@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+  <rect width="96" height="96" fill="#17181a"/>
+  <rect width="96" height="4" fill="#9ca3af" opacity="0.25"/>
+  <path d="M18 96 q2 -20.864162251818925 30 -24.864162251818925 q28 2 30 24.864162251818925 z" fill="#383b3f"/>
+  <path d="M26 77.13583774818107 L72 96" stroke="#0f0f0f" stroke-width="5" opacity="0.85"/>
+  <rect x="38" y="67.13583774818107" width="20" height="6" rx="2" fill="#9ca3af" opacity="0.85"/>
+  <path d="M23.18429322494194 55.90845216298476 q0 -26.81570677505806 24.81570677505806 -26.81570677505806 q24.81570677505806 0 24.81570677505806 26.81570677505806 l0 6 q-24.81570677505806 -4 -49.63141355011612 0 z" fill="#383b3f" opacity="0.9"/>
+  <circle cx="48" cy="39.0927453879267" r="16.81570677505806" fill="#c9a68a"/>
+  
+  
+  <rect x="34.54743457995355" y="43.29667208169121" width="26.905130840092898" height="12.611780081293546" rx="3" fill="#3f4a3f" opacity="0.95"/>
+  <rect x="0.5" y="0.5" width="95" height="95" fill="none" stroke="#000000" opacity="0.6"/>
+</svg>

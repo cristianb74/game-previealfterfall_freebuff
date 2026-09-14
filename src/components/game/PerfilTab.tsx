@@ -1,0 +1,105 @@
+import { Button } from "@/components/ui/button";
+import { HUD } from "@/components/game/HUD";
+import { StatsGrid } from "@/components/game/StatsGrid";
+import { useGame } from "@/game/GameProvider";
+import { STAT_META, STAT_ORDER, RESOURCE_META } from "@/game/resources";
+import { STAT_RESOURCE } from "@/game/balance";
+import { GAME_INFO } from "@/game/gameConfig";
+import { getZone } from "@/game/zones";
+
+export function PerfilTab() {
+  const { state } = useGame();
+  if (!state) return null;
+
+  const fullLog = state.log;
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* survivor card */}
+      <section className="rounded-lg border border-zinc-800 bg-[#101213] p-4">
+        <div className="flex items-center gap-4">
+          <img
+            src={state.survivor.portrait}
+            alt={state.survivor.name}
+            className="size-20 rounded-sm border border-zinc-800 object-cover"
+          />
+          <div className="min-w-0">
+            <h2 className="text-lg font-black tracking-wider text-zinc-100">{state.survivor.name}</h2>
+            <p className="text-sm text-green-500">{state.survivor.profession}</p>
+            <p className="mt-1 text-[10px] uppercase tracking-wider text-zinc-500">
+              EXP total {Math.floor(state.expTotal).toLocaleString("es")} · Exploraciones {state.explorationsDone}
+            </p>
+          </div>
+        </div>
+        <StatsGrid stats={state.survivor.stats} className="mt-3" />
+      </section>
+
+      {/* stat-resource relation */}
+      <section className="rounded-lg border border-zinc-800 bg-[#101213] p-4">
+        <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-zinc-300">
+          Estadísticas → Recursos
+        </h3>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px] sm:grid-cols-3">
+          {STAT_ORDER.map((k) => (
+            <div key={k} className="flex items-center justify-between gap-2">
+              <span className="text-zinc-400">{STAT_META[k].label}</span>
+              <span className="text-zinc-600">→</span>
+              <span className="text-zinc-300">{RESOURCE_META[STAT_RESOURCE[k]].label}</span>
+            </div>
+          ))}
+        </div>
+        <p className="mt-2 text-[10px] leading-4 text-zinc-600">
+          Una estadística más alta mejora la probabilidad de encontrar su recurso asociado.
+          Los edificios y los NPC multiplican esa probabilidad base (bonus relativo).
+        </p>
+      </section>
+
+      {/* rules / help */}
+      <section className="rounded-lg border border-zinc-800 bg-[#101213] p-4 text-[11px] leading-5 text-zinc-500">
+        <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-zinc-300">Cómo se juega</h3>
+        <p>· Explora: gasta 1 ⚡ y gana EXP, recursos y a veces supervivientes.</p>
+        <p>· Comida y Agua son tiempo de supervivencia; se consumen siempre, incluso cerrando la app.</p>
+        <p>· Los NPC asignados a zonas producen solos (más débiles que tu exploración).</p>
+        <p>· Mejora edificios en cada zona para multiplicar los hallazgos de esa zona.</p>
+        <p>· Alcanza EXP para desbloquear las 20 zonas hasta la Base Militar.</p>
+      </section>
+
+      {/* full log */}
+      <section className="rounded-lg border border-zinc-800 bg-[#101213] p-4">
+        <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-zinc-300">
+          Registro de exploración
+        </h3>
+        {fullLog.length === 0 ? (
+          <p className="text-xs text-zinc-600">Sin eventos todavía.</p>
+        ) : (
+          <ul className="flex max-h-96 flex-col gap-1.5 overflow-y-auto">
+            {fullLog.map((e, i) => (
+              <li key={`${e.t}-${i}`} className="flex items-baseline gap-2 text-xs">
+                <span className="shrink-0 font-mono text-[10px] text-zinc-600">
+                  {new Date(e.t).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}
+                </span>
+                <span
+                  className={
+                    e.kind === "damage"
+                      ? "text-red-400"
+                      : e.kind === "npc" || e.kind === "zone" || e.kind === "build"
+                        ? "text-green-400"
+                        : e.kind === "resource"
+                          ? "text-zinc-300"
+                          : "text-zinc-500"
+                  }
+                >
+                  {e.msg}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <p className="pb-2 text-center text-[10px] uppercase tracking-[0.25em] text-zinc-700">
+        {GAME_INFO.title} v{GAME_INFO.version} · guardado local
+      </p>
+    </div>
+  );
+}

@@ -4,6 +4,7 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
+import { GameProvider } from "./game/GameProvider.tsx";
 import React, { StrictMode, useEffect, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router";
@@ -14,6 +15,7 @@ const Landing = lazy(() => import("./pages/Landing.tsx"));
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
+const Game = lazy(() => import("./pages/Game.tsx"));
 
 // Simple loading fallback for route transitions
 function RouteLoading() {
@@ -94,6 +96,14 @@ function RouteSyncer() {
   }, [location.pathname]);
 
   useEffect(() => {
+    if ("serviceWorker" in navigator && window.location.protocol === "https:") {
+      navigator.serviceWorker.register("/sw.js").catch(() => {
+        /* PWA is optional */
+      });
+    }
+  }, []);
+
+  useEffect(() => {
     function handleMessage(event: MessageEvent) {
       if (event.data?.type === "navigate") {
         if (event.data.direction === "back") window.history.back();
@@ -107,6 +117,17 @@ function RouteSyncer() {
   return null;
 }
 
+/** AFTERFALL providers: local game state + template auth shell. */
+function GameProviders({ children }: { children: React.ReactNode }) {
+  return (
+    <ConvexAuthProvider client={convex}>
+      <GameProvider>
+        {children}
+        <Toaster />
+      </GameProvider>
+    </ConvexAuthProvider>
+  );
+}
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -114,12 +135,13 @@ createRoot(document.getElementById("root")!).render(
       <ToolbarErrorBoundary>
         <VlyToolbar />
       </ToolbarErrorBoundary>
-      <ConvexAuthProvider client={convex}>
+      <GameProviders>
         <BrowserRouter>
           <RouteSyncer />
           <Suspense fallback={<RouteLoading />}>
             <Routes>
               <Route path="/" element={<Landing />} />
+              <Route path="/juego" element={<Game />} />
               <Route
                 path="/auth"
                 element={<AuthPage redirectAfterAuth="/dashboard" />}
@@ -136,8 +158,7 @@ createRoot(document.getElementById("root")!).render(
             </Routes>
           </Suspense>
         </BrowserRouter>
-        <Toaster />
-      </ConvexAuthProvider>
+      </GameProviders>
     </RootErrorBoundary>
   </StrictMode>,
 );
