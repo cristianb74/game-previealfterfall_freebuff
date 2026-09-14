@@ -1,11 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { useConvex, useConvexAuth } from "convex/react";
 import { toast } from "sonner";
 import { BALANCE, STAT_RESOURCE } from "@/game/balance";
 import { getZone, ZONES } from "@/game/zones";
 import { NPC_BY_ID } from "@/game/npcData";
 import { NPC_TYPE_MODIFIERS, npcProductionMultiplier } from "@/game/npcTypes";
 import { createInitialState, loadGame, saveGame, deleteSave } from "@/game/saveSystem";
+import {
+  setConvexClient,
+  pullCloudSave,
+  pushCloudSave,
+  wipeAllSaves,
+} from "@/game/cloudSave";
 import { applyOfflineProgress } from "@/game/offlineProgress";
 import { tickNpcs } from "@/game/onlineTick";
 import { applyEnergyRegen, currentEnergy, spendEnergy } from "@/game/energySystem";
@@ -41,6 +48,12 @@ export interface GameContextValue {
   startNewGame: (survivor: Survivor) => Promise<void>;
   continueGame: () => Promise<void>;
   eraseSave: () => Promise<void>;
+  /** Cloud save status (Convex auth + last sync). */
+  cloud: { connected: boolean; syncing: boolean; lastSyncAt: number | null };
+  /** Manual full sync: merge with cloud (newest wins) and push local state. */
+  syncNow: () => Promise<void>;
+  /** Force-restore the cloud save over this device's copy. */
+  restoreFromCloud: () => Promise<void>;
   startExploration: (zoneId: number) => void;
   collectExploration: () => void;
   setCurrentZone: (zoneId: number) => void;
@@ -99,6 +112,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const bootOnceRef = useRef(false);
   const navigateRef = useRef<((path: string) => void) | null>(null);
 
+  // ---- cloud sync wiring ----
+  const convex = useConvex();
+  const { isAuthenticated: cloudConnected } = useConvexAuth();
+  const [cloudSyncing, setCloudSyncing] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
+  const cloudPushTimer = useRef<number | null>(null);
+  const lastPushedAt = useRef<number>(0);
+  const didInitialPull = useRef(false);
+
   const setAndSave = useCallback((updater: (s: GameState) => void) => {
     // NOTE: intentionally NOT a React updater function — StrictMode double-invokes
     // updaters, which would apply resource mutations twice. We compute from the ref.
@@ -111,8 +133,126 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
       void saveGame(next);
+      scheduleCloudPush();
     }, 400);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ---- cloud sync helpers ----
+  /** Debounced cloud push after any meaningful local change. */
+  const scheduleCloudPush = useCallback(() => {
+    if (cloudPushTimer.current) window.clearTimeout(cloudPushTimer.current);
+    cloudPushTimer.current = window.setTimeout(() => {
+      const s = stateRef.current;
+      if (!s || !cloudConnected) return;
+      // Skip if nothing changed since the last push.
+      if (s.lastTickAt <= lastPushedAt.current) return;
+      lastPushedAt.current = s.lastTickAt;
+      void pushCloudSave(s).then(() => setLastSyncAt(Date.now()));
+    }, 2000);
+  }, [cloudConnected]);
+
+  // Hand the Convex client to the cloud-save module + initial pull/merge once signed in.
+  useEffect(() => {
+    setConvexClient(convex);
+  }, [convex]);
+
+  useEffect(() => {
+    if (!cloudConnected || didInitialPull.current) return;
+    didInitialPull.current = true;
+    (async () => {
+      setCloudSyncing(true);
+      try {
+        const result = await pullCloudSave();
+        if (result.kind === "restored") {
+          // Adopt the cloud state (offline progression is applied by the boot
+          // flow on the next mount; here we simply take the newer copy).
+          const s = result.state;
+          const offline = applyOfflineProgress(s, Date.now());
+          const next = offline.state;
+          next.lastTickAt = Date.now();
+          stateRef.current = next;
+          setState(next);
+          setHasSaveFile(true);
+          toast.success("PROGRESO RESTAURADO", {
+            description: "Tu partida se ha sincronizado desde la nube.",
+          });
+        } else if (result.kind === "pushed") {
+          setLastSyncAt(Date.now());
+        }
+      } finally {
+        setCloudSyncing(false);
+      }
+    })();
+  }, [cloudConnected]);
+
+  // Push local state to the cloud as soon as the user signs in (first upload).
+  useEffect(() => {
+    if (!cloudConnected) return;
+    const s = stateRef.current;
+    if (!s) return;
+    if (lastPushedAt.current === 0) {
+      lastPushedAt.current = s.lastTickAt;
+      void pushCloudSave(s).then(() => setLastSyncAt(Date.now()));
+    }
+  }, [cloudConnected]);
+
+  const syncNow = useCallback(async () => {
+    const s = stateRef.current;
+    if (!s) return;
+    if (!cloudConnected) {
+      toast.error("Sesión no iniciada", {
+        description: "Inicia sesión para guardar tu progreso en la nube.",
+      });
+      return;
+    }
+    setCloudSyncing(true);
+    try {
+      if (cloudPushTimer.current) window.clearTimeout(cloudPushTimer.current);
+      await saveGame(s);
+      const result = await pullCloudSave();
+      if (result.kind === "restored") {
+        const next = result.state;
+        next.lastTickAt = Date.now();
+        stateRef.current = next;
+        setState(next);
+        toast.success("PROGRESO RESTAURADO", {
+          description: "La copia de la nube era más reciente.",
+        });
+      } else {
+        await pushCloudSave(s);
+        setLastSyncAt(Date.now());
+        toast.success("SINCRONIZADO", { description: "Partida guardada en la nube." });
+      }
+    } finally {
+      setCloudSyncing(false);
+    }
+  }, [cloudConnected]);
+
+  const restoreFromCloud = useCallback(async () => {
+    if (!cloudConnected) {
+      toast.error("Sesión no iniciada");
+      return;
+    }
+    setCloudSyncing(true);
+    try {
+      const result = await pullCloudSave();
+      if (result.kind === "restored") {
+        const next = result.state;
+        next.lastTickAt = Date.now();
+        stateRef.current = next;
+        setState(next);
+        setHasSaveFile(true);
+        toast.success("PROGRESO RESTAURADO", {
+          description: "Se ha cargado la copia de la nube.",
+        });
+      } else {
+        toast.info("La copia local es la más reciente");
+      }
+    } finally {
+      setCloudSyncing(false);
+    }
+  }, [cloudConnected]);
 
   // ---- boot: load save, apply offline progression ----
   useEffect(() => {
@@ -152,6 +292,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  // Cloud-push inside the periodic save path (tab hidden, exploration done).
+  useEffect(() => {
+    if (!cloudConnected) return;
+    const s = stateRef.current;
+    if (!s) return;
+    if (s.lastTickAt > lastPushedAt.current) {
+      lastPushedAt.current = s.lastTickAt;
+      void pushCloudSave(s).then(() => setLastSyncAt(Date.now()));
+    }
+  });
 
   // ---- 1 s tick ----
   useEffect(() => {
@@ -304,7 +455,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const eraseSave = useCallback(async () => {
-    await deleteSave();
+    await wipeAllSaves();
     setHasSaveFile(false);
     setState(null);
     stateRef.current = null;
@@ -467,6 +618,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
       startNewGame,
       continueGame,
       eraseSave,
+      cloud: { connected: cloudConnected, syncing: cloudSyncing, lastSyncAt },
+      syncNow,
+      restoreFromCloud,
       startExploration,
       collectExploration,
       setCurrentZone,
@@ -477,7 +631,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       rollOptions,
       rerollSurvivors,
     }),
-    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, startExploration, collectExploration, setCurrentZone, assignNpc, upgradeBuilding, useMedicine, buyResource, rollOptions, rerollSurvivors],
+    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, collectExploration, setCurrentZone, assignNpc, upgradeBuilding, useMedicine, buyResource, rollOptions, rerollSurvivors],
   );
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

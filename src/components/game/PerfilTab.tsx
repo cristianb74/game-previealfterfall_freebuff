@@ -1,14 +1,19 @@
 import { Button } from "@/components/ui/button";
 import { HUD } from "@/components/game/HUD";
 import { StatsGrid } from "@/components/game/StatsGrid";
+import { useNavigate } from "react-router";
 import { useGame } from "@/game/GameProvider";
 import { STAT_META, STAT_ORDER, RESOURCE_META } from "@/game/resources";
 import { STAT_RESOURCE } from "@/game/balance";
 import { GAME_INFO } from "@/game/gameConfig";
 import { getZone } from "@/game/zones";
+import { useAuth } from "@/hooks/use-auth";
+import { CloudUpload, CloudDownload, Loader2, LogIn, LogOut, ShieldCheck } from "lucide-react";
 
 export function PerfilTab() {
-  const { state } = useGame();
+  const { state, cloud, syncNow, restoreFromCloud } = useGame();
+  const { user, isAuthenticated, signOut } = useAuth();
+  const navigate = useNavigate();
   if (!state) return null;
 
   const fullLog = state.log;
@@ -32,6 +37,86 @@ export function PerfilTab() {
           </div>
         </div>
         <StatsGrid stats={state.survivor.stats} className="mt-3" />
+      </section>
+
+      {/* account + cloud save */}
+      <section className="rounded-lg border border-zinc-800 bg-[#101213] p-4">
+        <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-zinc-300">
+          Cuenta y guardado en la nube
+        </h3>
+        {isAuthenticated ? (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm text-zinc-200">
+                  {user?.name || user?.email || "Cuenta vinculada"}
+                </p>
+                <p className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-green-500">
+                  <ShieldCheck className="size-3" />
+                  {cloud.syncing
+                    ? "Sincronizando…"
+                    : cloud.lastSyncAt
+                      ? `Sincronizado ${new Date(cloud.lastSyncAt).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}`
+                      : "Conectado a la nube"}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={cloud.syncing}
+                onClick={() => void signOut()}
+                className="border-zinc-700 text-zinc-400 hover:text-zinc-200"
+              >
+                <LogOut className="mr-1.5 size-3.5" />
+                Salir
+              </Button>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <Button
+                size="sm"
+                disabled={cloud.syncing}
+                onClick={() => void syncNow()}
+                className="border border-green-500/40 bg-green-600/90 font-bold uppercase tracking-widest text-black hover:bg-green-500"
+              >
+                {cloud.syncing ? (
+                  <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                ) : (
+                  <CloudUpload className="mr-1.5 size-3.5" />
+                )}
+                Sincronizar
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={cloud.syncing}
+                onClick={() => void restoreFromCloud()}
+                className="border-zinc-700 text-zinc-300 hover:border-green-500/50 hover:text-green-400"
+              >
+                <CloudDownload className="mr-1.5 size-3.5" />
+                Restaurar nube
+              </Button>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs text-zinc-500">
+              Guardando solo en este dispositivo. Inicia sesión para proteger tu progreso y
+              continuar en cualquier móvil, tablet u ordenador.
+            </p>
+            <Button
+              size="sm"
+              onClick={() => navigate("/auth?returnTo=%2Fjuego")}
+              className="border border-green-500/40 bg-green-600/90 font-bold uppercase tracking-widest text-black hover:bg-green-500"
+            >
+              <LogIn className="mr-1.5 size-3.5" />
+              Iniciar sesión
+            </Button>
+          </div>
+        )}
+        <p className="mt-3 text-[10px] leading-4 text-zinc-600">
+          La partida se guarda automáticamente en el dispositivo y, con la sesión iniciada,
+          también se sube a la nube. Si dos copias chocan, gana la más reciente.
+        </p>
       </section>
 
       {/* stat-resource relation */}
@@ -98,7 +183,7 @@ export function PerfilTab() {
       </section>
 
       <p className="pb-2 text-center text-[10px] uppercase tracking-[0.25em] text-zinc-700">
-        {GAME_INFO.title} v{GAME_INFO.version} · guardado local
+        {GAME_INFO.title} v{GAME_INFO.version} · guardado local + nube
       </p>
     </div>
   );

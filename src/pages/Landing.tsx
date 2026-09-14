@@ -7,10 +7,13 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { GAME_INFO } from "@/game/gameConfig";
 import { useGame } from "@/game/GameProvider";
+import { useAuth } from "@/hooks/use-auth";
 import SurvivorCreation from "@/components/game/SurvivorCreation";
+import { CloudUpload, LogIn } from "lucide-react";
 
 export default function Landing() {
-  const { hasSaveFile, booted, startNewGame, continueGame, eraseSave, setNavigator } = useGame();
+  const { hasSaveFile, booted, startNewGame, continueGame, eraseSave, setNavigator, cloud, syncNow } = useGame();
+  const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   useEffect(() => {
     setNavigator((path: string) => navigate(path));
@@ -86,6 +89,28 @@ export default function Landing() {
           >
             Configuración
           </Button>
+          {isAuthenticated ? (
+            <button
+              type="button"
+              onClick={() => {
+                void syncNow();
+                navigate("/juego");
+              }}
+              className="mx-auto mt-1 flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-green-500/80 transition-colors hover:text-green-400"
+            >
+              <CloudUpload className="size-3.5" />
+              {cloud.connected ? "Sincronización activada" : "Activar sincronización"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => navigate("/auth?returnTo=%2Fjuego")}
+              className="mx-auto mt-1 flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-zinc-500 transition-colors hover:text-zinc-300"
+            >
+              <LogIn className="size-3.5" />
+              Guardar progreso en la nube
+            </button>
+          )}
         </div>
 
         <p className="mt-10 text-[10px] uppercase tracking-[0.25em] text-zinc-600">

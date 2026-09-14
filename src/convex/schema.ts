@@ -34,6 +34,20 @@ const schema = defineSchema(
 
     // add other tables here
 
+    // AFTERFALL — one cloud save document per user (keyed by the auth UID).
+    gameSaves: defineTable({
+      userId: v.id("users"),
+      /** Full serialized GameState. Schema validation is off; shape is
+       *  versioned via `version` and migrated client-side on load. */
+      state: v.any(),
+      version: v.number(),
+      /** Server time of the last upload. */
+      savedAt: v.number(),
+      /** Client-side game timestamp of the last upload (newest-wins checks). */
+      clientSavedAt: v.number(),
+    })
+      .index("by_user", ["userId"]),
+
     // tableName: defineTable({
     //   ...
     //   // table fields

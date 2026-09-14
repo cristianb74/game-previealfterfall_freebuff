@@ -144,7 +144,7 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/juego" element={<Game />} />
               <Route
                 path="/auth"
-                element={<AuthPage redirectAfterAuth="/dashboard" />}
+                element={<AuthPage redirectAfterAuth="/juego" />}
               />
               <Route
                 path="/dashboard"
