@@ -24,8 +24,8 @@ export interface ZoneDef {
 }
 
 export const ZONES: ZoneDef[] = [
-  { id: 1, name: "Apartamentos Ruinosos", description: "Bloques de viviendas derruidos. Restos de vidas cotidianas entre el polvo.", unlockExp: 0, explorationMinutes: 1, playerExpReward: 12, npcExpReward: 4, resources: ["materiales", "comida", "agua"] },
-  { id: 2, name: "Supermercado Saqueado", description: "Estanterías volcadas y latas olvidadas tras los mostradores.", unlockExp: 150, explorationMinutes: 2, playerExpReward: 20, npcExpReward: 6, resources: ["comida", "agua", "materiales"] },
+  { id: 1, name: "Apartamentos Ruinosos", description: "Bloques de viviendas derruidos. Restos de vidas cotidianas entre el polvo.", unlockExp: 0, explorationMinutes: 1, playerExpReward: 12, npcExpReward: 4, resources: ["materiales", "comida", "agua", "medicamentos"] },
+  { id: 2, name: "Supermercado Saqueado", description: "Estanterías volcadas y latas olvidadas tras los mostradores.", unlockExp: 150, explorationMinutes: 2, playerExpReward: 20, npcExpReward: 6, resources: ["comida", "agua", "materiales", "componentes"] },
   { id: 3, name: "Gasolinera Abandonada", description: "Tanques vacíos, químicos derramados y herramientas útiles.", unlockExp: 450, explorationMinutes: 3, playerExpReward: 28, npcExpReward: 9, resources: ["materiales", "componentes", "energia"] },
   { id: 4, name: "Hospital Derruido", description: "Pasillos colapsados y botiquines escondidos en la oscuridad.", unlockExp: 900, explorationMinutes: 4, playerExpReward: 36, npcExpReward: 12, resources: ["medicamentos", "materiales"] },
   { id: 5, name: "Bloque de Oficinas", description: "Torres grises donde aún zumba algún equipo con suerte.", unlockExp: 1600, explorationMinutes: 5, playerExpReward: 45, npcExpReward: 15, resources: ["componentes", "energia", "materiales"] },

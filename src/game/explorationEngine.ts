@@ -53,6 +53,22 @@ function zoneStateOf(state: GameState, zoneId: number): ZoneProgressState | unde
   return state.zones[zoneId];
 }
 
+/** Pick which resource the exploration targets, weighted by the governing stat:
+ * weight = 1 + stat × k, so a high Percepción biases toward Medicamentos, etc. */
+function pickWeightedResource(stats: Stats, candidates: ResourceKey[]): ResourceKey {
+  const weights = candidates.map((r) => {
+    const stat = stats[RESOURCE_STAT[r]] ?? 1;
+    return 1 + stat * BALANCE.statEffectFactor;
+  });
+  const total = weights.reduce((a, b) => a + b, 0);
+  let roll = Math.random() * total;
+  for (let i = 0; i < candidates.length; i++) {
+    roll -= weights[i];
+    if (roll <= 0) return candidates[i];
+  }
+  return candidates[candidates.length - 1];
+}
+
 /** Roll the findings of one completed exploration. Pure. */
 export function rollExploration(state: GameState, zoneId: number): ExplorationOutcome {
   const zone = getZone(zoneId);
@@ -69,21 +85,25 @@ export function rollExploration(state: GameState, zoneId: number): ExplorationOu
     });
   }
 
-  // Main resource find
-  if (Math.random() < BALANCE.explorationFindChance) {
+  // Main resource find — each candidate rolls with its own chance:
+  // base × stat multiplier × building multiplier (relative bonuses).
+  {
     const candidates = zone.resources.filter((r) => r !== "dinero");
     if (candidates.length > 0) {
-      const resource = candidates[Math.floor(Math.random() * candidates.length)];
-      const stat = state.survivor.stats[RESOURCE_STAT[resource]] ?? 1;
+      // A (stat-governed) pick of which resource the exploration targets.
+      const picked = pickWeightedResource(state.survivor.stats, candidates);
+      const stat = state.survivor.stats[RESOURCE_STAT[picked]] ?? 1;
       const statMult = findChanceForStat(stat);
-      const buildingMult = buildingMultiplierFor(zoneState, resource);
-      const finalChance = BALANCE.explorationFindChance * statMult * buildingMult;
-      const success = Math.random() < Math.min(0.95, finalChance);
-      if (success) {
-        const amount = isTime(resource)
+      const buildingMult = buildingMultiplierFor(zoneState, picked);
+      const finalChance = Math.min(
+        0.95,
+        BALANCE.explorationFindChance * statMult * buildingMult,
+      );
+      if (Math.random() < finalChance) {
+        const amount = isTime(picked)
           ? BALANCE.findTimeMin + Math.floor(Math.random() * (BALANCE.findTimeMax - BALANCE.findTimeMin + 1))
           : BALANCE.findUnitsMin + Math.floor(Math.random() * (BALANCE.findUnitsMax - BALANCE.findUnitsMin + 1));
-        findings.push({ kind: "resource", resource, amount });
+        findings.push({ kind: "resource", resource: picked, amount });
       }
     }
   }
