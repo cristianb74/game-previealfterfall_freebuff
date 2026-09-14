@@ -132,6 +132,7 @@ export type Screen =
   | "zonas"
   | "equipo"
   | "base"
+  | "mochila"
   | "perfil";
 
 export type SaveMeta = {

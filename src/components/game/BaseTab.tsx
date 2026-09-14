@@ -26,7 +26,7 @@ const BUILDING_ORDER: BuildingKey[] = [
 ];
 
 export function BaseTab() {
-  const { state, upgradeBuilding, buyResource } = useGame();
+  const { state, upgradeBuilding, buyResource, setScreen } = useGame();
   const [, force] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => force((v) => v + 1), 1000);
@@ -159,10 +159,15 @@ export function BaseTab() {
 
       <section className="rounded-lg border border-zinc-800 bg-[#101213] p-3 text-[11px] leading-5 text-zinc-500">
         <p className="mb-1 text-xs font-bold uppercase tracking-widest text-zinc-300">Inventario</p>
-        <p>
+        <button
+          type="button"
+          onClick={() => setScreen("mochila")}
+          className="w-full rounded-sm text-left transition-colors hover:text-zinc-300"
+        >
           ⚒ {Math.floor(state.resources.materiales)} Materiales · ✚ {Math.floor(state.resources.medicamentos)} Medicamentos · ⚙{" "}
           {Math.floor(state.resources.componentes)} Componentes · <span className="text-green-500">$ {Math.floor(state.resources.dinero)}</span>
-        </p>
+          <span className="ml-1 text-[9px] uppercase tracking-wider text-zinc-600">ver Mochila ›</span>
+        </button>
         <p className="mt-1 text-[10px] text-zinc-600">
           Las construcciones usan solo Materiales y Componentes. Nunca Comida ni Agua.
         </p>

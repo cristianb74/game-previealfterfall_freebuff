@@ -5,6 +5,7 @@ import { ExplorarTab } from "@/components/game/ExplorarTab";
 import { ZonasTab } from "@/components/game/ZonasTab";
 import { EquipoTab } from "@/components/game/EquipoTab";
 import { BaseTab } from "@/components/game/BaseTab";
+import { MochilaTab } from "@/components/game/MochilaTab";
 import { PerfilTab } from "@/components/game/PerfilTab";
 import { useGame } from "@/game/GameProvider";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,7 @@ const TABS: { key: Screen; label: string; glyph: string }[] = [
   { key: "zonas", label: "Zonas", glyph: "🗺" },
   { key: "equipo", label: "Equipo", glyph: "👥" },
   { key: "base", label: "Base", glyph: "🏗" },
+  { key: "mochila", label: "Mochila", glyph: "🎒" },
   { key: "perfil", label: "Perfil", glyph: "👤" },
 ];
 
@@ -56,6 +58,7 @@ export default function Game() {
             {screen === "zonas" && <ZonasTab />}
             {screen === "equipo" && <EquipoTab />}
             {screen === "base" && <BaseTab />}
+            {screen === "mochila" && <MochilaTab />}
             {screen === "perfil" && <PerfilTab />}
           </main>
 
@@ -70,7 +73,7 @@ export default function Game() {
 
       {/* Mobile bottom navigation */}
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-800 bg-[#0c0e0f]/95 backdrop-blur lg:hidden">
-        <div className="mx-auto grid max-w-3xl grid-cols-5">
+        <div className="mx-auto grid max-w-3xl grid-cols-6">
           {TABS.map((t) => (
             <button
               key={t.key}

@@ -53,7 +53,7 @@ function nextLockedZone(state: GameState) {
 }
 
 export function HUD() {
-  const { state } = useGame();
+  const { state, setScreen } = useGame();
   if (!state) return null;
   const now = Date.now();
   const energy = currentEnergy(state, now);
@@ -150,12 +150,18 @@ export function HUD() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 overflow-x-auto text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+        <button
+          type="button"
+          onClick={() => setScreen("mochila")}
+          className="flex items-center gap-3 overflow-x-auto rounded-sm py-0.5 text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-500 transition-colors hover:text-zinc-300"
+          title="Ver Mochila"
+        >
           <span>⚒ {Math.floor(state.resources.materiales)}</span>
           <span>✚ {Math.floor(state.resources.medicamentos)}</span>
           <span>⚙ {Math.floor(state.resources.componentes)}</span>
           <span className="text-green-500">$ {Math.floor(state.resources.dinero)}</span>
-        </div>
+          <span className="ml-auto shrink-0 text-[9px] text-zinc-700">Mochila ›</span>
+        </button>
       </div>
     </header>
   );
