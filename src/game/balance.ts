@@ -24,8 +24,9 @@ export const BALANCE = {
   maxEnergy: 24,
   energyRegenMinutesPerPoint: 60,
 
-  /** Exploration duration (minutes) — main active action. */
-  explorationMinutes: 15,
+  /** Exploration duration baseline (minutes). Real durations are per-zone
+   *  in zones.ts (explorationMinutes), rising with each zone. */
+  explorationMinutes: 1,
 
   /** Chance (0–1) that an exploration rolls a resource find. */
   explorationFindChance: 0.62,
