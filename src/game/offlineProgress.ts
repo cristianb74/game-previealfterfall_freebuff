@@ -58,27 +58,26 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
   // right after boot so the player receives the full EXP/resource rewards.
   // A finished MANUAL frontier run may have reached a new zone while away:
   // precompute the frontier so the boot state is coherent.
-  if ((state.exploration && now >= state.exploration.finishAt) || (state.autoRun && now >= state.autoRun.finishAt)) {
+  if (state.exploration && now >= state.exploration.finishAt) {
     explorationsCompleted = 1;
-    if (state.exploration && now >= state.exploration.finishAt) {
-      let maxUnlocked = 1;
-      for (const z of ZONES) {
-        if (state.expTotal >= z.unlockExp) maxUnlocked = Math.max(maxUnlocked, z.id);
-      }
-      if (maxUnlocked > frontierZoneId(state)) state.pendingZoneUnlock = maxUnlocked;
+    let maxUnlocked = 1;
+    for (const z of ZONES) {
+      if (state.expTotal >= z.unlockExp) maxUnlocked = Math.max(maxUnlocked, z.id);
     }
-    // Offline auto-farm cycles: credit reduced EXP for chained runs while
-    // away. The still-pending run is completed by the tick after boot, so
-    // credit only the additional full cycles here (cycles − 1).
-    if (state.autoExplore && state.autoRun && now >= state.autoRun.finishAt) {
-      const farmZone = frontierZoneId(state) - 1;
-      if (farmZone >= 1 && farmZone !== state.exploration?.zoneId) {
-        const cycleMin = getZone(farmZone).explorationMinutes;
-        const cycles = Math.max(0, Math.floor(minutesAway / cycleMin) - 1);
-        const farmExp = Math.max(1, Math.round(getZone(farmZone).playerExpReward * BALANCE.autoExploreExpFactor));
-        state.exp += farmExp * cycles;
-        state.expTotal += farmExp * cycles;
-      }
+    if (maxUnlocked > frontierZoneId(state)) state.pendingZoneUnlock = maxUnlocked;
+  }
+  // Offline auto-farm cycles per zone: credit reduced EXP for chained runs
+  // while away. Pending runs are completed by the tick after boot.
+  for (const zid of Object.keys(state.autoExplored ?? {}).map(Number)) {
+    if (!state.autoExplored[zid]) continue;
+    const run = state.autoFarms?.[zid];
+    if (run && now >= run.finishAt) {
+      const cycleMin = getZone(zid).explorationMinutes;
+      const cycles = Math.max(0, Math.floor(minutesAway / cycleMin) - 1);
+      const farmExp = Math.max(1, Math.round(getZone(zid).playerExpReward * BALANCE.autoExploreExpFactor));
+      state.exp += farmExp * cycles;
+      state.expTotal += farmExp * cycles;
+      explorationsCompleted = Math.max(explorationsCompleted, 1);
     }
   }
 

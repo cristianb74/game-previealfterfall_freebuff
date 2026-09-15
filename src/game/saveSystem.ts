@@ -62,8 +62,8 @@ export function createInitialState(survivor: GameState["survivor"], now = Date.n
     resources: { ...emptyResources(), energia: BALANCE.maxEnergy },
     currentZoneId: 1,
     exploration: null,
-    autoRun: null,
-    autoExplore: false,
+    autoFarms: {},
+    autoExplored: {},
     explorationsDone: 0,
     zones: createInitialZones(),
     npcs: [],
@@ -225,8 +225,21 @@ function migrate(envelope: SaveEnvelope): SaveEnvelope {
     if (!state.log) state.log = [];
     if (typeof state.foodMin !== "number") state.foodMin = BALANCE.startingFoodMin;
     if (typeof state.waterMin !== "number") state.waterMin = BALANCE.startingWaterMin;
-    if (typeof state.autoExplore !== "boolean") state.autoExplore = false;
-    if (state.autoRun === undefined) state.autoRun = null;
+    // Migrate old global autoExplore/autoRun to per-zone format
+    if (!state.autoExplored || typeof state.autoExplored !== "object") {
+      const oldAuto = (state as unknown as Record<string, unknown>).autoExplore;
+      const oldRun = (state as unknown as Record<string, unknown>).autoRun;
+      state.autoExplored = {};
+      state.autoFarms = {};
+      if (oldAuto === true && oldRun && typeof oldRun === "object") {
+        const r = oldRun as { zoneId?: number };
+        if (r.zoneId) {
+          state.autoExplored[r.zoneId] = true;
+          state.autoFarms[r.zoneId] = r as unknown as import("./types").ExplorationRun;
+        }
+      }
+    }
+    if (!state.autoFarms || typeof state.autoFarms !== "object") state.autoFarms = {};
   }
 
   return { version: v, savedAt: envelope.savedAt, state };

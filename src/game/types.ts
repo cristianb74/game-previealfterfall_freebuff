@@ -104,11 +104,11 @@ export interface GameState {
   currentZoneId: number;
   /** Manual exploration of the zone the player is in (costs energy). */
   exploration: ExplorationRun | null;
-  /** Background automatic re-exploration of the last conquered zone
-   *  (no energy, reduced EXP, never advances the frontier). */
-  autoRun: ExplorationRun | null;
-  /** Master switch for the background auto-exploration farm. */
-  autoExplore: boolean;
+  /** Per-zone background auto-exploration runs (no energy, reduced EXP,
+   *  never advances the frontier, never discovers NPCs). */
+  autoFarms: Record<number, ExplorationRun | null>;
+  /** Per-zone toggle: which zones have the auto-farm enabled. */
+  autoExplored: Record<number, boolean>;
   explorationsDone: number;
   zones: Record<number, ZoneProgressState>;
   npcs: NpcSurvivor[];

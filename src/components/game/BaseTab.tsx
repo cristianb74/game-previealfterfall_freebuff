@@ -4,7 +4,6 @@ import { Progress } from "@/components/ui/progress";
 import { HUD } from "@/components/game/HUD";
 import { useGame } from "@/game/GameProvider";
 import { BUILDING_BY_KEY, buildingBonus, buildingUpgradeCost, buildingUpgradeMinutes } from "@/game/buildings";
-import { ZONE_BUILDING_MAP } from "@/game/zones";
 import { BALANCE } from "@/game/balance";
 import { RESOURCE_META } from "@/game/resources";
 import type { BuildingKey } from "@/game/types";
@@ -37,7 +36,6 @@ export function BaseTab() {
   if (!state) return null;
   const zoneId = state.currentZoneId;
   const zoneState = state.zones[zoneId];
-  const availableKey = ZONE_BUILDING_MAP[zoneId] as BuildingKey | undefined;
 
   return (
     <div className="flex flex-col gap-3">
@@ -49,7 +47,10 @@ export function BaseTab() {
         {BUILDING_ORDER.map((key) => {
           const def = BUILDING_BY_KEY[key];
           const b = zoneState.buildings[key];
-          const available = availableKey === key;
+          // Sequential unlock: cocina always, others need previous at Lv1+
+          const idx = BUILDING_ORDER.indexOf(key);
+          const prevKey = idx > 0 ? BUILDING_ORDER[idx - 1] : null;
+          const available = prevKey === null || (zoneState.buildings[prevKey]?.level ?? 0) >= 1;
           const busy = b.upgradeFinishAt != null;
           const remaining = busy ? (b.upgradeFinishAt as number) - Date.now() : 0;
           const cost = buildingUpgradeCost(b.level);

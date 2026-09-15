@@ -12,7 +12,7 @@ import { useGame, MERCHANT_OFFERS } from "@/game/GameProvider";
 import { currentEnergy } from "@/game/energySystem";
 import { buildingUpgradeCost } from "@/game/buildings";
 import { BALANCE } from "@/game/balance";
-import { getZone, ZONES, ZONE_BUILDING_MAP } from "@/game/zones";
+import { getZone, ZONES } from "@/game/zones";
 import { cn } from "@/lib/utils";
 import type { Screen } from "@/game/types";
 
@@ -55,11 +55,16 @@ export default function Game() {
     const assignedIds = new Set(state.npcs.filter((n) => n.assignedZoneId).map((n) => n.id));
     equipoIdle = state.npcs.some((n) => !assignedIds.has(n.id));
     const zState = state.zones[state.currentZoneId];
-    const availKey = ZONE_BUILDING_MAP[state.currentZoneId];
     baseUpgradable = (Object.keys(zState.buildings) as (keyof typeof zState.buildings)[]).some((k) => {
       const b = zState.buildings[k];
       if (!b || b.level >= BALANCE.buildingMaxLevel || b.upgradeFinishAt) return false;
-      if (availKey !== k) return false;
+      // Sequential unlock: cocina always, others need previous at Lv1+
+      const order: (keyof typeof zState.buildings)[] = ["cocina", "tanque", "almacen", "enfermeria", "taller", "generador"];
+      const idx = order.indexOf(k);
+      if (idx > 0) {
+        const prev = zState.buildings[order[idx - 1]];
+        if (!prev || prev.level < 1) return false;
+      }
       const cost = buildingUpgradeCost(b.level);
       return state.resources.materiales >= cost.materiales && state.resources.componentes >= cost.componentes;
     });

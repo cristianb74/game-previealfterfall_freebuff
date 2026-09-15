@@ -64,8 +64,8 @@ export interface GameContextValue {
   /** Force-restore the cloud save over this device's copy. */
   restoreFromCloud: () => Promise<void>;
   startExploration: (zoneId: number) => void;
-  /** Toggle the background auto-exploration farm. */
-  toggleAutoExplore: () => void;
+  /** Toggle the background auto-exploration farm for a specific zone. */
+  toggleAutoExplore: (zoneId: number) => void;
   /** Highest zone id reachable with the player's total EXP. */
   maxUnlockedZoneId: number;
   setCurrentZone: (zoneId: number) => void;
@@ -335,16 +335,35 @@ export function GameProvider({ children }: { children: ReactNode }) {
         void saveGame(s);
       }
 
-      // BACKGROUND auto-farm completion (reduced rewards, no unlocks).
-      if (s.autoRun && now >= s.autoRun.finishAt) {
-        completeAutoRun(s, s.autoRun.startedAt);
-        dirty = true;
+      // BACKGROUND auto-farm completion (reduced rewards, no unlocks) — per zone.
+      for (const zid of Object.keys(s.autoFarms).map(Number)) {
+        const run = s.autoFarms[zid];
+        if (run && now >= run.finishAt) {
+          completeAutoRun(s, zid, run.startedAt);
+          dirty = true;
+        }
       }
 
-      // Keep the farm chain alive (after boot, after toggling, after each run).
-      if (s.autoExplore && !s.autoRun) {
-        scheduleAutoRun(s);
-        dirty = true;
+      // Keep the farm chain alive for every zone with auto enabled.
+      for (const zid of Object.keys(s.autoExplored).map(Number)) {
+        if (s.autoExplored[zid] && !s.autoFarms[zid]) {
+          scheduleAutoFarm(s, zid);
+          dirty = true;
+        }
+      }
+
+      // BUILDING COMPLETION: check every zone's buildings for finished upgrades.
+      for (const zid of Object.keys(s.zones).map(Number)) {
+        const zb = s.zones[zid].buildings;
+        for (const key of Object.keys(zb) as BuildingKey[]) {
+          const b = zb[key];
+          if (b.upgradeFinishAt && now >= b.upgradeFinishAt) {
+            b.level = Math.min(BALANCE.buildingMaxLevel, b.level + 1);
+            b.upgradeFinishAt = null;
+            pushLog(s, `Construcción completada: ${BUILDING_BY_KEY[key].name} → N${b.level} (Z${String(zid).padStart(2, "0")})`, "build");
+            dirty = true;
+          }
+        }
       }
 
       if (dirty) void saveGame(s);
@@ -426,9 +445,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const maxUnlocked = computeZoneUnlocks(s);
       if (maxUnlocked > frontierZoneId(s)) {
         s.pendingZoneUnlock = maxUnlocked;
-        // The just-conquered zone becomes the background farm automatically;
-        // the new zone must be explored manually until it is reached.
-        s.autoExplore = true;
         pushLog(s, `Nueva zona desbloqueada: ${getZone(maxUnlocked).name}`, "zone", startedAt);
         toast.success("☢ NUEVA ZONA DESBLOQUEADA", {
           description: `${getZone(maxUnlocked).name} · la anterior sigue farmeándose sola`,
@@ -463,35 +479,33 @@ export function GameProvider({ children }: { children: ReactNode }) {
       description: outcomeSummary(outcome),
       duration: 5000,
     });
-    if (s.autoExplore && !s.autoRun) scheduleAutoRun(s);
+    // Auto-enable auto-farm for the conquered zone if player has it toggled
+    // (handled by the tick: if autoExplored[zId] is true, the tick schedules it).
   }
 
-  /** Complete one BACKGROUND auto-farm run: reduced EXP, no NPC discovery,
-   *  no frontier changes. Chain continues via scheduleAutoRun. */
-  function completeAutoRun(s: GameState, startedAt: number) {
-    if (!s.autoRun) return;
-    const zone = getZone(s.autoRun.zoneId);
-    const outcome = rollExploration(s, s.autoRun.zoneId);
+  /** Complete one BACKGROUND auto-farm run for a specific zone: reduced EXP,
+   *  no NPC discovery, no frontier changes. Chain continues via tick. */
+  function completeAutoRun(s: GameState, zoneId: number, startedAt: number) {
+    if (!s.autoFarms[zoneId]) return;
+    const outcome = rollExploration(s, zoneId);
     // Auto runs never discover NPCs (that is the manual run's privilege).
     outcome.findings = outcome.findings.filter((f) => f.kind !== "npc");
     outcome.exp = Math.max(1, Math.round(outcome.exp * BALANCE.autoExploreExpFactor));
     applyOutcome(s, outcome, startedAt, { auto: true });
-    s.autoRun = null;
-    // silent — the log carries the result; a toast every cycle would spam
-    if (s.autoExplore) scheduleAutoRun(s);
+    s.autoFarms[zoneId] = null;
   }
 
-  /** Start the next auto-farm run in the last conquered zone (frontier − 1). */
-  function scheduleAutoRun(s: GameState) {
+  /** Start the next auto-farm run for a specific zone (must be unlocked). */
+  function scheduleAutoFarm(s: GameState, zoneId: number) {
     const now = Date.now();
-    const farmZone = frontierZoneId(s) - 1;
-    if (farmZone < 1) return; // nothing conquered yet — first zone is manual
-    if (s.autoRun) return;
+    const maxUnlocked = computeZoneUnlocks(s);
+    if (zoneId < 1 || zoneId > maxUnlocked) return;
+    if (s.autoFarms[zoneId]) return;
     // The manual run owns its zone; the farm retries on a later tick.
-    if (s.exploration && s.exploration.zoneId === farmZone) return;
+    if (s.exploration && s.exploration.zoneId === zoneId) return;
     if (s.health <= 0) return;
-    const minutes = getZone(farmZone).explorationMinutes;
-    s.autoRun = { zoneId: farmZone, startedAt: now, finishAt: now + minutes * 60000 };
+    const minutes = getZone(zoneId).explorationMinutes;
+    s.autoFarms[zoneId] = { zoneId, startedAt: now, finishAt: now + minutes * 60000 };
   }
 
   // ---- actions ----
@@ -576,14 +590,22 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   /** Turn the background farm on/off. ON starts a run in the last conquered
    *  zone immediately; OFF cancels the running auto run (it costs nothing). */
-  const toggleAutoExplore = useCallback(() => {
-    setAndSave((s) => {
-      s.autoExplore = !s.autoExplore;
-      pushLog(s, s.autoExplore ? "Exploración automática activada" : "Exploración automática desactivada", "info");
-      if (s.autoExplore) scheduleAutoRun(s);
-      else s.autoRun = null;
-    });
-  }, [setAndSave]);
+  const toggleAutoExplore = useCallback(
+    (zoneId: number) => {
+      setAndSave((s) => {
+        const was = s.autoExplored[zoneId] ?? false;
+        s.autoExplored[zoneId] = !was;
+        const zoneName = getZone(zoneId).name;
+        pushLog(s, !was ? `Auto-exploración activada en ${zoneName}` : `Auto-exploración desactivada en ${zoneName}`, "info");
+        if (!was) {
+          scheduleAutoFarm(s, zoneId);
+        } else {
+          s.autoFarms[zoneId] = null;
+        }
+      });
+    },
+    [setAndSave],
+  );
 
   const setCurrentZone = useCallback(
     (zoneId: number) => {
