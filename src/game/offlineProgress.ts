@@ -1,7 +1,8 @@
 import { BALANCE } from "./balance";
-import { getZone } from "./zones";
+import { getZone, frontierZoneId, ZONES } from "./zones";
 import { rollNpcCycle } from "./npcTypes";
 import { applyEnergyRegen } from "./energySystem";
+import { npcDisplayName } from "./npcData";
 import type { GameState, LogEvent, ResourceKey } from "./types";
 
 // ============================================================
@@ -53,10 +54,32 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
   energyRegen = applyEnergyRegen(state, now);
 
   // ---- Exploration completion while away ----
-  if (state.exploration && now >= state.exploration.finishAt) {
+  // NOTE: runs are NOT cleared here — the GameProvider tick completes them
+  // right after boot so the player receives the full EXP/resource rewards.
+  // A finished MANUAL frontier run may have reached a new zone while away:
+  // precompute the frontier so the boot state is coherent.
+  if ((state.exploration && now >= state.exploration.finishAt) || (state.autoRun && now >= state.autoRun.finishAt)) {
     explorationsCompleted = 1;
-    // NOTE: the run is NOT cleared here — the GameProvider tick completes it
-    // right after boot so the player receives the full EXP/resource rewards.
+    if (state.exploration && now >= state.exploration.finishAt) {
+      let maxUnlocked = 1;
+      for (const z of ZONES) {
+        if (state.expTotal >= z.unlockExp) maxUnlocked = Math.max(maxUnlocked, z.id);
+      }
+      if (maxUnlocked > frontierZoneId(state)) state.pendingZoneUnlock = maxUnlocked;
+    }
+    // Offline auto-farm cycles: credit reduced EXP for chained runs while
+    // away. The still-pending run is completed by the tick after boot, so
+    // credit only the additional full cycles here (cycles − 1).
+    if (state.autoExplore && state.autoRun && now >= state.autoRun.finishAt) {
+      const farmZone = frontierZoneId(state) - 1;
+      if (farmZone >= 1 && farmZone !== state.exploration?.zoneId) {
+        const cycleMin = getZone(farmZone).explorationMinutes;
+        const cycles = Math.max(0, Math.floor(minutesAway / cycleMin) - 1);
+        const farmExp = Math.max(1, Math.round(getZone(farmZone).playerExpReward * BALANCE.autoExploreExpFactor));
+        state.exp += farmExp * cycles;
+        state.expTotal += farmExp * cycles;
+      }
+    }
   }
 
   // ---- Building completions while away ----
@@ -137,11 +160,22 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
   }
   const findCount = npcFinds.length;
   if (findCount > 0) {
-    pushLog(state.log, {
-      t: now,
-      msg: `Tu equipo produjo ${findCount} hallazgos mientras no estabas`,
-      kind: "npc",
-    });
+    for (const f of npcFinds.slice(0, 5)) {
+      const npc = state.npcs.find((n) => n.id === f.npcId);
+      const isTime = f.resource === "comida" || f.resource === "agua";
+      pushLog(state.log, {
+        t: now,
+        msg: `${npc ? npcDisplayName(npc) : f.npcId} encontró ${isTime ? `+${f.amount} min` : `+${f.amount}`} ${f.resource === "dinero" ? "$" : f.resource}`,
+        kind: "npc",
+      });
+    }
+    if (findCount > 5) {
+      pushLog(state.log, {
+        t: now,
+        msg: `Tu equipo produjo ${findCount} hallazgos mientras no estabas`,
+        kind: "npc",
+      });
+    }
   }
   if (buildingsCompleted.length > 0) {
     pushLog(state.log, {

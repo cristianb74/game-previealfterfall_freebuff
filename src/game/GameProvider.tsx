@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import { useConvex, useConvexAuth } from "convex/react";
 import { toast } from "sonner";
 import { BALANCE, STAT_RESOURCE } from "@/game/balance";
-import { getZone, ZONES } from "@/game/zones";
-import { NPC_BY_ID } from "@/game/npcData";
+import { getZone, frontierZoneId, ZONES } from "@/game/zones";
+import { NPC_BY_ID, npcDisplayName } from "@/game/npcData";
 import { NPC_TYPE_MODIFIERS, npcProductionMultiplier } from "@/game/npcTypes";
 import { createInitialState, loadGame, saveGame, deleteSave } from "@/game/saveSystem";
 import {
@@ -25,6 +25,8 @@ import {
 import { SURVIVOR_MAX_ROLLS, generateSurvivorOptions, rollSurvivor } from "@/game/survivorGenerator";
 import type {
   BuildingKey,
+  ExplorationOutcome,
+  ExplorationRun,
   GameState,
   NpcSurvivor,
   ResourceKey,
@@ -36,6 +38,13 @@ import type {
 // AFTERFALL — game provider. Owns the authoritative GameState,
 // runs the 1 s tick, autosaves on important changes, applies
 // offline progression at boot.
+//
+// Exploration model:
+// - state.exploration: MANUAL run in the player's current zone.
+//   Costs 1 energy, full EXP, can unlock the next zone.
+// - state.autoRun: BACKGROUND farm in the last conquered zone
+//   (frontier − 1). Costs no energy, reduced EXP, never unlocks
+//   zones and never discovers NPCs. Runs while autoExplore is on.
 // ============================================================
 
 export interface GameContextValue {
@@ -55,7 +64,10 @@ export interface GameContextValue {
   /** Force-restore the cloud save over this device's copy. */
   restoreFromCloud: () => Promise<void>;
   startExploration: (zoneId: number) => void;
-  collectExploration: () => void;
+  /** Toggle the background auto-exploration farm. */
+  toggleAutoExplore: () => void;
+  /** Highest zone id reachable with the player's total EXP. */
+  maxUnlockedZoneId: number;
   setCurrentZone: (zoneId: number) => void;
   assignNpc: (npcId: string, zoneId: number | null) => void;
   upgradeBuilding: (zoneId: number, key: BuildingKey) => void;
@@ -96,8 +108,8 @@ function unlockedZoneId(state: GameState): number {
   return unlocked;
 }
 
-function computeZoneUnlocks(state: GameState): number | null {
-  // returns newly reached zone id (max) or null
+function computeZoneUnlocks(state: GameState): number {
+  // Highest zone id currently reachable with the player's total EXP.
   return unlockedZoneId(state);
 }
 
@@ -314,18 +326,28 @@ export function GameProvider({ children }: { children: ReactNode }) {
       applyEnergyRegen(s, now);
       tickNpcs(s, now);
       s.lastTickAt = now;
-      // exploration completion
+      let dirty = false;
+
+      // MANUAL exploration completion (full rewards, may unlock zones).
       if (s.exploration && now >= s.exploration.finishAt) {
-        const outcome = rollExploration(s, s.exploration.zoneId);
-        applyOutcome(s, outcome, s.exploration.startedAt);
-        s.exploration = null;
+        completeExploration(s, s.exploration.startedAt);
+        dirty = true;
         void saveGame(s);
-        toast.success("EXPLORACIÓN COMPLETADA", {
-          description: outcomeSummary(outcome),
-          duration: 5000,
-        });
       }
-      s.lastTickAt = now;
+
+      // BACKGROUND auto-farm completion (reduced rewards, no unlocks).
+      if (s.autoRun && now >= s.autoRun.finishAt) {
+        completeAutoRun(s, s.autoRun.startedAt);
+        dirty = true;
+      }
+
+      // Keep the farm chain alive (after boot, after toggling, after each run).
+      if (s.autoExplore && !s.autoRun) {
+        scheduleAutoRun(s);
+        dirty = true;
+      }
+
+      if (dirty) void saveGame(s);
       setState({ ...s });
       // periodic save (every 15 s) to keep timestamps fresh
       if (now % 15000 < 1000) void saveGame(s);
@@ -350,7 +372,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  function applyOutcome(s: GameState, outcome: ReturnType<typeof rollExploration>, startedAt: number) {
+  function applyOutcome(
+    s: GameState,
+    outcome: ExplorationOutcome,
+    startedAt: number,
+    opts: { auto?: boolean } = {},
+  ) {
     const zone = getZone(outcome.zoneId);
     s.exp += outcome.exp;
     s.expTotal += outcome.exp;
@@ -375,7 +402,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
             productionTotals: { materiales: 0, agua: 0, comida: 0, medicamentos: 0, componentes: 0, energia: 0, dinero: 0 },
           };
           s.npcs.push(npc);
-          pushLog(s, `${npc.id} «${npc.alias}» se unió al refugio`, "npc", startedAt);
+          pushLog(s, `${npcDisplayName(npc)} se unió al refugio`, "npc", startedAt);
           toast.info("SUPERVIVIENTE ENCONTRADO", {
             description: `${npc.name} «${npc.alias}» · ${NPC_TYPE_MODIFIERS[npc.type].label}`,
             duration: 6000,
@@ -386,28 +413,85 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (outcome.findings.length === 0) {
       pushLog(s, "Sin hallazgos", "info", startedAt);
     }
-    pushLog(s, `Exploración de ${zone.name} completada · +${outcome.exp} EXP`, "exp", startedAt);
-    const newZone = computeZoneUnlocks(s);
-    if (newZone != null && newZone > s.currentZoneId) {
-      s.pendingZoneUnlock = newZone;
-      pushLog(s, `Nueva zona desbloqueada: ${getZone(newZone).name}`, "zone", startedAt);
-      toast.success("☢ NUEVA ZONA DESBLOQUEADA", {
-        description: getZone(newZone).name,
-        duration: 6000,
-      });
+    pushLog(
+      s,
+      `${opts.auto ? "Automática" : "Exploración"} de ${zone.name} completada · +${outcome.exp} EXP`,
+      "exp",
+      startedAt,
+    );
+
+    // Only MANUAL explorations advance the frontier. Auto farm runs in
+    // conquered zones can never unlock anything (zone < frontier anyway).
+    if (!opts.auto) {
+      const maxUnlocked = computeZoneUnlocks(s);
+      if (maxUnlocked > frontierZoneId(s)) {
+        s.pendingZoneUnlock = maxUnlocked;
+        // The just-conquered zone becomes the background farm automatically;
+        // the new zone must be explored manually until it is reached.
+        s.autoExplore = true;
+        pushLog(s, `Nueva zona desbloqueada: ${getZone(maxUnlocked).name}`, "zone", startedAt);
+        toast.success("☢ NUEVA ZONA DESBLOQUEADA", {
+          description: `${getZone(maxUnlocked).name} · la anterior sigue farmeándose sola`,
+          duration: 6000,
+        });
+      }
     }
     s.explorationsDone += 1;
   }
 
-  function outcomeSummary(outcome: ReturnType<typeof rollExploration>): string {
+  function outcomeSummary(outcome: ExplorationOutcome): string {
     const parts: string[] = [`+${outcome.exp} EXP`];
     for (const f of outcome.findings) {
       if (f.kind === "resource") parts.push(`+${f.amount} ${f.resource === "dinero" ? "$" : f.resource}`);
       else if (f.kind === "damage") parts.push(`${f.cause} · -${f.damage} Salud`);
-      else if (f.kind === "npc") parts.push(`Superviviente ${f.npcId}`);
+      else if (f.kind === "npc") {
+        const seed = f.npcId ? NPC_BY_ID[f.npcId] : undefined;
+        parts.push(seed ? `Superviviente ${seed.name} «${seed.alias}»` : `Superviviente ${f.npcId}`);
+      }
     }
     if (outcome.findings.length === 0) parts.push("Sin hallazgos");
     return parts.join(" · ");
+  }
+
+  /** Complete the MANUAL exploration: roll, apply (full rewards), log, toast. */
+  function completeExploration(s: GameState, startedAt: number) {
+    if (!s.exploration) return;
+    const outcome = rollExploration(s, s.exploration.zoneId);
+    applyOutcome(s, outcome, startedAt);
+    s.exploration = null;
+    toast.success("EXPLORACIÓN COMPLETADA", {
+      description: outcomeSummary(outcome),
+      duration: 5000,
+    });
+    if (s.autoExplore && !s.autoRun) scheduleAutoRun(s);
+  }
+
+  /** Complete one BACKGROUND auto-farm run: reduced EXP, no NPC discovery,
+   *  no frontier changes. Chain continues via scheduleAutoRun. */
+  function completeAutoRun(s: GameState, startedAt: number) {
+    if (!s.autoRun) return;
+    const zone = getZone(s.autoRun.zoneId);
+    const outcome = rollExploration(s, s.autoRun.zoneId);
+    // Auto runs never discover NPCs (that is the manual run's privilege).
+    outcome.findings = outcome.findings.filter((f) => f.kind !== "npc");
+    outcome.exp = Math.max(1, Math.round(outcome.exp * BALANCE.autoExploreExpFactor));
+    applyOutcome(s, outcome, startedAt, { auto: true });
+    s.autoRun = null;
+    // silent — the log carries the result; a toast every cycle would spam
+    if (s.autoExplore) scheduleAutoRun(s);
+  }
+
+  /** Start the next auto-farm run in the last conquered zone (frontier − 1). */
+  function scheduleAutoRun(s: GameState) {
+    const now = Date.now();
+    const farmZone = frontierZoneId(s) - 1;
+    if (farmZone < 1) return; // nothing conquered yet — first zone is manual
+    if (s.autoRun) return;
+    // The manual run owns its zone; the farm retries on a later tick.
+    if (s.exploration && s.exploration.zoneId === farmZone) return;
+    if (s.health <= 0) return;
+    const minutes = getZone(farmZone).explorationMinutes;
+    s.autoRun = { zoneId: farmZone, startedAt: now, finishAt: now + minutes * 60000 };
   }
 
   // ---- actions ----
@@ -490,14 +574,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
     [setAndSave],
   );
 
-  const collectExploration = useCallback(() => {
+  /** Turn the background farm on/off. ON starts a run in the last conquered
+   *  zone immediately; OFF cancels the running auto run (it costs nothing). */
+  const toggleAutoExplore = useCallback(() => {
     setAndSave((s) => {
-      const now = Date.now();
-      if (!s.exploration || now < s.exploration.finishAt) return;
-      const outcome = rollExploration(s, s.exploration.zoneId);
-      applyOutcome(s, outcome, s.exploration.startedAt);
-      s.exploration = null;
-      toast.success("EXPLORACIÓN COMPLETADA", { description: outcomeSummary(outcome), duration: 5000 });
+      s.autoExplore = !s.autoExplore;
+      pushLog(s, s.autoExplore ? "Exploración automática activada" : "Exploración automática desactivada", "info");
+      if (s.autoExplore) scheduleAutoRun(s);
+      else s.autoRun = null;
     });
   }, [setAndSave]);
 
@@ -505,7 +589,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     (zoneId: number) => {
       setAndSave((s) => {
         const maxUnlocked = computeZoneUnlocks(s);
-        if (maxUnlocked != null && zoneId <= maxUnlocked) {
+        if (zoneId <= maxUnlocked && s.currentZoneId !== zoneId) {
           s.currentZoneId = zoneId;
         }
       });
@@ -520,7 +604,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (!npc) return;
         const npcWasAssigned = npc.assignedZoneId != null;
         if (npc.assignedZoneId) {
-          const oldZone = stateRef.current?.zones[Number(npc.assignedZoneId)];
+          const oldZone = s.zones[Number(npc.assignedZoneId)];
           if (oldZone && oldZone.assignedNpcId === npcId) oldZone.assignedNpcId = null;
         }
         npc.assignedZoneId = zoneId != null ? String(zoneId) : null;
@@ -533,10 +617,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
             }
             z.assignedNpcId = npcId;
             s.npcCycles[npcId] = Date.now();
-            pushLog(s, `${npc.id} asignado a ${getZone(zoneId).name}`, "npc");
+            pushLog(s, `${npcDisplayName(npc)} asignado a ${getZone(zoneId).name}`, "npc");
           }
         } else if (npcWasAssigned) {
-          pushLog(s, `${npc.id} sin asignación`, "npc");
+          pushLog(s, `${npcDisplayName(npc)} sin asignación`, "npc");
         }
       });
     },
@@ -622,7 +706,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       syncNow,
       restoreFromCloud,
       startExploration,
-      collectExploration,
+      toggleAutoExplore,
+      maxUnlockedZoneId: state ? computeZoneUnlocks(state) : 1,
       setCurrentZone,
       assignNpc,
       upgradeBuilding,
@@ -631,7 +716,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       rollOptions,
       rerollSurvivors,
     }),
-    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, collectExploration, setCurrentZone, assignNpc, upgradeBuilding, useMedicine, buyResource, rollOptions, rerollSurvivors],
+    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, toggleAutoExplore, setCurrentZone, assignNpc, upgradeBuilding, useMedicine, buyResource, rollOptions, rerollSurvivors],
   );
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

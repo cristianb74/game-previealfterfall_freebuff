@@ -102,7 +102,13 @@ export interface GameState {
   lastEnergyRegenAt: number;
   resources: Record<ResourceKey, number>;
   currentZoneId: number;
+  /** Manual exploration of the zone the player is in (costs energy). */
   exploration: ExplorationRun | null;
+  /** Background automatic re-exploration of the last conquered zone
+   *  (no energy, reduced EXP, never advances the frontier). */
+  autoRun: ExplorationRun | null;
+  /** Master switch for the background auto-exploration farm. */
+  autoExplore: boolean;
   explorationsDone: number;
   zones: Record<number, ZoneProgressState>;
   npcs: NpcSurvivor[];

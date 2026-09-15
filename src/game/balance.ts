@@ -30,6 +30,10 @@ export const BALANCE = {
 
   /** Chance (0–1) that an exploration rolls a resource find. */
   explorationFindChance: 0.62,
+  /** EXP multiplier for AUTOMATIC re-explorations of conquered zones.
+   *  Auto runs never advance the frontier — manual exploration must reach
+   *  each new zone. Active exploration stays the most valuable action. */
+  autoExploreExpFactor: 0.4,
   /** Chance (0–1) of a survival incident (only when no resource found). */
   explorationIncidentChance: 0.3,
   /** Resource find: min/max units for unit-type resources. */

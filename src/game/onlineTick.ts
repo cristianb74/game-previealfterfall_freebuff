@@ -1,6 +1,7 @@
 import { BALANCE } from "./balance";
 import { rollNpcCycle } from "./npcTypes";
 import { getZone } from "./zones";
+import { npcDisplayName } from "./npcData";
 import type { GameState, LogEvent, ResourceKey } from "./types";
 
 // ============================================================
@@ -97,9 +98,10 @@ export function tickNpcs(state: GameState, now: number): TickChanges {
   // logs
   for (const f of finds.slice(0, 5)) {
     const isTime = f.resource === "comida" || f.resource === "agua";
+    const npc = state.npcs.find((n) => n.id === f.npcId);
     pushLog(state.log, {
       t: now,
-      msg: `${f.npcId} encontró ${isTime ? `+${f.amount} min` : `+${f.amount}`} ${f.resource === "dinero" ? "$" : f.resource}`,
+      msg: `${npc ? npcDisplayName(npc) : f.npcId} encontró ${isTime ? `+${f.amount} min` : `+${f.amount}`} ${f.resource === "dinero" ? "$" : f.resource}`,
       kind: "npc",
     });
   }

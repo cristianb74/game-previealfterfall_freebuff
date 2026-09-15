@@ -8,7 +8,11 @@ import { BaseTab } from "@/components/game/BaseTab";
 import { MercaderTab } from "@/components/game/MercaderTab";
 import { MochilaTab } from "@/components/game/MochilaTab";
 import { PerfilTab } from "@/components/game/PerfilTab";
-import { useGame } from "@/game/GameProvider";
+import { useGame, MERCHANT_OFFERS } from "@/game/GameProvider";
+import { currentEnergy } from "@/game/energySystem";
+import { buildingUpgradeCost } from "@/game/buildings";
+import { BALANCE } from "@/game/balance";
+import { getZone, ZONES, ZONE_BUILDING_MAP } from "@/game/zones";
 import { cn } from "@/lib/utils";
 import type { Screen } from "@/game/types";
 
@@ -23,7 +27,7 @@ const TABS: { key: Screen; label: string; glyph: string }[] = [
 ];
 
 export default function Game() {
-  const { state, booted, hasSaveFile, screen, setScreen } = useGame();
+  const { state, booted, hasSaveFile, screen, setScreen, maxUnlockedZoneId } = useGame();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -32,14 +36,44 @@ export default function Game() {
     }
   }, [booted, state, hasSaveFile, navigate]);
 
-  if (!booted) {
-    return (
-      <main className="flex min-h-dvh items-center justify-center bg-[#0b0d0e]">
-        <p className="animate-pulse text-sm uppercase tracking-[0.3em] text-green-500">AFTERFALL</p>
-      </main>
+  // ---- "something to do" badges per nav tab ----
+  let explorableNow = false;
+  let zonesUnlockable = false;
+  let equipoIdle = false;
+  let baseUpgradable = false;
+  let merchantAffordable = false;
+  if (state) {
+    const now = Date.now();
+    const zone = getZone(state.currentZoneId);
+    const exploring = state.exploration != null;
+    explorableNow =
+      !exploring &&
+      currentEnergy(state, now) >= 1 &&
+      state.health > 0;
+    zonesUnlockable =
+      state.pendingZoneUnlock != null && state.pendingZoneUnlock > state.currentZoneId;
+    const assignedIds = new Set(state.npcs.filter((n) => n.assignedZoneId).map((n) => n.id));
+    equipoIdle = state.npcs.some((n) => !assignedIds.has(n.id));
+    const zState = state.zones[state.currentZoneId];
+    const availKey = ZONE_BUILDING_MAP[state.currentZoneId];
+    baseUpgradable = (Object.keys(zState.buildings) as (keyof typeof zState.buildings)[]).some((k) => {
+      const b = zState.buildings[k];
+      if (!b || b.level >= BALANCE.buildingMaxLevel || b.upgradeFinishAt) return false;
+      if (availKey !== k) return false;
+      const cost = buildingUpgradeCost(b.level);
+      return state.resources.materiales >= cost.materiales && state.resources.componentes >= cost.componentes;
+    });
+    merchantAffordable = Object.values(MERCHANT_OFFERS).some(
+      (o) => o && state.resources.dinero >= o.price,
     );
   }
-  if (!state) return null;
+  const TAB_ALERTS: Partial<Record<Screen, boolean>> = {
+    explorar: explorableNow,
+    zonas: zonesUnlockable,
+    equipo: equipoIdle,
+    base: baseUpgradable,
+    mercader: merchantAffordable,
+  };
 
   return (
     <div className="min-h-dvh bg-[#0b0d0e] text-zinc-200">
@@ -82,10 +116,18 @@ export default function Game() {
               key={t.key}
               onClick={() => setScreen(t.key)}
               className={cn(
-                "flex flex-col items-center gap-0.5 py-2.5 text-[9px] font-bold uppercase tracking-wider transition-colors",
+                "relative flex flex-col items-center gap-0.5 py-2.5 text-[9px] font-bold uppercase tracking-wider transition-colors",
                 screen === t.key ? "text-green-500" : "text-zinc-500 hover:text-zinc-300",
               )}
             >
+              {TAB_ALERTS[t.key] && (
+                <span
+                  aria-hidden
+                  className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-green-400 shadow-[0_0_6px_1px_rgba(74,222,128,0.9)]"
+                >
+                  <span className="absolute inset-0 animate-ping rounded-full bg-green-400" />
+                </span>
+              )}
               <span className="text-base leading-none">{t.glyph}</span>
               {t.label}
             </button>

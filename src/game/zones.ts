@@ -72,5 +72,11 @@ export function zoneBuildingUnlock(id: number): BuildingKey | null {
   return ZONE_BUILDINGS[id] ?? null;
 }
 
+/** Frontier = highest zone the player has ever reached. Tracked durably
+ *  via pendingZoneUnlock so traveling back to old zones never disturbs it. */
+export function frontierZoneId(state: { pendingZoneUnlock: number | null }): number {
+  return state.pendingZoneUnlock ?? 1;
+}
+
 export { ZONE_BUILDINGS as ZONE_BUILDING_MAP };
 export { BALANCE };

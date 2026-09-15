@@ -120,3 +120,8 @@ export const NPC_BY_ID: Record<string, NpcSurvivor> = NPC_ROSTER.reduce(
 export function npcPortrait(id: string): string {
   return `/assets/npc/${id}.svg`;
 }
+
+/** Human-readable label for logs/UI: Name «Alias» (ID). */
+export function npcDisplayName(npc: Pick<NpcSurvivor, "id" | "name" | "alias">): string {
+  return `${npc.name} «${npc.alias}» (${npc.id})`;
+}

@@ -3,19 +3,22 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { HUD } from "@/components/game/HUD";
 import { useGame } from "@/game/GameProvider";
-import { getZone, zoneImage } from "@/game/zones";
+import { getZone, frontierZoneId, zoneImage } from "@/game/zones";
 import { currentEnergy } from "@/game/energySystem";
 import { BALANCE } from "@/game/balance";
+import { cn } from "@/lib/utils";
 
 function fmtCountdown(ms: number): string {
   const totalSec = Math.max(0, Math.floor(ms / 1000));
-  const m = Math.floor(totalSec / 60);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
 export function ExplorarTab() {
-  const { state, startExploration, collectExploration, useMedicine, setScreen } = useGame();
+  const { state, startExploration, toggleAutoExplore, useMedicine, setScreen } = useGame();
   const [, force] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => force((v) => v + 1), 500);
@@ -32,6 +35,7 @@ export function ExplorarTab() {
     : 0;
   const energy = currentEnergy(state, now);
   const canExplore = !exploring && energy >= 1 && state.health > 0;
+  const farmZoneId = frontierZoneId(state) - 1;
 
   const log = state.log.slice(0, 3);
 
@@ -72,6 +76,50 @@ export function ExplorarTab() {
             </div>
           </div>
 
+          {/* auto-exploration toggle — background farm of the last conquered zone */}
+          <button
+            type="button"
+            onClick={toggleAutoExplore}
+            disabled={farmZoneId < 1}
+            className={cn(
+              "flex items-center justify-between rounded-md border px-3 py-2 text-left transition-colors",
+              state.autoExplore
+                ? "border-green-700/60 bg-green-950/30"
+                : "border-zinc-800 bg-[#0d0f10] hover:border-zinc-700",
+              farmZoneId < 1 && "cursor-not-allowed opacity-50",
+            )}
+          >
+            <div>
+              <p className={cn(
+                "text-xs font-bold uppercase tracking-widest",
+                state.autoExplore ? "text-green-500" : "text-zinc-300",
+              )}>
+                Exploración automática {state.autoExplore ? "· ACTIVA" : ""}
+              </p>
+              <p className="text-[10px] text-zinc-500">
+                {farmZoneId < 1
+                  ? "Conquista tu primera zona para activar la granja automática"
+                  : state.autoExplore
+                    ? "Tu última zona conquistada se explora sola en segundo plano (EXP reducida, sin energía)"
+                    : "Mientras exploras la zona nueva, la anterior se farmea sola"}
+              </p>
+            </div>
+            <span
+              className={cn(
+                "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+                state.autoExplore ? "bg-green-600" : "bg-zinc-700",
+              )}
+              aria-hidden
+            >
+              <span
+                className={cn(
+                  "absolute left-0.5 top-0.5 size-4 rounded-full bg-zinc-200 transition-transform",
+                  state.autoExplore ? "translate-x-4" : "translate-x-0",
+                )}
+              />
+            </span>
+          </button>
+
           {exploring ? (
             <div className="flex flex-col gap-2 rounded-md border border-green-900/50 bg-green-950/20 p-3">
               <div className="flex items-baseline justify-between">
@@ -101,14 +149,19 @@ export function ExplorarTab() {
             </Button>
           )}
 
-          {state.exploration && now >= state.exploration.finishAt && (
-            <Button
-              variant="outline"
-              onClick={collectExploration}
-              className="border-green-500/50 text-green-400 hover:bg-green-950/30"
-            >
-              Recoger resultados
-            </Button>
+          {/* background farm status: the last conquered zone explores itself */}
+          {state.autoExplore && farmZoneId >= 1 && (
+            <div className="flex items-center justify-between gap-2 rounded-md border border-green-900/40 bg-green-950/10 px-3 py-2">
+              <p className="min-w-0 text-[11px] leading-4 text-zinc-400">
+                <span className="font-bold uppercase tracking-wider text-green-500">Granja automática</span>
+                <span className="block truncate">
+                  {getZone(farmZoneId).name} · EXP reducida ({Math.round(BALANCE.autoExploreExpFactor * 100)}%)
+                </span>
+              </p>
+              <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-green-400">
+                {state.autoRun ? fmtCountdown(state.autoRun.finishAt - now) : "—"}
+              </span>
+            </div>
           )}
         </div>
       </section>

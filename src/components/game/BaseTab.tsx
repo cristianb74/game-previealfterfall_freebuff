@@ -6,6 +6,7 @@ import { useGame } from "@/game/GameProvider";
 import { BUILDING_BY_KEY, buildingBonus, buildingUpgradeCost, buildingUpgradeMinutes } from "@/game/buildings";
 import { ZONE_BUILDING_MAP } from "@/game/zones";
 import { BALANCE } from "@/game/balance";
+import { RESOURCE_META } from "@/game/resources";
 import type { BuildingKey } from "@/game/types";
 import { cn } from "@/lib/utils";
 
@@ -112,19 +113,39 @@ export function BaseTab() {
                     ) : maxed ? (
                       <span className="text-[10px] font-bold uppercase text-green-600">Máx</span>
                     ) : (
-                      <Button
-                        size="sm"
-                        disabled={!canAfford}
-                        onClick={() => upgradeBuilding(zoneId, key)}
-                        className="border border-green-500/40 bg-green-600/90 font-bold uppercase tracking-wider text-black hover:bg-green-500"
-                      >
-                        <span className="block text-[10px] leading-tight">
-                          Mejorar
-                          <span className="block font-mono text-[9px] font-bold opacity-80">
-                            {cost.materiales}⚙ {cost.componentes}⚿
+                      <div className="flex flex-col items-end gap-1.5">
+                        {/* required resources for this upgrade */}
+                        <div className="flex flex-col items-end gap-0.5">
+                          {([
+                            { key: "materiales" as const, need: cost.materiales, have: Math.floor(state.resources.materiales) },
+                            { key: "componentes" as const, need: cost.componentes, have: Math.floor(state.resources.componentes) },
+                          ]).map(({ key, need, have }) => (
+                            <span
+                              key={key}
+                              className={cn(
+                                "flex items-center gap-1 font-mono text-[10px] font-bold tabular-nums",
+                                have >= need ? "text-green-500" : "text-red-400",
+                              )}
+                            >
+                              {need} {RESOURCE_META[key].icon}
+                              <span className="text-[9px] font-normal text-zinc-600">({have})</span>
+                            </span>
+                          ))}
+                        </div>
+                        <Button
+                          size="sm"
+                          disabled={!canAfford}
+                          onClick={() => upgradeBuilding(zoneId, key)}
+                          className="border border-green-500/40 bg-green-600/90 font-bold uppercase tracking-wider text-black hover:bg-green-500"
+                        >
+                          <span className="block text-[10px] leading-tight">
+                            Mejorar
+                            <span className="block font-mono text-[9px] font-bold opacity-80">
+                              {minutes} min
+                            </span>
                           </span>
-                        </span>
-                      </Button>
+                        </Button>
+                      </div>
                     )}
                   </div>
                 )}

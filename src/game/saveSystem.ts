@@ -62,6 +62,8 @@ export function createInitialState(survivor: GameState["survivor"], now = Date.n
     resources: { ...emptyResources(), energia: BALANCE.maxEnergy },
     currentZoneId: 1,
     exploration: null,
+    autoRun: null,
+    autoExplore: false,
     explorationsDone: 0,
     zones: createInitialZones(),
     npcs: [],
@@ -223,6 +225,8 @@ function migrate(envelope: SaveEnvelope): SaveEnvelope {
     if (!state.log) state.log = [];
     if (typeof state.foodMin !== "number") state.foodMin = BALANCE.startingFoodMin;
     if (typeof state.waterMin !== "number") state.waterMin = BALANCE.startingWaterMin;
+    if (typeof state.autoExplore !== "boolean") state.autoExplore = false;
+    if (state.autoRun === undefined) state.autoRun = null;
   }
 
   return { version: v, savedAt: envelope.savedAt, state };
