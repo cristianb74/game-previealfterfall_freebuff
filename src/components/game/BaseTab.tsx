@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { HUD } from "@/components/game/HUD";
-import { useGame, MERCHANT_OFFERS } from "@/game/GameProvider";
+import { useGame } from "@/game/GameProvider";
 import { BUILDING_BY_KEY, buildingBonus, buildingUpgradeCost, buildingUpgradeMinutes } from "@/game/buildings";
 import { ZONE_BUILDING_MAP } from "@/game/zones";
 import { BALANCE } from "@/game/balance";
@@ -26,7 +26,7 @@ const BUILDING_ORDER: BuildingKey[] = [
 ];
 
 export function BaseTab() {
-  const { state, upgradeBuilding, buyResource, setScreen } = useGame();
+  const { state, upgradeBuilding, setScreen } = useGame();
   const [, force] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => force((v) => v + 1), 1000);
@@ -133,29 +133,6 @@ export function BaseTab() {
           );
         })}
       </div>
-
-      {/* merchant (money sink) */}
-      <section className="rounded-lg border border-zinc-800 bg-[#101213] p-3">
-        <p className="mb-2 text-xs font-bold uppercase tracking-widest text-zinc-300">Mercader</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {Object.entries(MERCHANT_OFFERS).map(([key, offer]) => (
-            <Button
-              key={key}
-              size="sm"
-              variant="outline"
-              disabled={state.resources.dinero < offer.price}
-              onClick={() => buyResource(key as keyof typeof MERCHANT_OFFERS)}
-              className="h-auto flex-col items-start gap-0.5 border-zinc-700 px-2 py-1.5 text-left hover:border-green-500/50"
-            >
-              <span className="text-[10px] font-bold text-zinc-200">{offer.label}</span>
-              <span className="text-[9px] font-mono text-green-500">${offer.price}</span>
-            </Button>
-          ))}
-        </div>
-        <p className="mt-2 text-[10px] text-zinc-600">
-          El dinero se encuentra explorando. No existe dinero premium.
-        </p>
-      </section>
 
       <section className="rounded-lg border border-zinc-800 bg-[#101213] p-3 text-[11px] leading-5 text-zinc-500">
         <p className="mb-1 text-xs font-bold uppercase tracking-widest text-zinc-300">Inventario</p>
