@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useGame } from "@/game/GameProvider";
 import { ZONES, zoneImage } from "@/game/zones";
+import { BUILDING_BY_KEY } from "@/game/buildings";
+import type { BuildingKey } from "@/game/types";
 import { cn } from "@/lib/utils";
 
 function fmtCountdown(ms: number): string {
@@ -8,12 +10,57 @@ function fmtCountdown(ms: number): string {
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  if (h > 0)
+    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+/** Find active buildings in a zone (upgradeFinishAt != null). */
+function getActiveBuildings(
+  buildings:
+    | Record<
+        BuildingKey,
+        { level: number; upgradeFinishAt: number | null }
+      >
+    | undefined,
+) {
+  if (!buildings) return [];
+  const now = Date.now();
+  return (
+    (Object.keys(buildings) as BuildingKey[])
+      .map((key) => {
+        const b = buildings[key];
+        if (!b.upgradeFinishAt) return null;
+        const remaining = b.upgradeFinishAt - now;
+        if (remaining <= 0) return null;
+        const def = BUILDING_BY_KEY[key];
+        return {
+          key,
+          name: def?.name ?? key,
+          level: b.level + 1, // constructing to this level
+          remaining,
+        };
+      })
+      .filter(Boolean) as {
+        key: BuildingKey;
+        name: string;
+        level: number;
+        remaining: number;
+      }[]
+  );
+}
+
+// Module-level double-tap tracker (reset per mount is not critical for tap timing).
+const _lastTap = new Map<number, number>();
+
 export function ZonasTab() {
-  const { state, setCurrentZone, maxUnlockedZoneId, toggleAutoExplore } = useGame();
+  const {
+    state,
+    setCurrentZone,
+    setScreen,
+    maxUnlockedZoneId,
+    toggleAutoExplore,
+  } = useGame();
   const [, force] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => force((v) => v + 1), 1000);
@@ -27,24 +74,42 @@ export function ZonasTab() {
   return (
     <div className="flex flex-col gap-3">
       <p className="px-1 text-[10px] uppercase tracking-[0.25em] text-zinc-500">
-        Zonas desbloqueadas · {unlockedMax}/20 · toca una zona para viajar
+        Zonas desbloqueadas · {unlockedMax}/20 · toca una zona para viajar ·
+        doble toque para abrir la base
       </p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {ZONES.map((z) => {
           const unlocked = z.id <= unlockedMax;
           const isCurrent = state.currentZoneId === z.id;
-          // Per-zone exploration status
           const isExploring = state.exploration?.zoneId === z.id;
-          // Per-zone auto-farm status
           const autoEnabled = state.autoExplored[z.id] ?? false;
           const autoRunning = state.autoFarms[z.id] != null;
           const assignedNpc = unlocked ? state.zones[z.id]?.assignedNpcId : null;
-          const expReady = !unlocked && nextZone?.id === z.id && state.expTotal >= z.unlockExp;
+          const expReady =
+            !unlocked &&
+            nextZone?.id === z.id &&
+            state.expTotal >= z.unlockExp;
+
+          const zoneBuildings = state.zones[z.id]?.buildings;
+          const activeBuildings = getActiveBuildings(zoneBuildings);
 
           return (
             <div key={z.id} className="flex flex-col gap-1">
               <button
-                onClick={() => unlocked && setCurrentZone(z.id)}
+                onDoubleClick={() => {
+                  if (!unlocked) return;
+                  setCurrentZone(z.id);
+                  setScreen("base");
+                }}
+                onClick={() => {
+                  if (!unlocked) return;
+                  // Double-tap guard: if onDoubleClick already fired, skip single-tap
+                  const prev = _lastTap.get(z.id) ?? 0;
+                  const now = Date.now();
+                  _lastTap.set(z.id, now);
+                  if (now - prev < 300) return;
+                  setCurrentZone(z.id);
+                }}
                 className={cn(
                   "group relative overflow-hidden rounded-lg border text-left transition-colors",
                   isCurrent
@@ -66,14 +131,15 @@ export function ZonasTab() {
                   <span className="absolute left-1.5 top-1.5 rounded-sm bg-black/70 px-1 text-[9px] font-bold tabular-nums text-zinc-300">
                     {String(z.id).padStart(2, "0")}
                   </span>
-                  {/* per-zone exploring badge with live countdown */}
                   {isExploring && state.exploration && (
                     <span className="absolute right-1.5 top-1.5 rounded-sm bg-green-600/95 px-1.5 py-0.5 text-right text-black shadow-[0_0_8px_1px_rgba(34,197,94,0.55)]">
                       <span className="block text-[8px] font-black uppercase leading-none tracking-wider">
                         Explorando
                       </span>
                       <span className="block font-mono text-[11px] font-black leading-tight tabular-nums">
-                        {fmtCountdown(state.exploration.finishAt - Date.now())}
+                        {fmtCountdown(
+                          state.exploration.finishAt - Date.now(),
+                        )}
                       </span>
                     </span>
                   )}
@@ -94,7 +160,9 @@ export function ZonasTab() {
                   )}
                 </div>
                 <div className="p-2">
-                  <p className="truncate text-[11px] font-bold text-zinc-200">{z.name}</p>
+                  <p className="truncate text-[11px] font-bold text-zinc-200">
+                    {z.name}
+                  </p>
                   <p className="text-[9px] uppercase tracking-wider text-zinc-500">
                     {unlocked
                       ? `${z.explorationMinutes} min · +${z.playerExpReward} EXP`
@@ -102,10 +170,31 @@ export function ZonasTab() {
                         ? "Alcanza la siguiente zona ›"
                         : `🔒 ${z.unlockExp.toLocaleString("es")} EXP`}
                   </p>
+
+                  {/* Construction status indicator */}
+                  {unlocked && activeBuildings.length > 0 && (
+                    <div className="mt-1.5 rounded-sm border border-amber-800/40 bg-amber-950/50 px-1.5 py-1">
+                      <p className="text-[8px] font-bold uppercase tracking-wider text-amber-500">
+                        🔨 Construyendo
+                      </p>
+                      <p className="text-[10px] font-bold tabular-nums text-amber-300">
+                        {activeBuildings[0].name} N{activeBuildings[0].level}{" "}
+                        <span className="font-mono text-amber-400">
+                          {fmtCountdown(activeBuildings[0].remaining)}
+                        </span>
+                      </p>
+                      {activeBuildings.length > 1 && (
+                        <p className="text-[8px] text-amber-600">
+                          +{activeBuildings.length - 1} construcción
+                          {activeBuildings.length - 1 > 1 ? "es" : ""} activa
+                          {activeBuildings.length - 1 > 1 ? "s" : ""}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </button>
 
-              {/* per-zone auto-explore toggle — only for unlocked zones */}
               {unlocked && (
                 <button
                   type="button"
@@ -117,11 +206,17 @@ export function ZonasTab() {
                       : "border-zinc-800/60 bg-[#0d0f10] hover:border-zinc-700",
                   )}
                 >
-                  <span className={cn(
-                    "text-[8px] font-bold uppercase tracking-widest",
-                    autoEnabled ? "text-green-500" : "text-zinc-600",
-                  )}>
-                    {autoEnabled && autoRunning ? "▶ Auto" : autoEnabled ? "Auto ON" : "Auto"}
+                  <span
+                    className={cn(
+                      "text-[8px] font-bold uppercase tracking-widest",
+                      autoEnabled ? "text-green-500" : "text-zinc-600",
+                    )}
+                  >
+                    {autoEnabled && autoRunning
+                      ? "▶ Auto"
+                      : autoEnabled
+                        ? "Auto ON"
+                        : "Auto"}
                   </span>
                   <span
                     className={cn(
@@ -144,9 +239,8 @@ export function ZonasTab() {
         })}
       </div>
       <p className="px-1 text-[10px] leading-4 text-zinc-600">
-        Al viajar cambias de zona al instante: explora allí, construye sus edificios y asigna
-        supervivientes. Cada zona guarda sus propias construcciones. La exploración automática
-        funciona por zona de forma independiente.
+        Al viajar cambias de zona al instante. Cada zona guarda sus propias
+        construcciones. Doble toque sobre una zona abre directamente su base.
       </p>
     </div>
   );

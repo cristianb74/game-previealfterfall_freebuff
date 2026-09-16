@@ -3,9 +3,15 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { HUD } from "@/components/game/HUD";
 import { useGame } from "@/game/GameProvider";
-import { BUILDING_BY_KEY, buildingBonus, buildingUpgradeCost, buildingUpgradeMinutes } from "@/game/buildings";
+import {
+  BUILDING_BY_KEY,
+  buildingBonus,
+  buildingUpgradeCost,
+  buildingUpgradeMinutes,
+} from "@/game/buildings";
 import { BALANCE } from "@/game/balance";
 import { RESOURCE_META } from "@/game/resources";
+import { getZone } from "@/game/zones";
 import type { BuildingKey } from "@/game/types";
 import { cn } from "@/lib/utils";
 
@@ -36,21 +42,38 @@ export function BaseTab() {
   if (!state) return null;
   const zoneId = state.currentZoneId;
   const zoneState = state.zones[zoneId];
+  const zoneDef = getZone(zoneId);
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="px-1 text-[10px] uppercase tracking-[0.25em] text-zinc-500">
-        Construcciones de la zona {String(zoneId).padStart(2, "0")} · cada zona mejora por separado
-      </p>
+      {/* Prominent zone identification header */}
+      <div className="rounded-lg border border-zinc-800/70 bg-[#101213] px-3 py-2.5">
+        <div className="flex items-baseline gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-zinc-500">
+            Base
+          </span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-600">
+            ·
+          </span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-green-500">
+            Zona {String(zoneId).padStart(2, "0")}
+          </span>
+        </div>
+        <p className="mt-0.5 text-sm font-bold text-zinc-200">{zoneDef.name}</p>
+        <p className="mt-0.5 text-[9px] text-zinc-600">
+          Las construcciones y sus bonus pertenecen únicamente a esta zona.
+        </p>
+      </div>
 
       <div className="flex flex-col gap-2">
         {BUILDING_ORDER.map((key) => {
           const def = BUILDING_BY_KEY[key];
           const b = zoneState.buildings[key];
-          // Sequential unlock: cocina always, others need previous at Lv1+
           const idx = BUILDING_ORDER.indexOf(key);
           const prevKey = idx > 0 ? BUILDING_ORDER[idx - 1] : null;
-          const available = prevKey === null || (zoneState.buildings[prevKey]?.level ?? 0) >= 1;
+          const available =
+            prevKey === null ||
+            (zoneState.buildings[prevKey]?.level ?? 0) >= 1;
           const busy = b.upgradeFinishAt != null;
           const remaining = busy ? (b.upgradeFinishAt as number) - Date.now() : 0;
           const cost = buildingUpgradeCost(b.level);
@@ -59,25 +82,31 @@ export function BaseTab() {
             state.resources.materiales >= cost.materiales &&
             state.resources.componentes >= cost.componentes;
           const minutes = buildingUpgradeMinutes(b.level);
-          const nextBonus = `+${Math.round((buildingBonus(b.level + 1) * 100))}%`;
+          const nextBonus = `+${Math.round(buildingBonus(b.level + 1) * 100)}%`;
 
           return (
             <section
               key={key}
               className={cn(
                 "rounded-lg border bg-[#101213] p-3",
-                available ? "border-zinc-800" : "border-zinc-800/50 opacity-50",
+                available
+                  ? "border-zinc-800"
+                  : "border-zinc-800/50 opacity-50",
               )}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-base">{def.icon}</span>
-                    <h3 className="text-sm font-bold text-zinc-100">{def.name}</h3>
+                    <h3 className="text-sm font-bold text-zinc-100">
+                      {def.name}
+                    </h3>
                     <span
                       className={cn(
                         "rounded-sm px-1 text-[9px] font-black",
-                        b.level > 0 ? "bg-green-600/90 text-black" : "bg-zinc-800 text-zinc-500",
+                        b.level > 0
+                          ? "bg-green-600/90 text-black"
+                          : "bg-zinc-800 text-zinc-500",
                       )}
                     >
                       N{b.level}
@@ -88,11 +117,20 @@ export function BaseTab() {
                       </span>
                     )}
                   </div>
-                  <p className="mt-1 text-[11px] leading-4 text-zinc-500">{def.description}</p>
+                  <p className="mt-1 text-[11px] leading-4 text-zinc-500">
+                    {def.description}
+                  </p>
                   <p className="mt-1 text-[10px] uppercase tracking-wider text-zinc-600">
                     Bonus actual:{" "}
-                    <span className="text-green-500">+{Math.round(buildingBonus(b.level) * 100)}%</span>
-                    {!maxed && <span className="text-zinc-500"> → siguiente {nextBonus}</span>}
+                    <span className="text-green-500">
+                      +{Math.round(buildingBonus(b.level) * 100)}%
+                    </span>
+                    {!maxed && (
+                      <span className="text-zinc-500">
+                        {" "}
+                        → siguiente {nextBonus}
+                      </span>
+                    )}
                   </p>
                 </div>
 
@@ -106,30 +144,48 @@ export function BaseTab() {
                         <Progress
                           value={Math.max(
                             0,
-                            Math.min(100, 100 - (remaining / (minutes * 60000)) * 100),
+                            Math.min(
+                              100,
+                              100 - (remaining / (minutes * 60000)) * 100,
+                            ),
                           )}
                           className="h-1.5 w-20 bg-zinc-800"
                         />
                       </div>
                     ) : maxed ? (
-                      <span className="text-[10px] font-bold uppercase text-green-600">Máx</span>
+                      <span className="text-[10px] font-bold uppercase text-green-600">
+                        Máx
+                      </span>
                     ) : (
                       <div className="flex flex-col items-end gap-1.5">
-                        {/* required resources for this upgrade */}
                         <div className="flex flex-col items-end gap-0.5">
-                          {([
-                            { key: "materiales" as const, need: cost.materiales, have: Math.floor(state.resources.materiales) },
-                            { key: "componentes" as const, need: cost.componentes, have: Math.floor(state.resources.componentes) },
-                          ]).map(({ key, need, have }) => (
+                          {(
+                            [
+                              {
+                                key: "materiales" as const,
+                                need: cost.materiales,
+                                have: Math.floor(state.resources.materiales),
+                              },
+                              {
+                                key: "componentes" as const,
+                                need: cost.componentes,
+                                have: Math.floor(state.resources.componentes),
+                              },
+                            ] as const
+                          ).map(({ key: rKey, need, have }) => (
                             <span
-                              key={key}
+                              key={rKey}
                               className={cn(
                                 "flex items-center gap-1 font-mono text-[10px] font-bold tabular-nums",
-                                have >= need ? "text-green-500" : "text-red-400",
+                                have >= need
+                                  ? "text-green-500"
+                                  : "text-red-400",
                               )}
                             >
-                              {need} {RESOURCE_META[key].icon}
-                              <span className="text-[9px] font-normal text-zinc-600">({have})</span>
+                              {need} {RESOURCE_META[rKey].icon}
+                              <span className="text-[9px] font-normal text-zinc-600">
+                                ({have})
+                              </span>
                             </span>
                           ))}
                         </div>
@@ -157,18 +213,27 @@ export function BaseTab() {
       </div>
 
       <section className="rounded-lg border border-zinc-800 bg-[#101213] p-3 text-[11px] leading-5 text-zinc-500">
-        <p className="mb-1 text-xs font-bold uppercase tracking-widest text-zinc-300">Inventario</p>
+        <p className="mb-1 text-xs font-bold uppercase tracking-widest text-zinc-300">
+          Inventario
+        </p>
         <button
           type="button"
           onClick={() => setScreen("mochila")}
           className="w-full rounded-sm text-left transition-colors hover:text-zinc-300"
         >
-          ⚒ {Math.floor(state.resources.materiales)} Materiales · ✚ {Math.floor(state.resources.medicamentos)} Medicamentos · ⚙{" "}
-          {Math.floor(state.resources.componentes)} Componentes · <span className="text-green-500">$ {Math.floor(state.resources.dinero)}</span>
-          <span className="ml-1 text-[9px] uppercase tracking-wider text-zinc-600">ver Mochila ›</span>
+          ⚒ {Math.floor(state.resources.materiales)} Materiales · ✚{" "}
+          {Math.floor(state.resources.medicamentos)} Medicamentos · ⚙{" "}
+          {Math.floor(state.resources.componentes)} Componentes ·{" "}
+          <span className="text-green-500">
+            $ {Math.floor(state.resources.dinero)}
+          </span>
+          <span className="ml-1 text-[9px] uppercase tracking-wider text-zinc-600">
+            ver Mochila ›
+          </span>
         </button>
         <p className="mt-1 text-[10px] text-zinc-600">
-          Las construcciones usan solo Materiales y Componentes. Nunca Comida ni Agua.
+          Las construcciones usan solo Materiales y Componentes. Nunca Comida
+          ni Agua.
         </p>
       </section>
     </div>
