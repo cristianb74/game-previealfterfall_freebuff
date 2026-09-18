@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useGame } from "@/game/GameProvider";
 import { ZONES, zoneImage } from "@/game/zones";
 import { BUILDING_BY_KEY } from "@/game/buildings";
+import { NPC_TYPE_MODIFIERS, npcProductionMultiplier } from "@/game/npcTypes";
+import { BUILDING_SPECIALIZATION } from "@/game/balance";
 import type { BuildingKey } from "@/game/types";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +49,53 @@ function getActiveBuildings(
         level: number;
         remaining: number;
       }[]
+  );
+}
+
+/** NPC indicator for a zone card. */
+function NpcIndicator({
+  npcId,
+  zoneId,
+  buildings,
+}: {
+  npcId: string | null;
+  zoneId: number;
+  buildings?: Record<BuildingKey, { level: number; upgradeFinishAt: number | null }>;
+}) {
+  const { state } = useGame();
+  if (!state) return null;
+
+  const npc = npcId ? state.npcs.find((n) => n.id === npcId) : null;
+
+  if (!npc) {
+    return (
+      <span className="absolute bottom-1.5 left-1.5 rounded-sm bg-black/70 px-1 text-[7px] font-bold uppercase tracking-wider text-zinc-600">
+        Sin NPC
+      </span>
+    );
+  }
+
+  const typeInfo = NPC_TYPE_MODIFIERS[npc.type];
+  // Build a proper ZoneProgressState for the bonus calculation.
+  const zoneState = buildings
+    ? {
+        buildings: Object.fromEntries(
+          (Object.keys(buildings) as BuildingKey[]).map((k) => [k, { key: k, ...buildings[k] }]),
+        ) as Record<BuildingKey, { key: BuildingKey; level: number; upgradeFinishAt: number | null }>,
+        assignedNpcId: npcId,
+      }
+    : null;
+  const totalBonus = zoneState ? npcProductionMultiplier(npc, zoneState, BUILDING_SPECIALIZATION[npc.specialization]) : null;
+  const bonusPct = totalBonus != null ? Math.round((totalBonus - 1) * 100) : null;
+
+  return (
+    <span
+      className="absolute bottom-1.5 left-1.5 rounded-sm px-1.5 py-0.5 text-[7px] font-bold leading-none tracking-wider shadow-[0_0_6px_1px_rgba(0,0,0,0.7)]"
+      style={{ backgroundColor: typeInfo.color + "22", color: typeInfo.color, border: `1px solid ${typeInfo.color}44` }}
+    >
+      👤 {npc.id} · {typeInfo.label.toUpperCase()}
+      {bonusPct != null && <span className="text-[6px] opacity-80"> · +{bonusPct}%</span>}
+    </span>
   );
 }
 
@@ -153,10 +202,13 @@ export function ZonasTab() {
                       🔒
                     </span>
                   )}
-                  {assignedNpc && (
-                    <span className="absolute bottom-1.5 right-1.5 rounded-sm bg-black/70 px-1 text-[8px] font-bold text-green-400">
-                      {assignedNpc}
-                    </span>
+                  {/* NPC indicator */}
+                  {unlocked && (
+                    <NpcIndicator
+                      npcId={assignedNpc}
+                      zoneId={z.id}
+                      buildings={zoneBuildings}
+                    />
                   )}
                 </div>
                 <div className="p-2">

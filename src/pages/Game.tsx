@@ -8,6 +8,7 @@ import { BaseTab } from "@/components/game/BaseTab";
 import { MercaderTab } from "@/components/game/MercaderTab";
 import { MochilaTab } from "@/components/game/MochilaTab";
 import { PerfilTab } from "@/components/game/PerfilTab";
+import { RegistroTab } from "@/components/game/RegistroTab";
 import { useGame, MERCHANT_OFFERS } from "@/game/GameProvider";
 import { currentEnergy } from "@/game/energySystem";
 import { buildingUpgradeCost } from "@/game/buildings";
@@ -24,6 +25,7 @@ const TABS: { key: Screen; label: string; glyph: string }[] = [
   { key: "mercader", label: "Mercader", glyph: "🤝" },
   { key: "mochila", label: "Mochila", glyph: "🎒" },
   { key: "perfil", label: "Perfil", glyph: "👤" },
+  { key: "registro", label: "Registro", glyph: "📋" },
 ];
 
 export default function Game() {
@@ -102,6 +104,7 @@ export default function Game() {
             {screen === "mercader" && <MercaderTab />}
             {screen === "mochila" && <MochilaTab />}
             {screen === "perfil" && <PerfilTab />}
+            {screen === "registro" && <RegistroTab />}
           </main>
 
           <aside className="hidden lg:block">
@@ -115,7 +118,7 @@ export default function Game() {
 
       {/* Mobile bottom navigation */}
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-800 bg-[#0c0e0f]/95 backdrop-blur lg:hidden">
-        <div className="mx-auto grid max-w-3xl grid-cols-7">
+        <div className="mx-auto grid max-w-3xl grid-cols-8">
           {TABS.map((t) => (
             <button
               key={t.key}

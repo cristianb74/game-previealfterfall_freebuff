@@ -140,7 +140,8 @@ export type Screen =
   | "base"
   | "mercader"
   | "mochila"
-  | "perfil";
+  | "perfil"
+  | "registro";
 
 export type SaveMeta = {
   version: number;
