@@ -47,9 +47,9 @@ export default function Game() {
   if (state) {
     const now = Date.now();
     const zone = getZone(state.currentZoneId);
-    const exploring = state.exploration != null;
+    const currentZoneExploring = state.explorationStates[state.currentZoneId] != null;
     explorableNow =
-      !exploring &&
+      !currentZoneExploring &&
       currentEnergy(state, now) >= 1 &&
       state.health > 0;
     zonesUnlockable =

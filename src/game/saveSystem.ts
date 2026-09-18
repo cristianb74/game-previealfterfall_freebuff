@@ -61,10 +61,11 @@ export function createInitialState(survivor: GameState["survivor"], now = Date.n
     lastEnergyRegenAt: now,
     resources: { ...emptyResources(), energia: BALANCE.maxEnergy },
     currentZoneId: 1,
-    exploration: null,
+    explorationStates: {},
     autoFarms: {},
     autoExplored: {},
     explorationsDone: 0,
+    explorationsSinceLastNPC: 0,
     zones: createInitialZones(),
     npcs: [],
     npcCycles: {},
@@ -240,6 +241,18 @@ function migrate(envelope: SaveEnvelope): SaveEnvelope {
       }
     }
     if (!state.autoFarms || typeof state.autoFarms !== "object") state.autoFarms = {};
+    // Migrate old single exploration to per-zone explorationStates
+    if (!state.explorationStates || typeof state.explorationStates !== "object") {
+      state.explorationStates = {};
+      const oldExpl = (state as unknown as Record<string, unknown>).exploration;
+      if (oldExpl && typeof oldExpl === "object") {
+        const e = oldExpl as { zoneId?: number; startedAt?: number; finishAt?: number };
+        if (e.zoneId && e.startedAt && e.finishAt) {
+          state.explorationStates[e.zoneId] = { zoneId: e.zoneId, startedAt: e.startedAt, finishAt: e.finishAt };
+        }
+      }
+    }
+    if (typeof state.explorationsSinceLastNPC !== "number") state.explorationsSinceLastNPC = 0;
   }
 
   return { version: v, savedAt: envelope.savedAt, state };

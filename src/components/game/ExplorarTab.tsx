@@ -27,15 +27,20 @@ export function ExplorarTab() {
   if (!state) return null;
   const now = Date.now();
   const zone = getZone(state.currentZoneId);
-  const exploring = state.exploration != null;
-  const remaining = state.exploration ? state.exploration.finishAt - now : 0;
-  const pct = state.exploration
-    ? Math.max(0, Math.min(100, ((now - state.exploration.startedAt) / (state.exploration.finishAt - state.exploration.startedAt)) * 100))
+  // Per-zone: check if THIS zone is exploring
+  const currentExploration = state.explorationStates[state.currentZoneId];
+  const isCurrentExploring = currentExploration != null;
+  const remaining = isCurrentExploring ? currentExploration.finishAt - now : 0;
+  const pct = isCurrentExploring
+    ? Math.max(0, Math.min(100, ((now - currentExploration.startedAt) / (currentExploration.finishAt - currentExploration.startedAt)) * 100))
     : 0;
   const energy = currentEnergy(state, now);
-  const canExplore = !exploring && energy >= 1 && state.health > 0;
+  // Can explore if this zone is not already exploring, has energy, and has health
+  const canExplore = !isCurrentExploring && energy >= 1 && state.health > 0;
 
   const log = state.log.slice(0, 3);
+  // Show all active manual explorations across zones
+  const activeExplorations = Object.keys(state.explorationStates).map(Number).filter((zid) => state.explorationStates[zid]);
   // Show running auto-farms across all zones
   const activeAutoFarms = Object.keys(state.autoFarms ?? {}).map(Number).filter((zid) => state.autoFarms[zid]);
 
@@ -76,16 +81,7 @@ export function ExplorarTab() {
             </div>
           </div>
 
-          {/* per-zone auto-explore: managed from ZonasTab */}
-          {Object.keys(state.autoExplored ?? {}).map(Number).filter((zid) => state.autoExplored[zid]).length > 0 && (
-            <div className="rounded-md border border-green-900/40 bg-green-950/10 px-3 py-2">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-green-500">
-                Auto-activas: {Object.keys(state.autoExplored ?? {}).map(Number).filter((zid) => state.autoExplored[zid]).length} zona(s)
-              </p>
-            </div>
-          )}
-
-          {exploring ? (
+          {isCurrentExploring ? (
             <div className="flex flex-col gap-2 rounded-md border border-green-900/50 bg-green-950/20 p-3">
               <div className="flex items-baseline justify-between">
                 <span className="text-xs font-bold uppercase tracking-widest text-green-500">EXPLORANDO...</span>
@@ -96,7 +92,7 @@ export function ExplorarTab() {
               <Progress value={pct} className="h-2 bg-zinc-800" />
               <p className="text-[10px] text-zinc-500">
                 Puedes cerrar la app. La exploración termina sola a las{" "}
-                {new Date(state.exploration!.finishAt).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}.
+                {new Date(currentExploration.finishAt).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}.
               </p>
             </div>
           ) : (
@@ -112,6 +108,29 @@ export function ExplorarTab() {
                   ? `Sin energía (${Math.ceil(1 - energy)} regenerando)`
                   : "Explorar"}
             </Button>
+          )}
+
+          {/* Show all active manual explorations across zones */}
+          {activeExplorations.length > 1 && (
+            <div className="flex flex-col gap-1">
+              <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">
+                Otras exploraciones activas
+              </p>
+              {activeExplorations.filter((zid) => zid !== state.currentZoneId).map((zid) => {
+                const run = state.explorationStates[zid]!;
+                return (
+                  <div key={zid} className="flex items-center justify-between gap-2 rounded-md border border-green-900/40 bg-green-950/10 px-3 py-1.5">
+                    <p className="min-w-0 text-[10px] leading-4 text-zinc-400">
+                      <span className="font-bold uppercase tracking-wider text-green-500">Z{String(zid).padStart(2, "0")}</span>
+                      <span className="ml-1 truncate">{getZone(zid).name}</span>
+                    </p>
+                    <span className="shrink-0 font-mono text-xs font-bold tabular-nums text-green-400">
+                      {fmtCountdown(run.finishAt - now)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           )}
 
           {/* active auto-farm status for all zones */}
@@ -133,6 +152,16 @@ export function ExplorarTab() {
               })}
             </div>
           )}
+
+          {/* NPC counter display */}
+          <div className="rounded-md border border-zinc-800 bg-[#0d0f10] px-3 py-2">
+            <p className="text-[9px] uppercase tracking-wider text-zinc-600">
+              NPC · {state.explorationsSinceLastNPC ?? 0} exploraciones desde último NPC
+            </p>
+            <p className="text-[10px] text-zinc-500">
+              Próximo chance: {((state.explorationsSinceLastNPC ?? 0) < 50 ? "exploración #50" : `${Math.round(((state.explorationsSinceLastNPC ?? 0) < 100 ? 0.01 : (state.explorationsSinceLastNPC ?? 0) < 150 ? 0.02 : (state.explorationsSinceLastNPC ?? 0) < 200 ? 0.04 : 1) * 100)}%`)}
+            </p>
+          </div>
         </div>
       </section>
 
@@ -187,7 +216,7 @@ export function ExplorarTab() {
           </ul>
         )}
         <button
-          onClick={() => setScreen("perfil")}
+          onClick={() => setScreen("registro")}
           className="mt-2 text-[10px] uppercase tracking-wider text-zinc-600 hover:text-zinc-400"
         >
           Ver registro completo →

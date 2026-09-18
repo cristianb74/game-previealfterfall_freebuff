@@ -130,7 +130,7 @@ export function ZonasTab() {
         {ZONES.map((z) => {
           const unlocked = z.id <= unlockedMax;
           const isCurrent = state.currentZoneId === z.id;
-          const isExploring = state.exploration?.zoneId === z.id;
+          const isExploring = state.explorationStates[z.id] != null;
           const autoEnabled = state.autoExplored[z.id] ?? false;
           const autoRunning = state.autoFarms[z.id] != null;
           const assignedNpc = unlocked ? state.zones[z.id]?.assignedNpcId : null;
@@ -180,14 +180,14 @@ export function ZonasTab() {
                   <span className="absolute left-1.5 top-1.5 rounded-sm bg-black/70 px-1 text-[9px] font-bold tabular-nums text-zinc-300">
                     {String(z.id).padStart(2, "0")}
                   </span>
-                  {isExploring && state.exploration && (
+                  {isExploring && state.explorationStates[z.id] && (
                     <span className="absolute right-1.5 top-1.5 rounded-sm bg-green-600/95 px-1.5 py-0.5 text-right text-black shadow-[0_0_8px_1px_rgba(34,197,94,0.55)]">
                       <span className="block text-[8px] font-black uppercase leading-none tracking-wider">
                         Explorando
                       </span>
                       <span className="block font-mono text-[11px] font-black leading-tight tabular-nums">
                         {fmtCountdown(
-                          state.exploration.finishAt - Date.now(),
+                          state.explorationStates[z.id].finishAt - Date.now(),
                         )}
                       </span>
                     </span>

@@ -119,11 +119,8 @@ export function rollExploration(state: GameState, zoneId: number): ExplorationOu
     });
   }
 
-  // NPC discovery
-  const npcId = rollNpcDiscovery(state);
-  if (npcId) {
-    findings.push({ kind: "npc", npcId });
-  }
+  // NPC discovery is now handled externally by the GameProvider
+  // using a counter-based system (explorationsSinceLastNPC).
 
   return { zoneId, exp, findings };
 }
@@ -145,25 +142,18 @@ function randomIncident(): { cause: string; damage: number } {
   return { cause: inc.cause, damage: min + Math.floor(Math.random() * (max - min + 1)) };
 }
 
-/** Which NPC could be discovered next (not yet owned). */
-function discoverableNpcIds(state: GameState): string[] {
-  const owned = new Set(state.npcs.map((n) => n.id));
-  return Object.keys(NPC_BY_ID).filter((id) => !owned.has(id));
+/** NPC discovery is now handled by GameProvider with a counter-based system. */
+export function npcChanceForCounter(counter: number): number {
+  if (counter < 50) return 0;
+  if (counter < 100) return 0.01;
+  if (counter < 150) return 0.02;
+  if (counter < 200) return 0.04;
+  return 1; // guaranteed on 200th
 }
 
-/** Guarantee the first NPC within the first ~10 explorations. */
-function rollNpcDiscovery(state: GameState): string | null {
-  const pool = discoverableNpcIds(state);
-  if (pool.length === 0) return null;
-  if (state.explorationsDone < BALANCE.npcFirstGuarantee) {
-    // within the guarantee window: remaining explorations until guarantee
-    const remaining = BALANCE.npcFirstGuarantee - state.explorationsDone;
-    const chance = Math.max(BALANCE.npcDiscoverChance, 1 / remaining);
-    return Math.random() < chance ? pool[Math.floor(Math.random() * pool.length)] : null;
-  }
-  return Math.random() < BALANCE.npcDiscoverChance
-    ? pool[Math.floor(Math.random() * pool.length)]
-    : null;
+export function discoverableNpcIds(state: GameState): string[] {
+  const owned = new Set(state.npcs.map((n) => n.id));
+  return Object.keys(NPC_BY_ID).filter((id) => !owned.has(id));
 }
 
 /** Formatted label of a finding for the log/results UI. */

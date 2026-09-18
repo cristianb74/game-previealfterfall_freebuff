@@ -53,18 +53,21 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
   const energyBefore = state.resources.energia;
   energyRegen = applyEnergyRegen(state, now);
 
-  // ---- Exploration completion while away ----
+  // ---- Per-zone exploration completion while away ----
   // NOTE: runs are NOT cleared here — the GameProvider tick completes them
   // right after boot so the player receives the full EXP/resource rewards.
-  // A finished MANUAL frontier run may have reached a new zone while away:
-  // precompute the frontier so the boot state is coherent.
-  if (state.exploration && now >= state.exploration.finishAt) {
-    explorationsCompleted = 1;
-    let maxUnlocked = 1;
-    for (const z of ZONES) {
-      if (state.expTotal >= z.unlockExp) maxUnlocked = Math.max(maxUnlocked, z.id);
+  // Check each zone's exploration independently.
+  for (const zid of Object.keys(state.explorationStates ?? {}).map(Number)) {
+    const run = state.explorationStates[zid];
+    if (run && now >= run.finishAt) {
+      explorationsCompleted += 1;
+      // A finished MANUAL frontier run may have reached a new zone while away.
+      let maxUnlocked = 1;
+      for (const z of ZONES) {
+        if (state.expTotal >= z.unlockExp) maxUnlocked = Math.max(maxUnlocked, z.id);
+      }
+      if (maxUnlocked > frontierZoneId(state)) state.pendingZoneUnlock = maxUnlocked;
     }
-    if (maxUnlocked > frontierZoneId(state)) state.pendingZoneUnlock = maxUnlocked;
   }
   // Offline auto-farm cycles per zone: credit reduced EXP for chained runs
   // while away. Pending runs are completed by the tick after boot.

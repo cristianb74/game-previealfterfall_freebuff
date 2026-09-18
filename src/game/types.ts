@@ -79,6 +79,8 @@ export interface ExplorationRun {
   zoneId: number;
   startedAt: number;
   finishAt: number;
+  /** True if this run was started by the background auto-farm. */
+  auto?: boolean;
 }
 
 export interface LogEvent {
@@ -102,14 +104,16 @@ export interface GameState {
   lastEnergyRegenAt: number;
   resources: Record<ResourceKey, number>;
   currentZoneId: number;
-  /** Manual exploration of the zone the player is in (costs energy). */
-  exploration: ExplorationRun | null;
+  /** Per-zone manual explorations (each zone runs independently). */
+  explorationStates: Record<number, ExplorationRun>;
   /** Per-zone background auto-exploration runs (no energy, reduced EXP,
    *  never advances the frontier, never discovers NPCs). */
   autoFarms: Record<number, ExplorationRun | null>;
   /** Per-zone toggle: which zones have the auto-farm enabled. */
   autoExplored: Record<number, boolean>;
   explorationsDone: number;
+  /** Counter since last NPC discovery (for balanced spawn system). */
+  explorationsSinceLastNPC: number;
   zones: Record<number, ZoneProgressState>;
   npcs: NpcSurvivor[];
   /** Per-NPC production accumulator timestamps (absolute ms). */

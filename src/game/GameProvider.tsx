@@ -16,7 +16,7 @@ import {
 import { applyOfflineProgress } from "@/game/offlineProgress";
 import { tickNpcs } from "@/game/onlineTick";
 import { applyEnergyRegen, currentEnergy, spendEnergy } from "@/game/energySystem";
-import { rollExploration } from "@/game/explorationEngine";
+import { rollExploration, npcChanceForCounter, discoverableNpcIds } from "@/game/explorationEngine";
 import {
   buildingUpgradeCost,
   buildingUpgradeMinutes,
@@ -328,11 +328,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
       s.lastTickAt = now;
       let dirty = false;
 
-      // MANUAL exploration completion (full rewards, may unlock zones).
-      if (s.exploration && now >= s.exploration.finishAt) {
-        completeExploration(s, s.exploration.startedAt);
-        dirty = true;
-        void saveGame(s);
+      // PER-ZONE exploration completion (each zone independent).
+      for (const zid of Object.keys(s.explorationStates).map(Number)) {
+        const run = s.explorationStates[zid];
+        if (run && now >= run.finishAt) {
+          completeExploration(s, zid, run.startedAt);
+          dirty = true;
+          void saveGame(s);
+        }
       }
 
       // BACKGROUND auto-farm completion (reduced rewards, no unlocks) — per zone.
@@ -411,22 +414,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
       } else if (f.kind === "damage") {
         s.health = Math.max(0, s.health - (f.damage ?? 0));
         pushLog(s, `${f.cause} · -${f.damage} Salud`, "damage", startedAt);
-      } else if (f.kind === "npc" && f.npcId) {
-        const seed = NPC_BY_ID[f.npcId];
-        if (seed) {
-          const npc: NpcSurvivor = {
-            ...seed,
-            assignedZoneId: null,
-            discoveredAt: Date.now(),
-            productionTotals: { materiales: 0, agua: 0, comida: 0, medicamentos: 0, componentes: 0, energia: 0, dinero: 0 },
-          };
-          s.npcs.push(npc);
-          pushLog(s, `${npcDisplayName(npc)} se unió al refugio`, "npc", startedAt);
-          toast.info("SUPERVIVIENTE ENCONTRADO", {
-            description: `${npc.name} «${npc.alias}» · ${NPC_TYPE_MODIFIERS[npc.type].label}`,
-            duration: 6000,
-          });
-        }
       }
     }
     if (outcome.findings.length === 0) {
@@ -460,27 +447,54 @@ export function GameProvider({ children }: { children: ReactNode }) {
     for (const f of outcome.findings) {
       if (f.kind === "resource") parts.push(`+${f.amount} ${f.resource === "dinero" ? "$" : f.resource}`);
       else if (f.kind === "damage") parts.push(`${f.cause} · -${f.damage} Salud`);
-      else if (f.kind === "npc") {
-        const seed = f.npcId ? NPC_BY_ID[f.npcId] : undefined;
-        parts.push(seed ? `Superviviente ${seed.name} «${seed.alias}»` : `Superviviente ${f.npcId}`);
-      }
+
     }
     if (outcome.findings.length === 0) parts.push("Sin hallazgos");
     return parts.join(" · ");
   }
 
-  /** Complete the MANUAL exploration: roll, apply (full rewards), log, toast. */
-  function completeExploration(s: GameState, startedAt: number) {
-    if (!s.exploration) return;
-    const outcome = rollExploration(s, s.exploration.zoneId);
+  /** Complete the MANUAL exploration: roll, apply (full rewards), log, toast.
+   *  NPC discovery uses the counter-based system (one roll per completion). */
+  function completeExploration(s: GameState, zoneId: number, startedAt: number) {
+    const run = s.explorationStates[zoneId];
+    if (!run) return;
+    const outcome = rollExploration(s, zoneId);
     applyOutcome(s, outcome, startedAt);
-    s.exploration = null;
+    // Single NPC check per exploration completion (counter-based)
+    const counter = (s.explorationsSinceLastNPC ?? 0) + 1;
+    const chance = npcChanceForCounter(counter);
+    const pool = discoverableNpcIds(s);
+    let npcFound = false;
+    if (pool.length > 0 && Math.random() < chance) {
+      const pick = pool[Math.floor(Math.random() * pool.length)];
+      const seed = NPC_BY_ID[pick];
+      if (seed) {
+        const npc: NpcSurvivor = {
+          ...seed,
+          assignedZoneId: null,
+          discoveredAt: Date.now(),
+          productionTotals: { materiales: 0, agua: 0, comida: 0, medicamentos: 0, componentes: 0, energia: 0, dinero: 0 },
+        };
+        s.npcs.push(npc);
+        pushLog(s, `[EXP #${s.explorationsDone + 1}] NPC OBTENIDO | ${npc.id} · ${npc.name} · ${NPC_TYPE_MODIFIERS[npc.type].label}`, "npc", startedAt);
+        pushLog(s, `[NPC] contador reiniciado a 0`, "info", Date.now());
+        s.explorationsSinceLastNPC = 0;
+        npcFound = true;
+        toast.info("SUPERVIVIENTE ENCONTRADO", {
+          description: `${npc.name} «${npc.alias}» · ${NPC_TYPE_MODIFIERS[npc.type].label}`,
+          duration: 6000,
+        });
+      }
+    }
+    if (!npcFound) {
+      s.explorationsSinceLastNPC = counter;
+      pushLog(s, `[EXP #${s.explorationsDone + 1}] NPC CHECK | contador ${counter} | probabilidad ${Math.round(chance * 100)}% | resultado NO`, "info", startedAt);
+    }
+    delete s.explorationStates[zoneId];
     toast.success("EXPLORACIÓN COMPLETADA", {
       description: outcomeSummary(outcome),
       duration: 5000,
     });
-    // Auto-enable auto-farm for the conquered zone if player has it toggled
-    // (handled by the tick: if autoExplored[zId] is true, the tick schedules it).
   }
 
   /** Complete one BACKGROUND auto-farm run for a specific zone: reduced EXP,
@@ -488,8 +502,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   function completeAutoRun(s: GameState, zoneId: number, startedAt: number) {
     if (!s.autoFarms[zoneId]) return;
     const outcome = rollExploration(s, zoneId);
-    // Auto runs never discover NPCs (that is the manual run's privilege).
-    outcome.findings = outcome.findings.filter((f) => f.kind !== "npc");
+    // Auto runs use reduced EXP, no NPC discovery (engine no longer rolls NPCs).
     outcome.exp = Math.max(1, Math.round(outcome.exp * BALANCE.autoExploreExpFactor));
     applyOutcome(s, outcome, startedAt, { auto: true });
     s.autoFarms[zoneId] = null;
@@ -502,7 +515,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (zoneId < 1 || zoneId > maxUnlocked) return;
     if (s.autoFarms[zoneId]) return;
     // The manual run owns its zone; the farm retries on a later tick.
-    if (s.exploration && s.exploration.zoneId === zoneId) return;
+    if (s.explorationStates[zoneId]) return;
     if (s.health <= 0) return;
     const minutes = getZone(zoneId).explorationMinutes;
     s.autoFarms[zoneId] = { zoneId, startedAt: now, finishAt: now + minutes * 60000 };
@@ -527,6 +540,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         else if (p === "agua") s.waterMin += amount * 60;
         else s.resources[p] += amount;
       }
+      s.explorationsSinceLastNPC = 0;
       pushLog(s, "Comienza tu supervivencia", "info", now);
       setState(s);
       stateRef.current = s;
@@ -569,7 +583,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     (zoneId: number) => {
       setAndSave((s) => {
         const now = Date.now();
-        if (s.exploration) return;
+        // Per-zone: only prevent if THIS zone is already exploring
+        if (s.explorationStates[zoneId]) return;
         if (currentEnergy(s, now) < 1) {
           toast.error("Sin energía", { description: "Espera a que se regenere." });
           return;
@@ -581,8 +596,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         spendEnergy(s, 1, now);
         const minutes = getZone(zoneId).explorationMinutes;
         s.currentZoneId = zoneId;
-        s.exploration = { zoneId, startedAt: now, finishAt: now + minutes * 60000 };
-        pushLog(s, `Exploración iniciada en ${getZone(zoneId).name}`, "info", now);
+        s.explorationStates[zoneId] = { zoneId, startedAt: now, finishAt: now + minutes * 60000 };
+        pushLog(s, `[EXP #${s.explorationsDone + 1}] Z${String(zoneId).padStart(2, "0")} | INICIO | duración ${minutes * 60}s`, "info", now);
       });
     },
     [setAndSave],

@@ -196,6 +196,52 @@ export function RegistroTab() {
           <div className="text-zinc-200">{state.npcs.length} obtenidos</div>
           <div className="text-zinc-500">Exploraciones</div>
           <div className="text-zinc-200">{state.explorationsDone}</div>
+          <div className="text-zinc-500">NPC counter</div>
+          <div className="text-zinc-200">{state.explorationsSinceLastNPC ?? 0} desde último NPC</div>
+        </div>
+      </section>
+
+      {/* Exploration & NPC diagnostics */}
+      <section className="rounded-lg border border-zinc-800 bg-[#101213] p-3">
+        <p className="mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">
+          Diagnóstico de exploración
+        </p>
+        <div className="flex flex-col gap-1.5">
+          {/* Active manual explorations */}
+          {Object.keys(state.explorationStates).map(Number).filter((zid) => state.explorationStates[zid]).length > 0 ? (
+            Object.keys(state.explorationStates).map(Number).filter((zid) => state.explorationStates[zid]).map((zid) => {
+              const run = state.explorationStates[zid]!;
+              const remaining = Math.max(0, Math.ceil((run.finishAt - Date.now()) / 1000));
+              return (
+                <div key={zid} className="flex items-center justify-between text-[10px]">
+                  <span className="text-green-400">
+                    [Z{String(zid).padStart(2, "0")}] exploración activa
+                  </span>
+                  <span className="font-mono text-zinc-300">restante {remaining}s</span>
+                </div>
+              );
+            })
+          ) : (
+            <p className="text-[10px] text-zinc-600">Sin exploraciones activas</p>
+          )}
+          {/* Active auto-farms */}
+          {Object.keys(state.autoFarms ?? {}).map(Number).filter((zid) => state.autoFarms[zid]).map((zid) => {
+            const run = state.autoFarms[zid]!;
+            const remaining = Math.max(0, Math.ceil((run.finishAt - Date.now()) / 1000));
+            return (
+              <div key={zid} className="flex items-center justify-between text-[10px]">
+                <span className="text-green-500">
+                  [Z{String(zid).padStart(2, "0")}] auto-farm activo
+                </span>
+                <span className="font-mono text-zinc-300">restante {remaining}s</span>
+              </div>
+            );
+          })}
+          {/* NPC spawn counter */}
+          <div className="mt-1 flex items-center justify-between rounded-sm bg-[#0d0f10] px-2 py-1 text-[10px]">
+            <span className="text-zinc-400">Contador NPC</span>
+            <span className="font-mono text-zinc-200">{state.explorationsSinceLastNPC ?? 0} / 200</span>
+          </div>
         </div>
       </section>
 
