@@ -57,6 +57,10 @@ export function HUD() {
   if (!state) return null;
   const now = Date.now();
   const energy = currentEnergy(state, now);
+  const msSinceLastRegen = Math.max(0, now - state.lastEnergyRegenAt);
+  const msPerPoint = BALANCE.energyRegenMinutesPerPoint * 60000;
+  const msUntilNext = energy < 1 ? Math.max(0, msPerPoint - msSinceLastRegen) : 0;
+  const nextRegenMMSS = `${String(Math.floor(msUntilNext / 60000)).padStart(2, "0")}:${String(Math.floor((msUntilNext % 60000) / 1000)).padStart(2, "0")}`;
   const nextZone = nextLockedZone(state);
   const assigned = state.npcs.filter((n) => n.assignedZoneId).length;
 
@@ -106,8 +110,9 @@ export function HUD() {
             label="Energía"
             value={energy}
             max={BALANCE.maxEnergy}
-            display={`${Math.floor(energy)}/24`}
+            display={energy < 1 ? `Sin energía · ${nextRegenMMSS}` : `${Math.floor(energy)}/${BALANCE.maxEnergy}`}
             color="#22c55e"
+            danger={energy < 1}
           />
           <SurvivalBar
             label="Salud"

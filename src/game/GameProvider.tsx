@@ -126,6 +126,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const saveTimer = useRef<number | null>(null);
   const bootOnceRef = useRef(false);
   const navigateRef = useRef<((path: string) => void) | null>(null);
+  const wasEnergyZeroRef = useRef(false);
 
   // ---- cloud sync wiring ----
   const convex = useConvex();
@@ -326,15 +327,32 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const s = stateRef.current;
       if (!s) return;
       const now = Date.now();
-      const energyBefore = s.resources.energia;
+      const energyBefore = Math.floor(s.resources.energia);
       applyEnergyRegen(s, now);
-      const energyGained = s.resources.energia - energyBefore;
+      const energyAfter = Math.floor(s.resources.energia);
+      const energyGained = energyAfter - energyBefore;
       if (energyGained >= 1) {
-        const rounded = Math.floor(energyGained);
-        const before = Math.floor(energyBefore);
-        const after = Math.floor(s.resources.energia);
-        pushLog(s, `[ENERGÍA] Regeneración automática · +${rounded} · ${before}/${BALANCE.maxEnergy} → ${after}/${BALANCE.maxEnergy}`, "info");
+        pushLog(s, `[ENERGÍA] +${energyGained} regeneración · ${energyBefore}/${BALANCE.maxEnergy} → ${energyAfter}/${BALANCE.maxEnergy}`, "info");
       }
+      // Auto-farm pause/resume on energy state transitions
+      const isZeroNow = energyAfter <= 0;
+      const wasZero = wasEnergyZeroRef.current;
+      if (isZeroNow && !wasZero) {
+        // Energy just hit 0: pause all active auto-farms
+        for (const zid of Object.keys(s.autoExplored).map(Number)) {
+          if (s.autoExplored[zid]) {
+            pushLog(s, `[AUTO] Z${String(zid).padStart(2, "0")} pausado por falta de Energía`, "info");
+          }
+        }
+      } else if (!isZeroNow && wasZero) {
+        // Energy just recovered from 0: resume auto-farms
+        for (const zid of Object.keys(s.autoExplored).map(Number)) {
+          if (s.autoExplored[zid]) {
+            pushLog(s, `[AUTO] Z${String(zid).padStart(2, "0")} reanudado · Energía disponible`, "info");
+          }
+        }
+      }
+      wasEnergyZeroRef.current = isZeroNow;
       tickNpcs(s, now);
       s.lastTickAt = now;
       let dirty = false;
@@ -359,10 +377,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
       }
 
       // Keep the farm chain alive for every zone with auto enabled.
-      for (const zid of Object.keys(s.autoExplored).map(Number)) {
-        if (s.autoExplored[zid] && !s.autoFarms[zid]) {
-          scheduleAutoFarm(s, zid);
-          dirty = true;
+      // But only schedule new runs if energy > 0.
+      if (energyAfter > 0) {
+        for (const zid of Object.keys(s.autoExplored).map(Number)) {
+          if (s.autoExplored[zid] && !s.autoFarms[zid]) {
+            scheduleAutoFarm(s, zid);
+            dirty = true;
+          }
         }
       }
 

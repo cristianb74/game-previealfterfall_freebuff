@@ -5,6 +5,7 @@ import { HUD } from "@/components/game/HUD";
 import { useGame } from "@/game/GameProvider";
 import { getZone, zoneImage } from "@/game/zones";
 import { currentEnergy } from "@/game/energySystem";
+import { BALANCE } from "@/game/balance";
 import { cn } from "@/lib/utils";
 
 function fmtCountdown(ms: number): string {
@@ -37,6 +38,11 @@ export function ExplorarTab() {
   const energy = currentEnergy(state, now);
   // Can explore if this zone is not already exploring, has energy, and has health
   const canExplore = !isCurrentExploring && energy >= 1 && state.health > 0;
+  // Energy regen countdown (ms until next +1)
+  const msSinceLastRegen = Math.max(0, now - state.lastEnergyRegenAt);
+  const msPerPoint = BALANCE.energyRegenMinutesPerPoint * 60000;
+  const msUntilNext = energy < 1 ? Math.max(0, msPerPoint - msSinceLastRegen) : 0;
+  const nextRegenMMSS = `${String(Math.floor(msUntilNext / 60000)).padStart(2, "0")}:${String(Math.floor((msUntilNext % 60000) / 1000)).padStart(2, "0")}`;
 
   const log = state.log.slice(0, 3);
   // Show all active manual explorations across zones
@@ -105,7 +111,7 @@ export function ExplorarTab() {
               {state.health <= 0
                 ? "Sin salud"
                 : energy < 1
-                  ? `Sin energía (${Math.ceil(1 - energy)} regenerando)`
+                  ? `Sin energía · próxima carga en ${nextRegenMMSS}`
                   : "Explorar"}
             </Button>
           )}

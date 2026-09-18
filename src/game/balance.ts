@@ -22,7 +22,7 @@ export const BALANCE = {
 
   /** Maximum energía and real-time regeneration. */
   maxEnergy: 24,
-  energyRegenMinutesPerPoint: 60,
+  energyRegenMinutesPerPoint: 15,
 
   /** Exploration duration baseline (minutes). Real durations are per-zone
    *  in zones.ts (explorationMinutes), rising with each zone. */
