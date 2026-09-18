@@ -87,7 +87,7 @@ export default function Game() {
       <HUD />
 
       {/* Mobile: single column. Desktop ≥1024: zonas | explorar | base */}
-      <div className="mx-auto w-full max-w-3xl px-3 pb-24 pt-3 lg:max-w-none lg:px-6 lg:pb-6">
+      <div className="mx-auto w-full max-w-3xl px-3 pb-24 pt-3 lg:max-w-none lg:px-6">
         <div className="lg:grid lg:grid-cols-[minmax(260px,340px)_minmax(0,1fr)_minmax(260px,340px)] lg:items-start lg:gap-4">
           <aside className="hidden lg:block">
             <div className="sticky top-[130px]">
@@ -116,8 +116,8 @@ export default function Game() {
         </div>
       </div>
 
-      {/* Mobile bottom navigation */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-800 bg-[#0c0e0f]/95 backdrop-blur lg:hidden">
+      {/* Bottom navigation — visible on mobile and desktop */}
+      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-800 bg-[#0c0e0f]/95 backdrop-blur">
         <div className="mx-auto grid max-w-3xl grid-cols-8">
           {TABS.map((t) => (
             <button
