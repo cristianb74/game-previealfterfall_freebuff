@@ -143,3 +143,12 @@ export const RESOURCE_PRICES: Partial<Record<ResourceKey, number>> = {
   comida: 6, // per 10 min of food
   agua: 6, // per 10 min of water
 };
+
+/** Sell prices to the merchant (~50% of buy price). */
+export const MERCHANT_SELL_PRICES: Partial<Record<ResourceKey, { amount: number; price: number; label: string }>> = {
+  materiales: { amount: 1, price: 4, label: "Vender 1 Materiales" },
+  medicamentos: { amount: 1, price: 6, label: "Vender 1 Medicamentos" },
+  componentes: { amount: 1, price: 8, label: "Vender 1 Componentes" },
+  comida: { amount: 30, price: 7, label: "Vender 30 min Comida" },
+  agua: { amount: 30, price: 7, label: "Vender 30 min Agua" },
+};

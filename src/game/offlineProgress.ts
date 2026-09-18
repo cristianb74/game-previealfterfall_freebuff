@@ -52,6 +52,16 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
   // ---- Energy regeneration (always, up to max) ----
   const energyBefore = state.resources.energia;
   energyRegen = applyEnergyRegen(state, now);
+  if (energyRegen >= 0.5) {
+    const hoursAway = Math.floor(minutesAway / 60);
+    const minsAway = Math.floor(minutesAway % 60);
+    const timeLabel = hoursAway > 0 ? `${hoursAway} horas${minsAway > 0 ? ` ${minsAway} min` : ""}` : `${minsAway} minutos`;
+    pushLog(state.log, {
+      t: now,
+      msg: `[ENERGÍA] Recuperación offline · ${timeLabel} · +${Math.floor(energyRegen)}`,
+      kind: "info",
+    });
+  }
 
   // ---- Per-zone exploration completion while away ----
   // NOTE: runs are NOT cleared here — the GameProvider tick completes them

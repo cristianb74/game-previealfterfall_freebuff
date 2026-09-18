@@ -13,8 +13,10 @@ import type { NpcSurvivor } from "@/game/types";
 import { cn } from "@/lib/utils";
 
 export function EquipoTab() {
-  const { state, assignNpc } = useGame();
+  const { state, assignNpc, expelNpc } = useGame();
   const [detail, setDetail] = useState<string | null>(null);
+  const [confirmExpel, setConfirmExpel] = useState<string | null>(null);
+  const [showMarketplace, setShowMarketplace] = useState<string | null>(null);
   if (!state) return null;
 
   const assigned = state.npcs.filter((n) => n.assignedZoneId);
@@ -175,8 +177,132 @@ export function EquipoTab() {
               <p className="text-[10px] leading-4 text-zinc-600">
                 Máximo 1 superviviente por zona. Los NPC asignados a zonas distintas trabajan a la vez.
               </p>
+
+              {/* NPC Management */}
+              <div className="flex gap-2 pt-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setDetail(null);
+                    setTimeout(() => setConfirmExpel(npc.id), 100);
+                  }}
+                  className="flex-1 border-red-800/60 text-red-400 hover:border-red-600 hover:bg-red-950/30 hover:text-red-300"
+                >
+                  Expulsar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setDetail(null);
+                    setTimeout(() => setShowMarketplace(npc.id), 100);
+                  }}
+                  className="flex-1 border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
+                >
+                  Poner a la venta
+                </Button>
+              </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm expel dialog */}
+      <Dialog open={confirmExpel != null} onOpenChange={(o) => !o && setConfirmExpel(null)}>
+        <DialogContent className="max-w-sm rounded-lg border-zinc-800 bg-[#101213] text-zinc-200">
+          {confirmExpel && (() => {
+            const npc = state.npcs.find((n) => n.id === confirmExpel);
+            if (!npc) return null;
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="text-red-400">Expulsar superviviente</DialogTitle>
+                  <DialogDescription className="text-zinc-500">
+                    ¿Seguro que quieres expulsar a este superviviente?
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="rounded-md border border-red-900/40 bg-red-950/20 p-3">
+                  <p className="text-sm font-bold text-zinc-200">
+                    {npc.name} «{npc.alias}» ({npc.id})
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    {NPC_TYPE_MODIFIERS[npc.type].label} · {npc.profession}
+                  </p>
+                  <p className="mt-2 text-[10px] text-red-400">
+                    Esta acción es permanente y no recibirás ninguna recompensa.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setConfirmExpel(null)}
+                    className="flex-1 border-zinc-700 text-zinc-300"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      expelNpc(confirmExpel);
+                      setConfirmExpel(null);
+                    }}
+                    className="flex-1 border border-red-500/40 bg-red-600/90 text-white hover:bg-red-500"
+                  >
+                    Expulsar
+                  </Button>
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* NPC Marketplace placeholder */}
+      <Dialog open={showMarketplace != null} onOpenChange={(o) => !o && setShowMarketplace(null)}>
+        <DialogContent className="max-w-sm rounded-lg border-zinc-800 bg-[#101213] text-zinc-200">
+          {showMarketplace && (() => {
+            const npc = state.npcs.find((n) => n.id === showMarketplace);
+            if (!npc) return null;
+            const info = NPC_TYPE_MODIFIERS[npc.type];
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Mercado de NPC</DialogTitle>
+                  <DialogDescription className="text-zinc-500">
+                    Próximamente — intercambio entre jugadores
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="rounded-md border border-zinc-700 bg-[#0d0f10] p-3">
+                  <div className="flex items-center gap-3">
+                    <img src={npc.portrait} alt={npc.name} className="size-10 rounded-sm border border-zinc-800 object-cover" />
+                    <div>
+                      <p className="text-sm font-bold text-zinc-200">{npc.name} «{npc.alias}»</p>
+                      <p className="text-[10px] text-zinc-500">{npc.id}</p>
+                    </div>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-[10px]">
+                    <div className="text-zinc-500">Rareza</div>
+                    <div style={{ color: info.color }} className="font-bold">{info.label}</div>
+                    <div className="text-zinc-500">Especialidad</div>
+                    <div className="text-zinc-300">{BUILDING_BY_KEY[npc.specialization].name}</div>
+                    <div className="text-zinc-500">Valor base</div>
+                    <div className="text-amber-400">—</div>
+                    <div className="text-zinc-500">Estado</div>
+                    <div className="text-zinc-400">En refugio</div>
+                  </div>
+                </div>
+                <div className="rounded-md border border-amber-800/40 bg-amber-950/20 p-3 text-center">
+                  <p className="text-xs font-bold uppercase tracking-widest text-amber-400">
+                    Mercado de NPC próximamente
+                  </p>
+                  <p className="mt-1 text-[10px] text-zinc-600">
+                    El sistema futuro permitirá publicar NPC a la venta.
+                    El propietario podrá pedir como máximo 2 tipos de recursos.
+                  </p>
+                </div>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

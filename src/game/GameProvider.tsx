@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from "react";
 import { useConvex, useConvexAuth } from "convex/react";
 import { toast } from "sonner";
-import { BALANCE, STAT_RESOURCE } from "@/game/balance";
+import { BALANCE, STAT_RESOURCE, MERCHANT_SELL_PRICES } from "@/game/balance";
 import { getZone, frontierZoneId, ZONES } from "@/game/zones";
 import { NPC_BY_ID, npcDisplayName } from "@/game/npcData";
 import { NPC_TYPE_MODIFIERS, npcProductionMultiplier } from "@/game/npcTypes";
@@ -23,6 +23,7 @@ import {
   BUILDING_BY_KEY,
 } from "@/game/buildings";
 import { SURVIVOR_MAX_ROLLS, generateSurvivorOptions, rollSurvivor } from "@/game/survivorGenerator";
+import { RESOURCE_META } from "@/game/resources";
 import type {
   BuildingKey,
   ExplorationOutcome,
@@ -73,6 +74,8 @@ export interface GameContextValue {
   upgradeBuilding: (zoneId: number, key: BuildingKey) => void;
   useMedicine: () => void;
   buyResource: (key: ResourceKey) => void;
+  sellResource: (key: ResourceKey, qty: number) => void;
+  expelNpc: (npcId: string) => void;
   rollOptions: Survivor[];
   rerollSurvivors: () => void;
 }
@@ -323,7 +326,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const s = stateRef.current;
       if (!s) return;
       const now = Date.now();
+      const energyBefore = s.resources.energia;
       applyEnergyRegen(s, now);
+      const energyGained = s.resources.energia - energyBefore;
+      if (energyGained >= 1) {
+        const rounded = Math.floor(energyGained);
+        const before = Math.floor(energyBefore);
+        const after = Math.floor(s.resources.energia);
+        pushLog(s, `[ENERGÍA] Regeneración automática · +${rounded} · ${before}/${BALANCE.maxEnergy} → ${after}/${BALANCE.maxEnergy}`, "info");
+      }
       tickNpcs(s, now);
       s.lastTickAt = now;
       let dirty = false;
@@ -723,6 +734,60 @@ export function GameProvider({ children }: { children: ReactNode }) {
     [setAndSave],
   );
 
+  const sellResource = useCallback(
+    (key: ResourceKey, qty: number) => {
+      setAndSave((s) => {
+        const offer = MERCHANT_SELL_PRICES[key];
+        if (!offer) return;
+        const sellAmount = offer.amount * qty;
+        const totalMoney = offer.price * qty;
+        if (key === "comida") {
+          if (s.foodMin < sellAmount) {
+            toast.error("Comida insuficiente", { description: `Necesitas ${sellAmount} min de comida` });
+            return;
+          }
+          s.foodMin -= sellAmount;
+        } else if (key === "agua") {
+          if (s.waterMin < sellAmount) {
+            toast.error("Agua insuficiente", { description: `Necesitas ${sellAmount} min de agua` });
+            return;
+          }
+          s.waterMin -= sellAmount;
+        } else {
+          if (s.resources[key] < sellAmount) {
+            toast.error(`${RESOURCE_META[key].label} insuficiente`, { description: `Necesitas ${sellAmount}` });
+            return;
+          }
+          s.resources[key] -= sellAmount;
+        }
+        s.resources.dinero += totalMoney;
+        pushLog(s, `[MERCADER] Venta · -${sellAmount} ${key === "comida" || key === "agua" ? `min ${key}` : key} · +$${totalMoney}`, "resource");
+        toast.success(`Venta realizada`, { description: `+ $${totalMoney}` });
+      });
+    },
+    [setAndSave],
+  );
+
+  const expelNpc = useCallback(
+    (npcId: string) => {
+      setAndSave((s) => {
+        const npcIdx = s.npcs.findIndex((n) => n.id === npcId);
+        if (npcIdx === -1) return;
+        const npc = s.npcs[npcIdx];
+        // Unassign from zone first
+        if (npc.assignedZoneId) {
+          const z = s.zones[Number(npc.assignedZoneId)];
+          if (z && z.assignedNpcId === npcId) z.assignedNpcId = null;
+        }
+        s.npcs.splice(npcIdx, 1);
+        delete s.npcCycles[npcId];
+        pushLog(s, `[NPC] ${npc.id} · ${npc.name} expulsada del refugio`, "npc");
+        toast.info(`${npc.name} expulsada`, { description: "El superviviente ha sido eliminado del refugio." });
+      });
+    },
+    [setAndSave],
+  );
+
   /** Lets Landing navigate to /juego right after starting a new game. */
   const setNavigator = useCallback((fn: ((path: string) => void) | null) => {
     navigateRef.current = fn;
@@ -750,10 +815,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
       upgradeBuilding,
       useMedicine,
       buyResource,
+      sellResource,
+      expelNpc,
       rollOptions,
       rerollSurvivors,
     }),
-    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, toggleAutoExplore, setCurrentZone, assignNpc, upgradeBuilding, useMedicine, buyResource, rollOptions, rerollSurvivors],
+    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, toggleAutoExplore, setCurrentZone, assignNpc, upgradeBuilding, useMedicine, buyResource, sellResource, expelNpc, rollOptions, rerollSurvivors],
   );
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
