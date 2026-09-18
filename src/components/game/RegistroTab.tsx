@@ -4,6 +4,8 @@ import { getZone } from "@/game/zones";
 import { NPC_TYPE_MODIFIERS } from "@/game/npcTypes";
 import { GAME_INFO } from "@/game/gameConfig";
 import { BUILDING_BY_KEY, buildingBonus } from "@/game/buildings";
+import { BALANCE } from "@/game/balance";
+import { currentEnergy } from "@/game/energySystem";
 import type { BuildingKey } from "@/game/types";
 
 const BUILDING_ORDER: BuildingKey[] = ["cocina", "tanque", "almacen", "enfermeria", "taller", "generador"];
@@ -50,6 +52,8 @@ export function RegistroTab() {
   const { state } = useGame();
   const [copied, setCopied] = useState(false);
 
+  const now = Date.now();
+
   /** Build the full summary header for export. */
   const summary = useMemo(() => {
     if (!state) return "";
@@ -58,9 +62,9 @@ export function RegistroTab() {
     lines.push(`Versión: ${GAME_INFO.version}`);
     lines.push(`Fecha: ${fmtDate(Date.now())}`);
     lines.push(`Zona actual: ${String(state.currentZoneId).padStart(2, "0")} · ${getZone(state.currentZoneId).name}`);
-    lines.push(`EXP total: ${state.expTotal.toLocaleString("es")}`);
+    lines.push(`EXP total: ${Math.round(state.expTotal)}`);
     lines.push(`Dinero: $${Math.floor(state.resources.dinero)}`);
-    lines.push(`Salud: ${state.health}/${100}`);
+    lines.push(`Salud: ${state.health}/${BALANCE.maxHealth}`);
     lines.push("");
     lines.push("--- RECURSOS ACTUALES ---");
     lines.push(`Materiales: ${Math.floor(state.resources.materiales)}`);
@@ -68,7 +72,21 @@ export function RegistroTab() {
     lines.push(`Agua: ${Math.floor(state.waterMin)} min`);
     lines.push(`Medicamentos: ${Math.floor(state.resources.medicamentos)}`);
     lines.push(`Componentes: ${Math.floor(state.resources.componentes)}`);
-    lines.push(`Energía: ${Math.floor(state.resources.energia)}`);
+    const energy = currentEnergy(state, Date.now());
+    lines.push(`Energía: ${Math.floor(energy)}/${BALANCE.maxEnergy}`);
+    const msSinceLastRegen = Math.max(0, Date.now() - state.lastEnergyRegenAt);
+    const nextRegenMs = BALANCE.energyRegenMinutesPerPoint * 60000 - msSinceLastRegen;
+    const nextRegenMin = Math.max(0, Math.ceil(nextRegenMs / 60000));
+    lines.push(`Última regeneración de energía: ${fmtDate(state.lastEnergyRegenAt)}`);
+    lines.push(`Próxima regeneración en: ${nextRegenMin} min`);
+    lines.push("");
+    lines.push("--- EXPLORACIONES ---");
+    lines.push(`Exploraciones manuales totales: ${state.manualExplorationsDone ?? 0}`);
+    const autoDone = (state.explorationsDone ?? 0) - (state.manualExplorationsDone ?? 0);
+    lines.push(`Exploraciones automáticas totales: ${Math.max(0, autoDone)}`);
+    lines.push(`Exploraciones totales: ${state.explorationsDone ?? 0}`);
+    lines.push(`Exploraciones desde último NPC: ${state.explorationsSinceLastNPC ?? 0}`);
+    lines.push(`Próximo exploration ID: ${state.nextExplorationId ?? 1}`);
     lines.push("");
     lines.push("--- SUPERVIVIENTE ---");
     lines.push(`${state.survivor.name} · ${state.survivor.profession}`);
@@ -105,11 +123,13 @@ export function RegistroTab() {
     return lines.join("\n");
   }, [state]);
 
-  /** Full log text for clipboard / download. */
+  /** Full log text for clipboard / download — sorted ascending by timestamp. */
   const fullLog = useMemo(() => {
     if (!state) return "";
-    const logLines = state.log.map(
-      (e) => `[${fmtTs(e.t)}] ${KIND_LABELS[e.kind] ?? e.kind} | ${e.msg}`,
+    // Sort ascending (oldest first) for chronological reading
+    const sorted = [...state.log].sort((a, b) => a.t - b.t);
+    const logLines = sorted.map(
+      (e) => `[${fmtTs(e.t)}] ${e.msg}`,
     );
     return summary + "\n" + logLines.join("\n");
   }, [state, summary]);
@@ -137,6 +157,12 @@ export function RegistroTab() {
   }, [fullLog]);
 
   if (!state) return null;
+
+  const energy = currentEnergy(state, now);
+  const msSinceLastRegen = Math.max(0, now - state.lastEnergyRegenAt);
+  const nextRegenMs = BALANCE.energyRegenMinutesPerPoint * 60000 - msSinceLastRegen;
+  const nextRegenMin = Math.max(0, Math.ceil(nextRegenMs / 60000));
+  const autoDone = Math.max(0, (state.explorationsDone ?? 0) - (state.manualExplorationsDone ?? 0));
 
   return (
     <div className="flex flex-col gap-3">
@@ -177,11 +203,15 @@ export function RegistroTab() {
             {String(state.currentZoneId).padStart(2, "0")} · {getZone(state.currentZoneId).name}
           </div>
           <div className="text-zinc-500">EXP total</div>
-          <div className="text-zinc-200">{state.expTotal.toLocaleString("es")}</div>
+          <div className="text-zinc-200">{Math.round(state.expTotal)}</div>
           <div className="text-zinc-500">Salud</div>
-          <div className="text-zinc-200">{state.health}/100</div>
+          <div className="text-zinc-200">{state.health}/{BALANCE.maxHealth}</div>
           <div className="text-zinc-500">Dinero</div>
           <div className="text-green-400">${Math.floor(state.resources.dinero)}</div>
+          <div className="text-zinc-500">Energía</div>
+          <div className="text-zinc-200">{Math.floor(energy)}/{BALANCE.maxEnergy}</div>
+          <div className="text-zinc-500">Próxima regen</div>
+          <div className="text-zinc-200">{nextRegenMin} min</div>
           <div className="text-zinc-500">Materiales</div>
           <div className="text-zinc-200">{Math.floor(state.resources.materiales)}</div>
           <div className="text-zinc-500">Comida</div>
@@ -194,28 +224,42 @@ export function RegistroTab() {
           <div className="text-zinc-200">{Math.floor(state.resources.componentes)}</div>
           <div className="text-zinc-500">NPC</div>
           <div className="text-zinc-200">{state.npcs.length} obtenidos</div>
-          <div className="text-zinc-500">Exploraciones</div>
-          <div className="text-zinc-200">{state.explorationsDone}</div>
-          <div className="text-zinc-500">NPC counter</div>
-          <div className="text-zinc-200">{state.explorationsSinceLastNPC ?? 0} desde último NPC</div>
+        </div>
+      </section>
+
+      {/* Exploration stats */}
+      <section className="rounded-lg border border-zinc-800 bg-[#101213] p-3">
+        <p className="mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">
+          Exploraciones
+        </p>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
+          <div className="text-zinc-500">Manuales</div>
+          <div className="text-zinc-200">{state.manualExplorationsDone ?? 0}</div>
+          <div className="text-zinc-500">Automáticas</div>
+          <div className="text-zinc-200">{autoDone}</div>
+          <div className="text-zinc-500">Totales</div>
+          <div className="text-zinc-200">{state.explorationsDone ?? 0}</div>
+          <div className="text-zinc-500">Desde último NPC</div>
+          <div className="text-zinc-200">{state.explorationsSinceLastNPC ?? 0}</div>
+          <div className="text-zinc-500">Próximo ID</div>
+          <div className="text-zinc-200">#{state.nextExplorationId ?? 1}</div>
         </div>
       </section>
 
       {/* Exploration & NPC diagnostics */}
       <section className="rounded-lg border border-zinc-800 bg-[#101213] p-3">
         <p className="mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">
-          Diagnóstico de exploración
+          Diagnóstico activo
         </p>
         <div className="flex flex-col gap-1.5">
-          {/* Active manual explorations */}
           {Object.keys(state.explorationStates).map(Number).filter((zid) => state.explorationStates[zid]).length > 0 ? (
             Object.keys(state.explorationStates).map(Number).filter((zid) => state.explorationStates[zid]).map((zid) => {
               const run = state.explorationStates[zid]!;
-              const remaining = Math.max(0, Math.ceil((run.finishAt - Date.now()) / 1000));
+              const remaining = Math.max(0, Math.ceil((run.finishAt - now) / 1000));
               return (
                 <div key={zid} className="flex items-center justify-between text-[10px]">
                   <span className="text-green-400">
-                    [Z{String(zid).padStart(2, "0")}] exploración activa
+                    [EXP #{run.expId ?? "?"}] Z{String(zid).padStart(2, "0")} exploración activa
                   </span>
                   <span className="font-mono text-zinc-300">restante {remaining}s</span>
                 </div>
@@ -224,20 +268,18 @@ export function RegistroTab() {
           ) : (
             <p className="text-[10px] text-zinc-600">Sin exploraciones activas</p>
           )}
-          {/* Active auto-farms */}
           {Object.keys(state.autoFarms ?? {}).map(Number).filter((zid) => state.autoFarms[zid]).map((zid) => {
             const run = state.autoFarms[zid]!;
-            const remaining = Math.max(0, Math.ceil((run.finishAt - Date.now()) / 1000));
+            const remaining = Math.max(0, Math.ceil((run.finishAt - now) / 1000));
             return (
               <div key={zid} className="flex items-center justify-between text-[10px]">
                 <span className="text-green-500">
-                  [Z{String(zid).padStart(2, "0")}] auto-farm activo
+                  [EXP #{run.expId ?? "?"}] Z{String(zid).padStart(2, "0")} auto-farm activo
                 </span>
                 <span className="font-mono text-zinc-300">restante {remaining}s</span>
               </div>
             );
           })}
-          {/* NPC spawn counter */}
           <div className="mt-1 flex items-center justify-between rounded-sm bg-[#0d0f10] px-2 py-1 text-[10px]">
             <span className="text-zinc-400">Contador NPC</span>
             <span className="font-mono text-zinc-200">{state.explorationsSinceLastNPC ?? 0} / 200</span>
@@ -290,7 +332,7 @@ export function RegistroTab() {
         </section>
       )}
 
-      {/* Chronological log */}
+      {/* Chronological log — displayed descending (newest first) for live view */}
       <section className="rounded-lg border border-zinc-800 bg-[#101213] p-3">
         <p className="mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">
           Historial cronológico
@@ -302,14 +344,6 @@ export function RegistroTab() {
             state.log.map((e, i) => (
               <div key={i} className="flex gap-2 border-b border-zinc-900 py-0.5">
                 <span className="shrink-0 text-zinc-600">[{fmtTs(e.t)}]</span>
-                <span
-                  className={cn(
-                    "shrink-0 w-14 text-right text-[9px] font-bold uppercase",
-                    KIND_COLORS[e.kind] ?? "text-zinc-500",
-                  )}
-                >
-                  {KIND_LABELS[e.kind] ?? e.kind}
-                </span>
                 <span className="text-zinc-300">{e.msg}</span>
               </div>
             ))

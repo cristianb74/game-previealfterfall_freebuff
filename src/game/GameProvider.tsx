@@ -409,9 +409,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     s: GameState,
     outcome: ExplorationOutcome,
     startedAt: number,
-    opts: { auto?: boolean } = {},
+    opts: { auto?: boolean; expId?: number } = {},
   ) {
     const zone = getZone(outcome.zoneId);
+    const expTag = opts.expId != null ? `[EXP #${opts.expId}] ` : "";
     s.exp += outcome.exp;
     s.expTotal += outcome.exp;
     for (const f of outcome.findings) {
@@ -421,18 +422,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
         else if (f.resource === "agua") s.waterMin += amount;
         else s.resources[f.resource] += amount;
         const isTime = f.resource === "comida" || f.resource === "agua";
-        pushLog(s, `${isTime ? `+${amount} min ${f.resource}` : `+${amount} ${f.resource === "dinero" ? "$" : f.resource}`}`, "resource", startedAt);
+        pushLog(s, `${expTag}RECURSO | ${isTime ? `+${amount} min ${f.resource}` : `+${amount} ${f.resource === "dinero" ? "$" : f.resource}`}`, "resource", startedAt);
       } else if (f.kind === "damage") {
         s.health = Math.max(0, s.health - (f.damage ?? 0));
-        pushLog(s, `${f.cause} · -${f.damage} Salud`, "damage", startedAt);
+        pushLog(s, `${expTag}DAÑO | ${f.cause} · -${f.damage} Salud`, "damage", startedAt);
       }
     }
     if (outcome.findings.length === 0) {
-      pushLog(s, "Sin hallazgos", "info", startedAt);
+      pushLog(s, `${expTag}Sin hallazgos`, "info", startedAt);
     }
     pushLog(
       s,
-      `${opts.auto ? "Automática" : "Exploración"} de ${zone.name} completada · +${outcome.exp} EXP`,
+      `${expTag}${opts.auto ? "Auto" : "FIN"} | Z${String(outcome.zoneId).padStart(2, "0")} · ${zone.name} completada · +${outcome.exp} EXP`,
       "exp",
       startedAt,
     );
@@ -450,7 +451,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
         });
       }
     }
-    s.explorationsDone += 1;
   }
 
   function outcomeSummary(outcome: ExplorationOutcome): string {
@@ -469,8 +469,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
   function completeExploration(s: GameState, zoneId: number, startedAt: number) {
     const run = s.explorationStates[zoneId];
     if (!run) return;
+    const expId = run.expId ?? s.nextExplorationId++;
     const outcome = rollExploration(s, zoneId);
-    applyOutcome(s, outcome, startedAt);
+    applyOutcome(s, outcome, startedAt, { expId });
     // Single NPC check per exploration completion (counter-based)
     const counter = (s.explorationsSinceLastNPC ?? 0) + 1;
     const chance = npcChanceForCounter(counter);
@@ -487,7 +488,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           productionTotals: { materiales: 0, agua: 0, comida: 0, medicamentos: 0, componentes: 0, energia: 0, dinero: 0 },
         };
         s.npcs.push(npc);
-        pushLog(s, `[EXP #${s.explorationsDone + 1}] NPC OBTENIDO | ${npc.id} · ${npc.name} · ${NPC_TYPE_MODIFIERS[npc.type].label}`, "npc", startedAt);
+        pushLog(s, `[EXP #${expId}] NPC OBTENIDO | ${npc.id} · ${npc.name} · ${NPC_TYPE_MODIFIERS[npc.type].label}`, "npc", startedAt);
         pushLog(s, `[NPC] contador reiniciado a 0`, "info", Date.now());
         s.explorationsSinceLastNPC = 0;
         npcFound = true;
@@ -499,8 +500,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
     if (!npcFound) {
       s.explorationsSinceLastNPC = counter;
-      pushLog(s, `[EXP #${s.explorationsDone + 1}] NPC CHECK | contador ${counter} | probabilidad ${Math.round(chance * 100)}% | resultado NO`, "info", startedAt);
+      pushLog(s, `[EXP #${expId}] NPC CHECK | contador ${counter} | probabilidad ${Math.round(chance * 100)}% | resultado NO`, "info", startedAt);
     }
+    s.explorationsDone += 1;
+    s.manualExplorationsDone += 1;
     delete s.explorationStates[zoneId];
     toast.success("EXPLORACIÓN COMPLETADA", {
       description: outcomeSummary(outcome),
@@ -512,10 +515,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
    *  no NPC discovery, no frontier changes. Chain continues via tick. */
   function completeAutoRun(s: GameState, zoneId: number, startedAt: number) {
     if (!s.autoFarms[zoneId]) return;
+    const expId = s.nextExplorationId++;
     const outcome = rollExploration(s, zoneId);
     // Auto runs use reduced EXP, no NPC discovery (engine no longer rolls NPCs).
     outcome.exp = Math.max(1, Math.round(outcome.exp * BALANCE.autoExploreExpFactor));
-    applyOutcome(s, outcome, startedAt, { auto: true });
+    applyOutcome(s, outcome, startedAt, { auto: true, expId });
+    s.explorationsDone += 1;
     s.autoFarms[zoneId] = null;
   }
 
@@ -607,8 +612,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
         spendEnergy(s, 1, now);
         const minutes = getZone(zoneId).explorationMinutes;
         s.currentZoneId = zoneId;
-        s.explorationStates[zoneId] = { zoneId, startedAt: now, finishAt: now + minutes * 60000 };
-        pushLog(s, `[EXP #${s.explorationsDone + 1}] Z${String(zoneId).padStart(2, "0")} | INICIO | duración ${minutes * 60}s`, "info", now);
+        const expId = s.nextExplorationId++;
+        s.explorationStates[zoneId] = { zoneId, startedAt: now, finishAt: now + minutes * 60000, expId };
+        pushLog(s, `[EXP #${expId}] Z${String(zoneId).padStart(2, "0")} | INICIO | duración ${minutes * 60}s`, "info", now);
       });
     },
     [setAndSave],

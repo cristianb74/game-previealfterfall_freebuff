@@ -65,6 +65,8 @@ export function createInitialState(survivor: GameState["survivor"], now = Date.n
     autoFarms: {},
     autoExplored: {},
     explorationsDone: 0,
+    manualExplorationsDone: 0,
+    nextExplorationId: 1,
     explorationsSinceLastNPC: 0,
     zones: createInitialZones(),
     npcs: [],
@@ -253,6 +255,8 @@ function migrate(envelope: SaveEnvelope): SaveEnvelope {
       }
     }
     if (typeof state.explorationsSinceLastNPC !== "number") state.explorationsSinceLastNPC = 0;
+    if (typeof state.nextExplorationId !== "number") state.nextExplorationId = (state.explorationsDone ?? 0) + 1;
+    if (typeof state.manualExplorationsDone !== "number") state.manualExplorationsDone = state.explorationsDone ?? 0;
   }
 
   return { version: v, savedAt: envelope.savedAt, state };

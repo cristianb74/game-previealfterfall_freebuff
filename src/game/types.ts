@@ -81,6 +81,8 @@ export interface ExplorationRun {
   finishAt: number;
   /** True if this run was started by the background auto-farm. */
   auto?: boolean;
+  /** Global unique exploration ID assigned at start (manual) or completion (auto). */
+  expId?: number;
 }
 
 export interface LogEvent {
@@ -112,6 +114,10 @@ export interface GameState {
   /** Per-zone toggle: which zones have the auto-farm enabled. */
   autoExplored: Record<number, boolean>;
   explorationsDone: number;
+  /** Manual explorations only (for summary). */
+  manualExplorationsDone: number;
+  /** Global unique exploration ID (incremented at start, never reused). */
+  nextExplorationId: number;
   /** Counter since last NPC discovery (for balanced spawn system). */
   explorationsSinceLastNPC: number;
   zones: Record<number, ZoneProgressState>;
