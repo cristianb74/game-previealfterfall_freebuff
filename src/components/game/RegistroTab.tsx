@@ -5,7 +5,7 @@ import { NPC_TYPE_MODIFIERS } from "@/game/npcTypes";
 import { GAME_INFO } from "@/game/gameConfig";
 import { BUILDING_BY_KEY, buildingBonus } from "@/game/buildings";
 import { BALANCE } from "@/game/balance";
-import { currentEnergy } from "@/game/energySystem";
+import { currentEnergy, nextEnergyRegenAt } from "@/game/energySystem";
 import type { BuildingKey } from "@/game/types";
 
 const BUILDING_ORDER: BuildingKey[] = ["cocina", "tanque", "almacen", "enfermeria", "taller", "generador"];
@@ -74,9 +74,9 @@ export function RegistroTab() {
     lines.push(`Componentes: ${Math.floor(state.resources.componentes)}`);
     const energy = currentEnergy(state, Date.now());
     lines.push(`Energía: ${Math.floor(energy)}/${BALANCE.maxEnergy}`);
-    const msSinceLastRegen = Math.max(0, Date.now() - state.lastEnergyRegenAt);
-    const nextRegenMs = BALANCE.energyRegenMinutesPerPoint * 60000 - msSinceLastRegen;
-    const nextRegenMin = Math.max(0, Math.ceil(nextRegenMs / 60000));
+    const nextAt = nextEnergyRegenAt(state);
+    const nextRegenMs = Math.max(0, nextAt - Date.now());
+    const nextRegenMin = Math.ceil(nextRegenMs / 60000);
     lines.push(`Última regeneración de energía: ${fmtDate(state.lastEnergyRegenAt)}`);
     lines.push(`Próxima regeneración en: ${nextRegenMin} min`);
     lines.push("");
@@ -159,9 +159,9 @@ export function RegistroTab() {
   if (!state) return null;
 
   const energy = currentEnergy(state, now);
-  const msSinceLastRegen = Math.max(0, now - state.lastEnergyRegenAt);
-  const nextRegenMs = BALANCE.energyRegenMinutesPerPoint * 60000 - msSinceLastRegen;
-  const nextRegenMin = Math.max(0, Math.ceil(nextRegenMs / 60000));
+  const nextAt = nextEnergyRegenAt(state);
+  const nextRegenMs = Math.max(0, nextAt - now);
+  const nextRegenMin = Math.ceil(nextRegenMs / 60000);
   const autoDone = Math.max(0, (state.explorationsDone ?? 0) - (state.manualExplorationsDone ?? 0));
 
   return (

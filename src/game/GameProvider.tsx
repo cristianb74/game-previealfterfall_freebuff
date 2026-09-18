@@ -15,7 +15,7 @@ import {
 } from "@/game/cloudSave";
 import { applyOfflineProgress } from "@/game/offlineProgress";
 import { tickNpcs } from "@/game/onlineTick";
-import { applyEnergyRegen, currentEnergy, spendEnergy } from "@/game/energySystem";
+import { applyEnergyRegen, currentEnergy, spendEnergy, nextEnergyRegenAt } from "@/game/energySystem";
 import { rollExploration, npcChanceForCounter, discoverableNpcIds } from "@/game/explorationEngine";
 import {
   buildingUpgradeCost,
@@ -328,11 +328,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (!s) return;
       const now = Date.now();
       const energyBefore = Math.floor(s.resources.energia);
-      applyEnergyRegen(s, now);
+      const gained = applyEnergyRegen(s, now);
       const energyAfter = Math.floor(s.resources.energia);
-      const energyGained = energyAfter - energyBefore;
-      if (energyGained >= 1) {
-        pushLog(s, `[ENERGÍA] +${energyGained} regeneración · ${energyBefore}/${BALANCE.maxEnergy} → ${energyAfter}/${BALANCE.maxEnergy}`, "info");
+      if (gained >= 1) {
+        pushLog(s, `[ENERGÍA] +${gained} regeneración · ${energyBefore}/${BALANCE.maxEnergy} → ${energyAfter}/${BALANCE.maxEnergy}`, "info");
+        // Log next cycle start if still below max
+        if (energyAfter < BALANCE.maxEnergy) {
+          const nextAt = nextEnergyRegenAt(s);
+          const remainMs = Math.max(0, nextAt - now);
+          const mm = String(Math.floor(remainMs / 60000)).padStart(2, "0");
+          const ss = String(Math.floor((remainMs % 60000) / 1000)).padStart(2, "0");
+          pushLog(s, `[ENERGÍA] Ciclo iniciado · próxima regeneración ${mm}:${ss}`, "info");
+        }
       }
       // Auto-farm pause/resume on energy state transitions
       const isZeroNow = energyAfter <= 0;

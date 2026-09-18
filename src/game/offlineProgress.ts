@@ -49,16 +49,16 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
 
   const rnd = mulberry32(Math.floor(last / 1000) ^ 0x9e3779b9);
 
-  // ---- Energy regeneration (always, up to max) ----
+  // ---- Energy regeneration (discrete +1 blocks, up to max) ----
   const energyBefore = state.resources.energia;
   energyRegen = applyEnergyRegen(state, now);
-  if (energyRegen >= 0.5) {
+  if (energyRegen >= 1) {
     const hoursAway = Math.floor(minutesAway / 60);
     const minsAway = Math.floor(minutesAway % 60);
     const timeLabel = hoursAway > 0 ? `${hoursAway} horas${minsAway > 0 ? ` ${minsAway} min` : ""}` : `${minsAway} minutos`;
     pushLog(state.log, {
       t: now,
-      msg: `[ENERGÍA] Recuperación offline · ${timeLabel} · +${Math.floor(energyRegen)}`,
+      msg: `[ENERGÍA] Recuperación offline · ${timeLabel} · +${energyRegen}`,
       kind: "info",
     });
   }
