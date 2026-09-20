@@ -4,6 +4,7 @@ import { rollNpcCycle } from "./npcTypes";
 import { applyEnergyRegen } from "./energySystem";
 import { npcDisplayName } from "./npcData";
 import { explorationMinutesWithAgility } from "./statEffects";
+import { applySurvivalDrain } from "./survivalSystem";
 import type { GameState, LogEvent, ResourceKey } from "./types";
 
 // ============================================================
@@ -147,6 +148,8 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
     const upkeep = BALANCE.survivorUpkeepPerHour * hours * BALANCE.npcConsumptionFactor * state.npcs.length;
     state.foodMin = Math.max(0, state.foodMin - upkeep);
     state.waterMin = Math.max(0, state.waterMin - upkeep);
+    // Progressive hunger/thirst health drain while away (tier-based).
+    applySurvivalDrain(state, hours);
   }
 
   // ---- Player survival consumption while away ----

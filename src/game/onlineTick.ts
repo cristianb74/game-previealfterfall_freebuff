@@ -2,6 +2,7 @@ import { BALANCE } from "./balance";
 import { rollNpcCycle } from "./npcTypes";
 import { getZone } from "./zones";
 import { npcDisplayName } from "./npcData";
+import { applySurvivalDrain, hungerTier, thirstTier, TIER_META } from "./survivalSystem";
 import type { GameState, LogEvent, ResourceKey } from "./types";
 
 // ============================================================
@@ -35,6 +36,10 @@ export function settleBuildings(state: GameState, now: number, completed: string
   }
 }
 
+// Module-level tier cache so we only log on transitions, not every tick.
+let lastHungerTier: import("./survivalSystem").SurvivalTier | null = null;
+let lastThirstTier: import("./survivalSystem").SurvivalTier | null = null;
+
 /**
  * Advance NPC production + consumption from `state.lastTickAt` to `now`.
  * Mutates state and returns what happened (for logs/toasts).
@@ -54,6 +59,8 @@ export function tickNpcs(state: GameState, now: number): TickChanges {
       state.foodMin = Math.max(0, state.foodMin - BALANCE.survivorUpkeepPerHour * npcHours * state.npcs.length);
       state.waterMin = Math.max(0, state.waterMin - BALANCE.survivorUpkeepPerHour * npcHours * state.npcs.length);
     }
+    // Progressive health drain from hunger/thirst tiers (0 when OK).
+    applySurvivalDrain(state, hours);
   }
 
   const canProduce =
@@ -96,6 +103,18 @@ export function tickNpcs(state: GameState, now: number): TickChanges {
   settleBuildings(state, now, buildingsCompleted);
 
   // logs
+  // Log tier transitions (hunger/thirst) so the player notices degradation.
+  // First pass only seeds the cache (no log on boot).
+  const hTier = hungerTier(state);
+  const tTier = thirstTier(state);
+  if (lastHungerTier !== null && hTier !== lastHungerTier) {
+    pushLog(state.log, { t: now, msg: `[SUPERVIVENCIA] Comida: ${TIER_META[hTier].label}`, kind: hTier === "ok" ? "info" : "damage" });
+  }
+  if (lastThirstTier !== null && tTier !== lastThirstTier) {
+    pushLog(state.log, { t: now, msg: `[SUPERVIVENCIA] Agua: ${TIER_META[tTier].label}`, kind: tTier === "ok" ? "info" : "damage" });
+  }
+  lastHungerTier = hTier;
+  lastThirstTier = tTier;
   for (const f of finds.slice(0, 5)) {
     const isTime = f.resource === "comida" || f.resource === "agua";
     const npc = state.npcs.find((n) => n.id === f.npcId);

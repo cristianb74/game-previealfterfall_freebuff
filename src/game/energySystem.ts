@@ -1,4 +1,5 @@
 import { BALANCE } from "./balance";
+import { survivalRegenPenalty } from "./survivalSystem";
 import type { GameState } from "./types";
 
 // ============================================================
@@ -9,9 +10,15 @@ import type { GameState } from "./types";
 // correctly and survives tab switches / backgrounding.
 // ============================================================
 
-/** Returns the timestamp of the next energy regeneration. */
+/** Returns the timestamp of the next energy regeneration.
+ *  Hunger/thirst tiers (MODERADA or worse) stretch the cycle. */
 export function nextEnergyRegenAt(state: GameState): number {
-  return state.lastEnergyRegenAt + BALANCE.energyRegenMinutesPerPoint * 60000;
+  return state.lastEnergyRegenAt + regenCycleMs(state);
+}
+
+/** Current regen cycle length in ms, including survival tier penalties. */
+export function regenCycleMs(state: GameState): number {
+  return (BALANCE.energyRegenMinutesPerPoint + survivalRegenPenalty(state)) * 60000;
 }
 
 /**
@@ -21,7 +28,7 @@ export function nextEnergyRegenAt(state: GameState): number {
  * mid-cycle), so the UI countdown stays accurate.
  */
 export function applyEnergyRegen(state: GameState, now = Date.now()): number {
-  const msPerPoint = BALANCE.energyRegenMinutesPerPoint * 60000;
+  const msPerPoint = regenCycleMs(state);
   let elapsed = Math.max(0, now - state.lastEnergyRegenAt);
   let gained = 0;
 
@@ -46,7 +53,7 @@ export function applyEnergyRegen(state: GameState, now = Date.now()): number {
  * Counts discrete blocks from the reference timestamp.
  */
 export function currentEnergy(state: GameState, now = Date.now()): number {
-  const msPerPoint = BALANCE.energyRegenMinutesPerPoint * 60000;
+  const msPerPoint = regenCycleMs(state);
   const elapsed = Math.max(0, now - state.lastEnergyRegenAt);
   const pending = Math.floor(elapsed / msPerPoint);
   return Math.min(BALANCE.maxEnergy, state.resources.energia + pending);

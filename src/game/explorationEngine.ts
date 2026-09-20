@@ -9,6 +9,7 @@ import {
   mitigatedDamage,
   rareFindChance,
 } from "./statEffects";
+import { survivalEfficiency } from "./survivalSystem";
 import type {
   BuildingKey,
   ExplorationFinding,
@@ -109,9 +110,10 @@ export function rollExploration(state: GameState, zoneId: number): ExplorationOu
           ? inteligenciaTechBonus(state.survivor.stats.inteligencia)
           : 0;
       const buildingMult = buildingMultiplierFor(zoneState, picked, techBonus);
+      // Hunger/thirst tier of the WORST meter reduces find efficiency.
       const finalChance = Math.min(
         0.95,
-        BALANCE.explorationFindChance * statMult * buildingMult,
+        BALANCE.explorationFindChance * statMult * buildingMult * survivalEfficiency(state),
       );
       if (Math.random() < finalChance) {
         // Rare find tier (Percepción): ×3 amount.

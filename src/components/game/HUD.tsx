@@ -3,6 +3,7 @@ import { BALANCE } from "@/game/balance";
 import { ZONES, getZone } from "@/game/zones";
 import { useGame } from "@/game/GameProvider";
 import { currentEnergy } from "@/game/energySystem";
+import { hungerTier, thirstTier, TIER_META } from "@/game/survivalSystem";
 import type { GameState } from "@/game/types";
 import { cn } from "@/lib/utils";
 
@@ -91,20 +92,20 @@ export function HUD() {
 
         <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
           <SurvivalBar
-            label="Comida"
+            label={`Comida${hungerTier(state) !== "ok" ? ` · ${TIER_META[hungerTier(state)].label}` : ""}`}
             value={state.foodMin}
             max={BALANCE.startingFoodMin * 1.5}
             display={fmtDuration(state.foodMin)}
             color="#a3e635"
-            danger={state.foodMin < 120}
+            danger={hungerTier(state) !== "ok"}
           />
           <SurvivalBar
-            label="Agua"
+            label={`Agua${thirstTier(state) !== "ok" ? ` · ${TIER_META[thirstTier(state)].label}` : ""}`}
             value={state.waterMin}
             max={BALANCE.startingWaterMin * 1.5}
             display={fmtDuration(state.waterMin)}
             color="#38bdf8"
-            danger={state.waterMin < 120}
+            danger={thirstTier(state) !== "ok"}
           />
           <SurvivalBar
             label="Energía"
