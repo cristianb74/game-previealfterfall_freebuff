@@ -52,7 +52,6 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
   const rnd = mulberry32(Math.floor(last / 1000) ^ 0x9e3779b9);
 
   // ---- Energy regeneration (discrete +1 blocks, up to max) ----
-  const energyBefore = state.resources.energia;
   energyRegen = applyEnergyRegen(state, now);
   if (energyRegen >= 1) {
     const hoursAway = Math.floor(minutesAway / 60);
