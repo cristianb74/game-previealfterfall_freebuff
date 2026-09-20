@@ -276,6 +276,11 @@ function migrate(envelope: SaveEnvelope): SaveEnvelope {
         zs.exclusiveBuilding = { key: exclDef.key, level: 0, upgradeFinishAt: null };
       }
     }
+    // NPC recruitment migration: NPCs owned before the recruitment system
+    // existed are grandfathered as "active" (already part of the shelter).
+    for (const npc of state.npcs ?? []) {
+      if (!npc.status) npc.status = "active";
+    }
   }
 
   return { version: v, savedAt: envelope.savedAt, state };

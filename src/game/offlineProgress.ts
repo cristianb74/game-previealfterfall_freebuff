@@ -5,6 +5,7 @@ import { applyEnergyRegen } from "./energySystem";
 import { npcDisplayName } from "./npcData";
 import { explorationMinutesWithAgility } from "./statEffects";
 import { applySurvivalDrain } from "./survivalSystem";
+import { npcZoneSpeedFactor } from "./npcTypes";
 import type { GameState, LogEvent, ResourceKey } from "./types";
 
 // ============================================================
@@ -86,8 +87,10 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
     if (!state.autoExplored[zid]) continue;
     const run = state.autoFarms?.[zid];
     if (run && now >= run.finishAt) {
-      // Agilidad applies to offline auto-farm cycles too.
-      const cycleMin = explorationMinutesWithAgility(getZone(zid).explorationMinutes, state.survivor.stats.agilidad);
+      // Agilidad + passive NPC benefit apply to offline auto-farm cycles too.
+      const cycleMin =
+        explorationMinutesWithAgility(getZone(zid).explorationMinutes, state.survivor.stats.agilidad) *
+        npcZoneSpeedFactor(state, zid);
       const cycles = Math.max(0, Math.floor(minutesAway / cycleMin) - 1);
       const farmExp = Math.max(1, Math.round(getZone(zid).playerExpReward * BALANCE.autoExploreExpFactor));
       state.exp += farmExp * cycles;

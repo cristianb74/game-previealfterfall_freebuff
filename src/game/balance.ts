@@ -81,6 +81,16 @@ export const BALANCE = {
   survivorUpkeepPerHour: 20, // ≈ 24 h of food from start fades in ~3 days
   /** Minimum food/water (minutes) to run NPC cycles; below this, NPCs pause. */
   npcMinimumFoodWaterMin: 20,
+  /** Recruitment: cost (Materiales) to recruit a candidate NPC into the shelter.
+   *  0 = free recruitment. Tunable. */
+  npcRecruitCostMateriales: 5,
+  /** Recruitment: cost (Comida, minutes) to recruit a candidate NPC. */
+  npcRecruitCostComidaMin: 60,
+  /** Passive benefit of an NPC ASSIGNED to a zone: exploration duration of
+   *  that zone is reduced by this fraction, scaled by NPC rarity bonus
+   *  (relative to the Dorado bonus as the 1.0 reference).
+   *  effective = k × (npcBonus / npcTypeBonus.Dorado). */
+  npcZoneSpeedK: 0.06, // Dorado (24 %) → −6 % duration; Azul (8 %) → −2 %
 
   /** Offline NPC production is capped at this many hours. */
   offlineNpcCapHours: 4,

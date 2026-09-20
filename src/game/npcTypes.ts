@@ -98,6 +98,22 @@ export function npcCycleChance(
   return Math.min(0.6, base * statFactor * bonus);
 }
 
+/** ---------------------------------------------------------
+ * PASSIVE BENEFIT — assigned NPC speeds up their zone's exploration.
+ * effective = BALANCE.npcZoneSpeedK × (npcBonus / DoradoBonus)
+ * Dorado (24 %) → −6 % duration · Rojo (16 %) → −4 % · Azul (8 %) → −2 %
+ * --------------------------------------------------------- */
+export function npcZoneSpeedFactor(
+  state: { npcs: { id: string; type: NpcTypeCode; assignedZoneId: string | null }[]; },
+  zoneId: number,
+): number {
+  const npc = state.npcs.find((n) => n.assignedZoneId === String(zoneId));
+  if (!npc) return 1;
+  const rarityRatio = NPC_TYPE_MODIFIERS[npc.type].bonus / NPC_TYPE_MODIFIERS.D.bonus;
+  const reduction = BALANCE.npcZoneSpeedK * rarityRatio;
+  return Math.max(0.8, 1 - reduction);
+}
+
 /** Roll one NPC production cycle. Returns null when nothing found. */
 export function rollNpcCycle(
   npc: NpcSurvivor,

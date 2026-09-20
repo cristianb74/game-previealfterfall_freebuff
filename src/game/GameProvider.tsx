@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { BALANCE, STAT_RESOURCE, MERCHANT_SELL_PRICES } from "@/game/balance";
 import { getZone, frontierZoneId, ZONES } from "@/game/zones";
 import { NPC_BY_ID, npcDisplayName } from "@/game/npcData";
-import { NPC_TYPE_MODIFIERS, npcProductionMultiplier } from "@/game/npcTypes";
+import { NPC_TYPE_MODIFIERS, npcProductionMultiplier, npcZoneSpeedFactor } from "@/game/npcTypes";
 import { createInitialState, loadGame, saveGame, deleteSave } from "@/game/saveSystem";
 import {
   setConvexClient,
@@ -82,6 +82,8 @@ export interface GameContextValue {
   maxUnlockedZoneId: number;
   setCurrentZone: (zoneId: number) => void;
   assignNpc: (npcId: string, zoneId: number | null) => void;
+  /** Recruit a candidate NPC into the shelter (pays the recruit cost). */
+  recruitNpc: (npcId: string) => void;
   upgradeBuilding: (zoneId: number, key: BuildingKey) => void;
   /** Upgrade the zone-exclusive building of a host zone. */
   upgradeExclusiveBuilding: (zoneId: number) => void;
@@ -558,6 +560,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const npc: NpcSurvivor = {
           ...seed,
           assignedZoneId: null,
+          // New finds are CANDIDATES: they must be recruited in Equipo
+          // before they can be assigned to a zone.
+          status: "candidate",
           discoveredAt: Date.now(),
           productionTotals: { materiales: 0, agua: 0, comida: 0, medicamentos: 0, componentes: 0, energia: 0, dinero: 0 },
         };
@@ -609,7 +614,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (s.explorationStates[zoneId]) return;
     if (s.health <= 0) return;
     // Agilidad reduces exploration duration (statEffects module).
-    const minutes = explorationMinutesWithAgility(getZone(zoneId).explorationMinutes, s.survivor.stats.agilidad);
+    // Passive NPC benefit: an assigned NPC speeds up their zone further.
+    const minutes =
+      explorationMinutesWithAgility(getZone(zoneId).explorationMinutes, s.survivor.stats.agilidad) *
+      npcZoneSpeedFactor(s, zoneId);
     s.autoFarms[zoneId] = { zoneId, startedAt: now, finishAt: now + minutes * 60000 };
   }
 
@@ -687,7 +695,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
         }
         spendEnergy(s, 1, now);
         // Agilidad reduces exploration duration (statEffects module).
-        const minutes = explorationMinutesWithAgility(getZone(zoneId).explorationMinutes, s.survivor.stats.agilidad);
+        // Passive NPC benefit: an assigned NPC speeds up their zone further.
+        const minutes =
+          explorationMinutesWithAgility(getZone(zoneId).explorationMinutes, s.survivor.stats.agilidad) *
+          npcZoneSpeedFactor(s, zoneId);
         s.currentZoneId = zoneId;
         const expId = s.nextExplorationId++;
         s.explorationStates[zoneId] = { zoneId, startedAt: now, finishAt: now + minutes * 60000, expId };
@@ -878,6 +889,36 @@ export function GameProvider({ children }: { children: ReactNode }) {
     [setAndSave],
   );
 
+  /** Recruit a candidate NPC into the shelter: pays the recruit cost and
+   *  flips status to "active" so it can be assigned to a zone. */
+  const recruitNpc = useCallback(
+    (npcId: string) => {
+      setAndSave((s) => {
+        const npc = s.npcs.find((n) => n.id === npcId);
+        if (!npc) return;
+        if ((npc.status ?? "active") === "active") return; // already recruited
+        const matCost = BALANCE.npcRecruitCostMateriales;
+        const foodCost = BALANCE.npcRecruitCostComidaMin;
+        if (s.resources.materiales < matCost) {
+          toast.error("Materiales insuficientes", { description: `Reclutar cuesta ${matCost} Materiales` });
+          return;
+        }
+        if (s.foodMin < foodCost) {
+          toast.error("Comida insuficiente", { description: `Reclutar cuesta ${foodCost} min de comida` });
+          return;
+        }
+        s.resources.materiales -= matCost;
+        s.foodMin -= foodCost;
+        npc.status = "active";
+        pushLog(s, `[NPC] ${npc.id} · ${npc.name} reclutado · -${matCost} Materiales · -${foodCost} min Comida`, "npc");
+        toast.success("SUPERVIVIENTE RECLUTADO", {
+          description: `${npc.name} «${npc.alias}» se une al refugio.`,
+        });
+      });
+    },
+    [setAndSave],
+  );
+
   const expelNpc = useCallback(
     (npcId: string) => {
       setAndSave((s) => {
@@ -922,6 +963,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       maxUnlockedZoneId: state ? computeZoneUnlocks(state) : 1,
       setCurrentZone,
       assignNpc,
+      recruitNpc,
       upgradeBuilding,
       upgradeExclusiveBuilding,
       useMedicine,
@@ -931,7 +973,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       rollOptions,
       rerollSurvivors,
     }),
-    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, toggleAutoExplore, setCurrentZone, assignNpc, upgradeBuilding, upgradeExclusiveBuilding, useMedicine, buyResource, sellResource, expelNpc, rollOptions, rerollSurvivors],
+    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, upgradeBuilding, upgradeExclusiveBuilding, useMedicine, buyResource, sellResource, expelNpc, rollOptions, rerollSurvivors],
   );
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

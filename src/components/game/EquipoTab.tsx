@@ -6,6 +6,7 @@ import { HUD } from "@/components/game/HUD";
 import { StatsGrid } from "@/components/game/StatsGrid";
 import { useGame } from "@/game/GameProvider";
 import { NPC_TYPE_MODIFIERS, npcCycleChance } from "@/game/npcTypes";
+import { BALANCE } from "@/game/balance";
 import { BUILDING_BY_KEY } from "@/game/buildings";
 import { ZONES } from "@/game/zones";
 import { RESOURCE_META } from "@/game/resources";
@@ -13,15 +14,20 @@ import type { NpcSurvivor } from "@/game/types";
 import { cn } from "@/lib/utils";
 
 export function EquipoTab() {
-  const { state, assignNpc, expelNpc } = useGame();
+  const { state, assignNpc, recruitNpc, expelNpc } = useGame();
   const [detail, setDetail] = useState<string | null>(null);
   const [confirmExpel, setConfirmExpel] = useState<string | null>(null);
   const [showMarketplace, setShowMarketplace] = useState<string | null>(null);
   if (!state) return null;
 
-  const assigned = state.npcs.filter((n) => n.assignedZoneId);
-  const unassigned = state.npcs.filter((n) => !n.assignedZoneId);
+  // Recruitment flow: candidates are NOT assignable until recruited.
+  const candidates = state.npcs.filter((n) => (n.status ?? "active") === "candidate");
+  const active = state.npcs.filter((n) => (n.status ?? "active") === "active");
+  const assigned = active.filter((n) => n.assignedZoneId);
+  const unassigned = active.filter((n) => !n.assignedZoneId);
   const ordered = [...assigned, ...unassigned];
+  const matCost = BALANCE.npcRecruitCostMateriales;
+  const foodCost = BALANCE.npcRecruitCostComidaMin;
   const npc = detail != null ? state.npcs.find((n) => n.id === detail) : null;
   const unlockedMax = ZONES.reduce(
     (acc, z) => (state.expTotal >= z.unlockExp ? Math.max(acc, z.id) : acc),
@@ -44,8 +50,68 @@ export function EquipoTab() {
   return (
     <div className="flex flex-col gap-3">
       <p className="px-1 text-[10px] uppercase tracking-[0.25em] text-zinc-500">
-        EQUIPO · {state.npcs.length} · {assigned.length} asignados
+        EQUIPO · {active.length} · {assigned.length} asignados
       </p>
+
+      {/* Candidates awaiting recruitment */}
+      {candidates.length > 0 && (
+        <section className="rounded-lg border border-amber-900/50 bg-[#12100c] p-3">
+          <p className="mb-2 text-[9px] font-bold uppercase tracking-widest text-amber-400">
+            Por reclutar · {candidates.length}
+          </p>
+          <div className="flex flex-col gap-2">
+            {candidates.map((n) => {
+              const info = NPC_TYPE_MODIFIERS[n.type];
+              const canAfford =
+                state.resources.materiales >= matCost && state.foodMin >= foodCost;
+              return (
+                <div
+                  key={n.id}
+                  className="flex items-center gap-3 rounded-md border border-amber-900/40 bg-black/40 p-2.5"
+                >
+                  <div className="relative shrink-0">
+                    <img
+                      src={n.portrait}
+                      alt={n.name}
+                      className="size-12 rounded-sm border border-zinc-800 object-cover"
+                      loading="lazy"
+                    />
+                    <span
+                      className="absolute -bottom-1 -right-1 rounded-sm border border-black px-1 text-[8px] font-black"
+                      style={{ backgroundColor: info.color, color: "#000" }}
+                    >
+                      {n.type}
+                    </span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-zinc-100">
+                      {n.name} «{n.alias}»
+                    </p>
+                    <p className="truncate text-[10px] text-zinc-500">
+                      {n.profession} · {n.id}
+                    </p>
+                    <p className="mt-0.5 text-[9px] text-zinc-600">
+                      Costo: {matCost} ⚒ · {foodCost} min ▣
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    disabled={!canAfford}
+                    onClick={() => recruitNpc(n.id)}
+                    className="shrink-0 border border-amber-500/40 bg-amber-600/90 font-bold uppercase tracking-wider text-black hover:bg-amber-500"
+                  >
+                    Reclutar
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-[9px] leading-4 text-zinc-600">
+            Los supervivientes encontrados explorando necesitan ser reclutados antes
+            de poder asignarlos a una zona.
+          </p>
+        </section>
+      )}
 
       {state.npcs.length === 0 ? (
         <div className="rounded-lg border border-dashed border-zinc-800 bg-[#101213] p-6 text-center">
@@ -146,6 +212,19 @@ export function EquipoTab() {
                 <p className="mb-1 font-bold uppercase tracking-wider text-zinc-400">Producción acumulada</p>
                 <p>{totalsLabel(npc)}</p>
               </div>
+              {/* Candidates cannot be assigned until recruited. */}
+              {(npc.status ?? "active") === "candidate" ? (
+                <div className="rounded-md border border-amber-900/40 bg-amber-950/20 p-3 text-center">
+                  <p className="text-xs font-bold uppercase tracking-widest text-amber-400">
+                    Sin reclutar
+                  </p>
+                  <p className="mt-1 text-[10px] text-zinc-500">
+                    Recluta a este superviviente desde la lista "Por reclutar" para
+                    poder asignarlo a una zona.
+                  </p>
+                </div>
+              ) : (
+                <>
               <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Asignar a zona</p>
               <div className="max-h-52 overflow-y-auto rounded-md border border-white/5">
                 {ZONES.filter((z) => z.id <= unlockedMax).map((z) => {
@@ -176,7 +255,11 @@ export function EquipoTab() {
               </div>
               <p className="text-[10px] leading-4 text-zinc-600">
                 Máximo 1 superviviente por zona. Los NPC asignados a zonas distintas trabajan a la vez.
+                Bonus pasivo: mientras trabaja en una zona, sus exploraciones son más rápidas
+                (según su rareza).
               </p>
+                </>
+              )}
 
               {/* NPC Management */}
               <div className="flex gap-2 pt-1">

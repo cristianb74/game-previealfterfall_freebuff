@@ -67,6 +67,10 @@ export interface NpcSurvivor {
   assignedZoneId: string | null;
   discoveredAt: number;
   productionTotals: Record<ResourceKey, number>;
+  /** Recruitment flow: candidates found while exploring must be recruited
+   *  from the Equipo tab before they can be assigned to a zone.
+   *  Absent in pre-migration saves → treated as "active". */
+  status?: "candidate" | "active";
 }
 
 export interface BuildingState {
