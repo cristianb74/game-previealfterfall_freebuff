@@ -141,7 +141,7 @@ export interface GameState {
 }
 
 export interface ExplorationFinding {
-  kind: "resource" | "damage" | "npc" | "nothing";
+  kind: "resource" | "damage" | "npc" | "nothing" | "event";
   resource?: ResourceKey;
   amount?: number;
   damage?: number;
@@ -149,6 +149,21 @@ export interface ExplorationFinding {
   npcId?: string;
   /** Rare find (Percepción tier): amount was tripled. */
   rare?: boolean;
+  /** Manual-only special event payload. */
+  event?: SpecialEvent;
+}
+
+/** Manual-exploration special events. Auto-farm can never roll these. */
+export interface SpecialEvent {
+  id: string;
+  /** Player-facing narrative line (logged and shown in the toast). */
+  text: string;
+  /** Flat money reward. */
+  money?: number;
+  /** Health restored (found supplies, safe shelter...). */
+  heal?: number;
+  /** Resource grants (unit resources or minutes for Comida/Agua). */
+  grants?: { resource: ResourceKey; amount: number }[];
 }
 
 export interface ExplorationOutcome {

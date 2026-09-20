@@ -16,6 +16,7 @@ import type {
   ExplorationOutcome,
   GameState,
   ResourceKey,
+  SpecialEvent,
   Stats,
   ZoneProgressState,
 } from "./types";
@@ -27,6 +28,75 @@ import type {
 // ============================================================
 
 const isTime = (r: ResourceKey) => r === "comida" || r === "agua";
+
+// ============================================================
+// MANUAL EXPLORATION SPECIAL EVENTS (auto-farm can NEVER roll them).
+// Weighted pool — no single-event tuning needed elsewhere.
+// ============================================================
+const SPECIAL_EVENTS: { weight: number; make: () => SpecialEvent }[] = [
+  {
+    weight: 3,
+    make: () => ({
+      id: "cache",
+      text: "Caché escondido bajo un escombro — intacto desde el Estallido.",
+      money: BALANCE.moneyFindMin + Math.floor(Math.random() * (BALANCE.moneyFindMax - BALANCE.moneyFindMin + 1)),
+    }),
+  },
+  {
+    weight: 2,
+    make: () => ({
+      id: "botiquin",
+      text: "Botiquín de campaña olvidado en una taquilla oxidada.",
+      grants: [{ resource: "medicamentos", amount: 1 + Math.floor(Math.random() * 2) }],
+    }),
+  },
+  {
+    weight: 2,
+    make: () => ({
+      id: "refugio",
+      text: "Refugio seguro: una noche sin peligros, con agua caliente.",
+      heal: 5 + Math.floor(Math.random() * 6),
+    }),
+  },
+  {
+    weight: 2,
+    make: () => ({
+      id: "pantry",
+      text: "Despensa saqueada a medias — quedó lo que nadie quiso mover.",
+      grants: [
+        { resource: "comida", amount: BALANCE.findTimeMin + Math.floor(Math.random() * (BALANCE.findTimeMax - BALANCE.findTimeMin + 1)) },
+        { resource: "agua", amount: BALANCE.findTimeMin + Math.floor(Math.random() * (BALANCE.findTimeMax - BALANCE.findTimeMin + 1)) },
+      ],
+    }),
+  },
+  {
+    weight: 1,
+    make: () => ({
+      id: "taller-abierto",
+      text: "Taller intacto: herramientas finas y componentes a mano.",
+      grants: [{ resource: "componentes", amount: 2 + Math.floor(Math.random() * 3) }],
+    }),
+  },
+  {
+    weight: 1,
+    make: () => ({
+      id: "hormigon",
+      text: "Bolsas de cemento y chatra seleccionada en un contenedor sellado.",
+      grants: [{ resource: "materiales", amount: 3 + Math.floor(Math.random() * 4) }],
+    }),
+  },
+];
+
+const SPECIAL_EVENT_TOTAL_WEIGHT = SPECIAL_EVENTS.reduce((a, e) => a + e.weight, 0);
+
+function rollSpecialEvent(): SpecialEvent {
+  let roll = Math.random() * SPECIAL_EVENT_TOTAL_WEIGHT;
+  for (const entry of SPECIAL_EVENTS) {
+    roll -= entry.weight;
+    if (roll <= 0) return entry.make();
+  }
+  return SPECIAL_EVENTS[0].make();
+}
 
 export function findChanceForStat(stat: number): number {
   // 1 + stat × k (relative) — e.g. stat 5 → ×1.175 on the base chance
@@ -85,14 +155,22 @@ function pickWeightedResource(stats: Stats, candidates: ResourceKey[]): Resource
   return candidates[candidates.length - 1];
 }
 
-/** Roll the findings of one completed exploration. Pure. */
-export function rollExploration(state: GameState, zoneId: number): ExplorationOutcome {
+/** Roll the findings of one completed exploration. Pure.
+ *  `opts.auto`: background farm run — reduced EXP (applied by caller),
+ *  no rare tier, no special events, and no manual find bonus. */
+export function rollExploration(
+  state: GameState,
+  zoneId: number,
+  opts: { auto?: boolean } = {},
+): ExplorationOutcome {
   const zone = getZone(zoneId);
   const zoneState = zoneStateOf(state, zoneId);
   const findings: ExplorationFinding[] = [];
   let exp = zone.playerExpReward;
   // Zone specialization: the focus resource is amplified in this zone.
   const focusBonus = zone.focus ? 1 + zoneFocusBonus(zoneId) : 1;
+  // Manual advantage: +X% find chance (auto runs use the plain chance).
+  const manualFindBonus = opts.auto ? 0 : BALANCE.manualFindChanceBonus;
 
   // Money find (independent chance)
   if (Math.random() < BALANCE.moneyFindChance) {
@@ -123,11 +201,11 @@ export function rollExploration(state: GameState, zoneId: number): ExplorationOu
       // Hunger/thirst tier of the WORST meter reduces find efficiency.
       const finalChance = Math.min(
         0.95,
-        BALANCE.explorationFindChance * statMult * buildingMult * focusMult * survivalEfficiency(state),
+        BALANCE.explorationFindChance * statMult * buildingMult * focusMult * survivalEfficiency(state) + manualFindBonus,
       );
       if (Math.random() < finalChance) {
-        // Rare find tier (Percepción): ×3 amount.
-        const rare = Math.random() < rareFindChance(state.survivor.stats.percepcion);
+        // Rare find tier (Percepción): ×3 amount. MANUAL ONLY.
+        const rare = !opts.auto && Math.random() < rareFindChance(state.survivor.stats.percepcion);
         let amount = isTime(picked)
           ? BALANCE.findTimeMin + Math.floor(Math.random() * (BALANCE.findTimeMax - BALANCE.findTimeMin + 1))
           : BALANCE.findUnitsMin + Math.floor(Math.random() * (maxUnitsPerFind(state.survivor.stats.fuerza) - BALANCE.findUnitsMin + 1));
@@ -147,6 +225,11 @@ export function rollExploration(state: GameState, zoneId: number): ExplorationOu
       damage: mitigatedDamage(incident.damage, state.survivor.stats.voluntad, state.survivor.stats.resistencia),
       cause: incident.cause,
     });
+  }
+  // MANUAL-ONLY special events: a concrete advantage of active exploration.
+  // Rolls regardless of findings (its own small chance), never on auto runs.
+  if (!opts.auto && Math.random() < BALANCE.manualSpecialEventChance) {
+    findings.push({ kind: "event", event: rollSpecialEvent() });
   }
 
   // NPC discovery is now handled externally by the GameProvider

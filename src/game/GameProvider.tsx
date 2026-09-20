@@ -467,6 +467,24 @@ export function GameProvider({ children }: { children: ReactNode }) {
       } else if (f.kind === "damage") {
         s.health = Math.max(0, s.health - (f.damage ?? 0));
         pushLog(s, `${expTag}DAÑO | ${f.cause} · -${f.damage} Salud`, "damage", startedAt);
+      } else if (f.kind === "event" && f.event) {
+        // Manual-only special event: apply its real rewards.
+        const ev = f.event;
+        if (ev.money) s.resources.dinero += ev.money;
+        if (ev.heal) s.health = Math.min(BALANCE.maxHealth, s.health + ev.heal);
+        for (const g of ev.grants ?? []) {
+          if (g.resource === "comida") s.foodMin += g.amount;
+          else if (g.resource === "agua") s.waterMin += g.amount;
+          else s.resources[g.resource] += g.amount;
+        }
+        const parts: string[] = [];
+        if (ev.money) parts.push(`+$${ev.money}`);
+        if (ev.heal) parts.push(`+${ev.heal} Salud`);
+        for (const g of ev.grants ?? []) {
+          const isTimeG = g.resource === "comida" || g.resource === "agua";
+          parts.push(`+${g.amount}${isTimeG ? " min" : ""} ${g.resource === "dinero" ? "$" : g.resource}`);
+        }
+        pushLog(s, `${expTag}EVENTO | ${ev.text}${parts.length > 0 ? ` (${parts.join(" · ")})` : ""}`, "exp", startedAt);
       }
     }
     if (outcome.findings.length === 0) {
@@ -499,7 +517,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     for (const f of outcome.findings) {
       if (f.kind === "resource") parts.push(`+${f.amount} ${f.resource === "dinero" ? "$" : f.resource}`);
       else if (f.kind === "damage") parts.push(`${f.cause} · -${f.damage} Salud`);
-
+      else if (f.kind === "event" && f.event) parts.push(f.event.text);
     }
     if (outcome.findings.length === 0) parts.push("Sin hallazgos");
     return parts.join(" · ");
@@ -511,6 +529,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const run = s.explorationStates[zoneId];
     if (!run) return;
     const expId = run.expId ?? s.nextExplorationId++;
+    // MANUAL run: full EXP, rare tier, special events, find bonus.
     const outcome = rollExploration(s, zoneId);
     applyOutcome(s, outcome, startedAt, { expId });
     // Single NPC check per exploration completion (counter-based)
@@ -557,8 +576,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   function completeAutoRun(s: GameState, zoneId: number, startedAt: number) {
     if (!s.autoFarms[zoneId]) return;
     const expId = s.nextExplorationId++;
-    const outcome = rollExploration(s, zoneId);
-    // Auto runs use reduced EXP, no NPC discovery (engine no longer rolls NPCs).
+    // AUTO run: reduced EXP, no rare tier, no special events, no find bonus.
+    const outcome = rollExploration(s, zoneId, { auto: true });
     outcome.exp = Math.max(1, Math.round(outcome.exp * BALANCE.autoExploreExpFactor));
     applyOutcome(s, outcome, startedAt, { auto: true, expId });
     s.explorationsDone += 1;

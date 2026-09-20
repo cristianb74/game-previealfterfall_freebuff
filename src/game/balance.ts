@@ -34,6 +34,13 @@ export const BALANCE = {
    *  Auto runs never advance the frontier — manual exploration must reach
    *  each new zone. Active exploration stays the most valuable action. */
   autoExploreExpFactor: 0.4,
+  /** MANUAL advantage: flat +X% added to the resource find chance.
+   *  Auto-farm runs never get this bonus. */
+  manualFindChanceBonus: 0.15,
+  /** MANUAL advantage: chance (0–1) of rolling a special event
+   *  (cache, safe shelter, supply stash...). Auto-farm can never
+   *  trigger these events. */
+  manualSpecialEventChance: 0.08,
   /** Chance (0–1) of a survival incident (only when no resource found). */
   explorationIncidentChance: 0.3,
   /** Resource find: min/max units for unit-type resources. */
