@@ -51,6 +51,8 @@ const KIND_LABELS: Record<string, string> = {
 export function RegistroTab() {
   const { state } = useGame();
   const [copied, setCopied] = useState(false);
+  /** Log channel filter: tech (debug) | narr (player-facing) | both. */
+  const [channelFilter, setChannelFilter] = useState<"tech" | "narr" | "both">("both");
 
   const now = Date.now();
 
@@ -337,17 +339,55 @@ export function RegistroTab() {
         <p className="mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">
           Historial cronológico
         </p>
+        {/* Channel filter */}
+        <div className="mb-2 grid grid-cols-3 gap-1 rounded-md border border-zinc-800 bg-black/40 p-1">
+          {(
+            [
+              { key: "narr" as const, label: "Narrativo" },
+              { key: "tech" as const, label: "Técnico" },
+              { key: "both" as const, label: "Ambos" },
+            ]
+          ).map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => setChannelFilter(opt.key)}
+              className={cn(
+                "rounded-sm px-2 py-1 text-[9px] font-bold uppercase tracking-widest transition-colors",
+                channelFilter === opt.key
+                  ? "bg-green-600/90 text-black"
+                  : "text-zinc-500 hover:text-zinc-300",
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
         <div className="max-h-[50vh] overflow-y-auto rounded-sm bg-black/40 p-2 font-mono text-[10px] leading-5">
-          {state.log.length === 0 ? (
-            <p className="text-zinc-600">Sin eventos registrados</p>
-          ) : (
-            state.log.map((e, i) => (
+          {(() => {
+            const filtered = state.log.filter((e) => {
+              const ch = e.channel ?? "tech";
+              if (channelFilter === "both") return true;
+              return ch === channelFilter;
+            });
+            if (filtered.length === 0) {
+              return <p className="text-zinc-600">Sin eventos en este canal</p>;
+            }
+            return filtered.map((e, i) => (
               <div key={i} className="flex gap-2 border-b border-zinc-900 py-0.5">
                 <span className="shrink-0 text-zinc-600">[{fmtTs(e.t)}]</span>
-                <span className="text-zinc-300">{e.msg}</span>
+                <span
+                  className={
+                    e.channel === "narr"
+                      ? "italic text-green-300/90"
+                      : "text-zinc-300"
+                  }
+                >
+                  {e.msg}
+                </span>
               </div>
-            ))
-          )}
+            ));
+          })()}
         </div>
       </section>
     </div>

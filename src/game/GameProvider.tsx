@@ -17,6 +17,15 @@ import { applyOfflineProgress } from "@/game/offlineProgress";
 import { tickNpcs } from "@/game/onlineTick";
 import { applyEnergyRegen, currentEnergy, spendEnergy, nextEnergyRegenAt } from "@/game/energySystem";
 import { explorationMinutesWithAgility } from "@/game/statEffects";
+import {
+  narrExplorationStart,
+  narrResourceFind,
+  narrDamage,
+  narrEvent,
+  narrNpcFound,
+  narrZoneUnlock,
+  narrBuildDone,
+} from "@/game/narrativeLog";
 import { rollExploration, npcChanceForCounter, discoverableNpcIds } from "@/game/explorationEngine";
 import {
   buildingUpgradeCost,
@@ -407,6 +416,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
             b.level = Math.min(BALANCE.buildingMaxLevel, b.level + 1);
             b.upgradeFinishAt = null;
             pushLog(s, `Construcción completada: ${BUILDING_BY_KEY[key].name} → N${b.level} (Z${String(zid).padStart(2, "0")})`, "build");
+            narrBuildDone(s, BUILDING_BY_KEY[key].name, b.level);
             dirty = true;
           }
         }
@@ -464,9 +474,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
         else s.resources[f.resource] += amount;
         const isTime = f.resource === "comida" || f.resource === "agua";
         pushLog(s, `${expTag}RECURSO | ${isTime ? `+${amount} min ${f.resource}` : `+${amount} ${f.resource === "dinero" ? "$" : f.resource}`}`, "resource", startedAt);
+        narrResourceFind(s, outcome.zoneId, f.resource, amount, !!f.rare);
       } else if (f.kind === "damage") {
         s.health = Math.max(0, s.health - (f.damage ?? 0));
         pushLog(s, `${expTag}DAÑO | ${f.cause} · -${f.damage} Salud`, "damage", startedAt);
+        narrDamage(s, outcome.zoneId, f.cause ?? "Accidente", f.damage ?? 0);
       } else if (f.kind === "event" && f.event) {
         // Manual-only special event: apply its real rewards.
         const ev = f.event;
@@ -485,6 +497,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           parts.push(`+${g.amount}${isTimeG ? " min" : ""} ${g.resource === "dinero" ? "$" : g.resource}`);
         }
         pushLog(s, `${expTag}EVENTO | ${ev.text}${parts.length > 0 ? ` (${parts.join(" · ")})` : ""}`, "exp", startedAt);
+        narrEvent(s, ev.text);
       }
     }
     if (outcome.findings.length === 0) {
@@ -504,6 +517,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (maxUnlocked > frontierZoneId(s)) {
         s.pendingZoneUnlock = maxUnlocked;
         pushLog(s, `Nueva zona desbloqueada: ${getZone(maxUnlocked).name}`, "zone", startedAt);
+        narrZoneUnlock(s, getZone(maxUnlocked).name);
         toast.success("☢ NUEVA ZONA DESBLOQUEADA", {
           description: `${getZone(maxUnlocked).name} · la anterior sigue farmeándose sola`,
           duration: 6000,
@@ -549,6 +563,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         };
         s.npcs.push(npc);
         pushLog(s, `[EXP #${expId}] NPC OBTENIDO | ${npc.id} · ${npc.name} · ${NPC_TYPE_MODIFIERS[npc.type].label}`, "npc", startedAt);
+        narrNpcFound(s, npc.name, npc.alias);
         pushLog(s, `[NPC] contador reiniciado a 0`, "info", Date.now());
         s.explorationsSinceLastNPC = 0;
         npcFound = true;
@@ -677,6 +692,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const expId = s.nextExplorationId++;
         s.explorationStates[zoneId] = { zoneId, startedAt: now, finishAt: now + minutes * 60000, expId };
         pushLog(s, `[EXP #${expId}] Z${String(zoneId).padStart(2, "0")} | INICIO | duración ${minutes * 60}s`, "info", now);
+        narrExplorationStart(s, zoneId, getZone(zoneId).name);
       });
     },
     [setAndSave],

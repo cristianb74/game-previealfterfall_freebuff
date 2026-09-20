@@ -101,6 +101,9 @@ export interface LogEvent {
   t: number; // timestamp
   msg: string;
   kind: "resource" | "exp" | "damage" | "npc" | "zone" | "build" | "info";
+  /** Log channel: "tech" (debug, default) or "narr" (player-facing
+   *  narrative). Older saves have no channel → treated as "tech". */
+  channel?: "tech" | "narr";
 }
 
 export interface GameState {

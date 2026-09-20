@@ -3,6 +3,7 @@ import { rollNpcCycle } from "./npcTypes";
 import { getZone } from "./zones";
 import { npcDisplayName } from "./npcData";
 import { applySurvivalDrain, hungerTier, thirstTier, TIER_META } from "./survivalSystem";
+import { narrNpcFind, narrSurvivalWarn } from "./narrativeLog";
 import type { GameState, LogEvent, ResourceKey } from "./types";
 
 // ============================================================
@@ -109,9 +110,11 @@ export function tickNpcs(state: GameState, now: number): TickChanges {
   const tTier = thirstTier(state);
   if (lastHungerTier !== null && hTier !== lastHungerTier) {
     pushLog(state.log, { t: now, msg: `[SUPERVIVENCIA] Comida: ${TIER_META[hTier].label}`, kind: hTier === "ok" ? "info" : "damage" });
+    if (hTier !== "ok") narrSurvivalWarn(state, "comida");
   }
   if (lastThirstTier !== null && tTier !== lastThirstTier) {
     pushLog(state.log, { t: now, msg: `[SUPERVIVENCIA] Agua: ${TIER_META[tTier].label}`, kind: tTier === "ok" ? "info" : "damage" });
+    if (tTier !== "ok") narrSurvivalWarn(state, "agua");
   }
   lastHungerTier = hTier;
   lastThirstTier = tTier;
@@ -123,6 +126,7 @@ export function tickNpcs(state: GameState, now: number): TickChanges {
       msg: `${npc ? npcDisplayName(npc) : f.npcId} encontró ${isTime ? `+${f.amount} min` : `+${f.amount}`} ${f.resource === "dinero" ? "$" : f.resource}`,
       kind: "npc",
     });
+    if (npc) narrNpcFind(state, npc.name, f.resource, f.amount);
   }
   for (const b of buildingsCompleted) {
     pushLog(state.log, { t: now, msg: `Construcción completada: ${b}`, kind: "build" });
