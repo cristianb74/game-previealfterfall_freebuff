@@ -22,6 +22,7 @@ import {
   buildingUpgradeCost,
   buildingUpgradeMinutes,
   BUILDING_BY_KEY,
+  EXCLUSIVE_BUILDING_BY_ZONE,
 } from "@/game/buildings";
 import { SURVIVOR_MAX_ROLLS, generateSurvivorOptions, rollSurvivor } from "@/game/survivorGenerator";
 import { RESOURCE_META } from "@/game/resources";
@@ -73,6 +74,8 @@ export interface GameContextValue {
   setCurrentZone: (zoneId: number) => void;
   assignNpc: (npcId: string, zoneId: number | null) => void;
   upgradeBuilding: (zoneId: number, key: BuildingKey) => void;
+  /** Upgrade the zone-exclusive building of a host zone. */
+  upgradeExclusiveBuilding: (zoneId: number) => void;
   useMedicine: () => void;
   buyResource: (key: ResourceKey) => void;
   sellResource: (key: ResourceKey, qty: number) => void;
@@ -407,6 +410,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
             dirty = true;
           }
         }
+        // Exclusive building completion (host zones only).
+        const excl = s.zones[zid].exclusiveBuilding;
+        if (excl && excl.upgradeFinishAt && now >= excl.upgradeFinishAt) {
+          excl.level = Math.min(BALANCE.buildingMaxLevel, excl.level + 1);
+          excl.upgradeFinishAt = null;
+          const def = EXCLUSIVE_BUILDING_BY_ZONE[zid];
+          pushLog(s, `Construcción completada: ${def?.name ?? excl.key} → N${excl.level} (Z${String(zid).padStart(2, "0")})`, "build");
+          dirty = true;
+        }
       }
 
       if (dirty) void saveGame(s);
@@ -736,6 +748,32 @@ export function GameProvider({ children }: { children: ReactNode }) {
     [setAndSave],
   );
 
+  /** Upgrade the exclusive building of a host zone (same costs/times). */
+  const upgradeExclusiveBuilding = useCallback(
+    (zoneId: number) => {
+      setAndSave((s) => {
+        const z = s.zones[zoneId];
+        if (!z) return;
+        const excl = z.exclusiveBuilding;
+        if (!excl || excl.level >= BALANCE.buildingMaxLevel || excl.upgradeFinishAt) return;
+        const cost = buildingUpgradeCost(excl.level);
+        if (s.resources.materiales < cost.materiales || s.resources.componentes < cost.componentes) {
+          toast.error("Recursos insuficientes", {
+            description: `${cost.materiales} Materiales · ${cost.componentes} Componentes`,
+          });
+          return;
+        }
+        s.resources.materiales -= cost.materiales;
+        s.resources.componentes -= cost.componentes;
+        const minutes = buildingUpgradeMinutes(excl.level);
+        excl.upgradeFinishAt = Date.now() + minutes * 60000;
+        const def = EXCLUSIVE_BUILDING_BY_ZONE[zoneId];
+        pushLog(s, `Mejora iniciada: ${def?.name ?? excl.key} N${excl.level + 1}`, "build");
+      });
+    },
+    [setAndSave],
+  );
+
   const useMedicine = useCallback(() => {
     setAndSave((s) => {
       if (s.resources.medicamentos <= 0) {
@@ -850,6 +888,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setCurrentZone,
       assignNpc,
       upgradeBuilding,
+      upgradeExclusiveBuilding,
       useMedicine,
       buyResource,
       sellResource,
@@ -857,7 +896,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       rollOptions,
       rerollSurvivors,
     }),
-    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, toggleAutoExplore, setCurrentZone, assignNpc, upgradeBuilding, useMedicine, buyResource, sellResource, expelNpc, rollOptions, rerollSurvivors],
+    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, toggleAutoExplore, setCurrentZone, assignNpc, upgradeBuilding, upgradeExclusiveBuilding, useMedicine, buyResource, sellResource, expelNpc, rollOptions, rerollSurvivors],
   );
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

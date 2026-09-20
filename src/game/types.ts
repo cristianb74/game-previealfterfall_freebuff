@@ -37,6 +37,13 @@ export type BuildingKey =
   | "taller"
   | "generador";
 
+/** Zone-exclusive buildings (see buildings.ts for their host zones).
+ *  Present only in the zones that host them; old saves get them via
+ *  the save migration at level 0. */
+export type ExclusiveBuildingKey = "invernadero" | "perforadora" | "laboratorio" | "hormigonera";
+
+export type AnyBuildingKey = BuildingKey | ExclusiveBuildingKey;
+
 export type NpcTypeCode = "B" | "G" | "A" | "R" | "D";
 
 export type Profession = string;
@@ -63,7 +70,8 @@ export interface NpcSurvivor {
 }
 
 export interface BuildingState {
-  key: BuildingKey;
+  /** Core or exclusive key (exclusiveBuilding uses an exclusive key). */
+  key: AnyBuildingKey;
   level: number; // 0–10
   upgradeFinishAt: number | null; // absolute timestamp
 }
@@ -72,6 +80,10 @@ export type ZoneStatus = "locked" | "unlocked";
 
 export interface ZoneProgressState {
   buildings: Record<BuildingKey, BuildingState>;
+  /** Zone-exclusive building (only for zones that host one). Absent in
+   *  zones without an exclusive and in pre-migration saves until upgraded
+   *  — treat as level 0 when missing. */
+  exclusiveBuilding?: BuildingState;
   assignedNpcId: string | null;
 }
 

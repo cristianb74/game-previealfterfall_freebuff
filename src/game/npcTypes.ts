@@ -1,5 +1,5 @@
 import { BALANCE, BUILDING_SPECIALIZATION } from "./balance";
-import { buildingBonus } from "./buildings";
+import { buildingBonus, exclusiveBuildingBonus, BUILDING_BY_KEY_ANY } from "./buildings";
 import type {
   BuildingKey,
   NpcSurvivor,
@@ -8,7 +8,7 @@ import type {
   StatKey,
   ZoneProgressState,
 } from "./types";
-import { getZone } from "./zones";
+import { getZone, zoneFocusBonus } from "./zones";
 
 // ============================================================
 // AFTERFALL — NPC type modifiers and production math.
@@ -49,7 +49,7 @@ export function npcStatFor(npc: NpcSurvivor, resource: ResourceKey): number {
 }
 
 /** Total relative bonus multiplier for an NPC working a zone on a resource:
- * ×(1 + npcTypeBonus + buildingSpecializationBonus). */
+ * ×(1 + npcTypeBonus + buildingSpecializationBonus + zoneFocusBonus). */
 export function npcProductionMultiplier(
   npc: NpcSurvivor,
   zoneState: ZoneProgressState,
@@ -66,7 +66,17 @@ export function npcProductionMultiplier(
       break;
     }
   }
-  return 1 + typeBonus + buildingBonusTotal;
+  // Exclusive building of the host zone stacks on its resource.
+  const excl = zoneState.exclusiveBuilding;
+  const exclBonus =
+    excl && BUILDING_BY_KEY_ANY[excl.key].specializes === resource
+      ? exclusiveBuildingBonus(excl.level)
+      : 0;
+  // Zone specialization amplifies the focus resource for NPCs too.
+  const zoneId = npc.assignedZoneId ? Number(npc.assignedZoneId) : 1;
+  const focus = getZone(zoneId).focus;
+  const focusBonus = focus === resource ? zoneFocusBonus(zoneId) : 0;
+  return 1 + typeBonus + buildingBonusTotal + exclBonus + focusBonus;
 }
 
 /** Effective per-cycle find probability for an NPC in a zone.

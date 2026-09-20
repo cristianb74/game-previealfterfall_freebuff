@@ -1,6 +1,6 @@
 import { GAME_INFO, SAVE_VERSION } from "./gameConfig";
 import { BALANCE } from "./balance";
-import { BUILDINGS } from "./buildings";
+import { BUILDINGS, EXCLUSIVE_BUILDING_BY_ZONE } from "./buildings";
 import { getZone } from "./zones";
 import type {
   BuildingKey,
@@ -39,9 +39,18 @@ export function createInitialZones(): Record<number, ZoneProgressState> {
   for (let id = 1; id <= 20; id++) {
     const buildings = {} as Record<BuildingKey, BuildingState>;
     for (const b of BUILDINGS) {
-      buildings[b.key] = { key: b.key, level: 0, upgradeFinishAt: null };
+      const coreKey = b.key as BuildingKey;
+      buildings[coreKey] = { key: coreKey, level: 0, upgradeFinishAt: null };
     }
-    zones[id] = { buildings, assignedNpcId: null };
+    // Host zones start with their exclusive building at N0.
+    const exclDef = EXCLUSIVE_BUILDING_BY_ZONE[id];
+    zones[id] = {
+      buildings,
+      exclusiveBuilding: exclDef
+        ? { key: exclDef.key, level: 0, upgradeFinishAt: null }
+        : undefined,
+      assignedNpcId: null,
+    };
   }
   return zones;
 }
@@ -257,6 +266,16 @@ function migrate(envelope: SaveEnvelope): SaveEnvelope {
     if (typeof state.explorationsSinceLastNPC !== "number") state.explorationsSinceLastNPC = 0;
     if (typeof state.nextExplorationId !== "number") state.nextExplorationId = (state.explorationsDone ?? 0) + 1;
     if (typeof state.manualExplorationsDone !== "number") state.manualExplorationsDone = state.explorationsDone ?? 0;
+    // Zone differentiation migration: host zones get their exclusive
+    // building at N0 (old saves have none). Non-host zones stay untouched.
+    for (const zid of Object.keys(state.zones ?? {}).map(Number)) {
+      const zs = state.zones[zid];
+      if (!zs) continue;
+      const exclDef = EXCLUSIVE_BUILDING_BY_ZONE[zid];
+      if (exclDef && !zs.exclusiveBuilding) {
+        zs.exclusiveBuilding = { key: exclDef.key, level: 0, upgradeFinishAt: null };
+      }
+    }
   }
 
   return { version: v, savedAt: envelope.savedAt, state };

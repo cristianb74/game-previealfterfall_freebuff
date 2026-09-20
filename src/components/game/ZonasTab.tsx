@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useGame } from "@/game/GameProvider";
 import { ZONES, zoneImage } from "@/game/zones";
-import { BUILDING_BY_KEY } from "@/game/buildings";
+import { BUILDING_BY_KEY, BUILDING_BY_KEY_ANY } from "@/game/buildings";
+import type { AnyBuildingKey } from "@/game/types";
 import { NPC_TYPE_MODIFIERS, npcProductionMultiplier } from "@/game/npcTypes";
 import { BUILDING_SPECIALIZATION } from "@/game/balance";
 import type { BuildingKey } from "@/game/types";
@@ -17,7 +18,8 @@ function fmtCountdown(ms: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-/** Find active buildings in a zone (upgradeFinishAt != null). */
+/** Find active buildings in a zone (upgradeFinishAt != null).
+ *  Includes the zone-exclusive building when present. */
 function getActiveBuildings(
   buildings:
     | Record<
@@ -25,31 +27,37 @@ function getActiveBuildings(
         { level: number; upgradeFinishAt: number | null }
       >
     | undefined,
+  exclusive?: { key: string; level: number; upgradeFinishAt: number | null },
 ) {
-  if (!buildings) return [];
   const now = Date.now();
-  return (
-    (Object.keys(buildings) as BuildingKey[])
-      .map((key) => {
-        const b = buildings[key];
-        if (!b.upgradeFinishAt) return null;
-        const remaining = b.upgradeFinishAt - now;
-        if (remaining <= 0) return null;
-        const def = BUILDING_BY_KEY[key];
-        return {
-          key,
-          name: def?.name ?? key,
-          level: b.level + 1, // constructing to this level
-          remaining,
-        };
-      })
-      .filter(Boolean) as {
-        key: BuildingKey;
-        name: string;
-        level: number;
-        remaining: number;
-      }[]
-  );
+  const list: { key: string; name: string; level: number; remaining: number }[] = [];
+  if (buildings) {
+    for (const key of Object.keys(buildings) as BuildingKey[]) {
+      const b = buildings[key];
+      if (!b.upgradeFinishAt) continue;
+      const remaining = b.upgradeFinishAt - now;
+      if (remaining <= 0) continue;
+      const def = BUILDING_BY_KEY[key];
+      list.push({
+        key,
+        name: def?.name ?? key,
+        level: b.level + 1, // constructing to this level
+        remaining,
+      });
+    }
+  }
+  if (exclusive && exclusive.upgradeFinishAt) {
+    const remaining = exclusive.upgradeFinishAt - now;
+    if (remaining > 0) {
+      list.push({
+        key: exclusive.key,
+        name: BUILDING_BY_KEY_ANY[exclusive.key as AnyBuildingKey]?.name ?? exclusive.key,
+        level: exclusive.level + 1,
+        remaining,
+      });
+    }
+  }
+  return list;
 }
 
 /** NPC indicator for a zone card. */
@@ -140,7 +148,10 @@ export function ZonasTab() {
             state.expTotal >= z.unlockExp;
 
           const zoneBuildings = state.zones[z.id]?.buildings;
-          const activeBuildings = getActiveBuildings(zoneBuildings);
+          const activeBuildings = getActiveBuildings(
+            zoneBuildings,
+            state.zones[z.id]?.exclusiveBuilding,
+          );
 
           return (
             <div key={z.id} className="flex flex-col gap-1">

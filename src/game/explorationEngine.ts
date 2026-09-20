@@ -1,6 +1,6 @@
 import { BALANCE, RESOURCE_STAT } from "./balance";
-import { getZone } from "./zones";
-import { buildingBonus } from "./buildings";
+import { getZone, zoneFocusBonus } from "./zones";
+import { buildingBonus, exclusiveBuildingBonus, BUILDING_BY_KEY_ANY } from "./buildings";
 import { NPC_BY_ID } from "./npcData";
 import {
   incidentChanceFactor,
@@ -44,7 +44,13 @@ export function buildingMultiplierFor(
     const b = zoneState.buildings[k];
     if (b && BUILDING_SPECIALIZATION_MAP[k] === resource) {
       // techBonus: Inteligencia adds extra efficiency to Taller/Generador.
-      return 1 + buildingBonus(b.level) + techBonus;
+      // Exclusive building (if the zone hosts one for this resource) stacks.
+      const excl = zoneState.exclusiveBuilding;
+      const exclBonus =
+        excl && BUILDING_BY_KEY_ANY[excl.key].specializes === resource
+          ? exclusiveBuildingBonus(excl.level)
+          : 0;
+      return 1 + buildingBonus(b.level) + techBonus + exclBonus;
     }
   }
   return 1;
@@ -85,6 +91,8 @@ export function rollExploration(state: GameState, zoneId: number): ExplorationOu
   const zoneState = zoneStateOf(state, zoneId);
   const findings: ExplorationFinding[] = [];
   let exp = zone.playerExpReward;
+  // Zone specialization: the focus resource is amplified in this zone.
+  const focusBonus = zone.focus ? 1 + zoneFocusBonus(zoneId) : 1;
 
   // Money find (independent chance)
   if (Math.random() < BALANCE.moneyFindChance) {
@@ -110,10 +118,12 @@ export function rollExploration(state: GameState, zoneId: number): ExplorationOu
           ? inteligenciaTechBonus(state.survivor.stats.inteligencia)
           : 0;
       const buildingMult = buildingMultiplierFor(zoneState, picked, techBonus);
+      // Zone focus amplifies finds of its specialty resource.
+      const focusMult = picked === zone.focus ? focusBonus : 1;
       // Hunger/thirst tier of the WORST meter reduces find efficiency.
       const finalChance = Math.min(
         0.95,
-        BALANCE.explorationFindChance * statMult * buildingMult * survivalEfficiency(state),
+        BALANCE.explorationFindChance * statMult * buildingMult * focusMult * survivalEfficiency(state),
       );
       if (Math.random() < finalChance) {
         // Rare find tier (Percepción): ×3 amount.

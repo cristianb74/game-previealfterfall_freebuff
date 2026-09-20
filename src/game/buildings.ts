@@ -1,6 +1,13 @@
 import { BALANCE } from "./balance";
 import type { BuildingKey, ResourceKey } from "./types";
 
+// Exclusive building keys extend the six core keys. Existing saves only
+// contain the 6 core keys per zone; exclusive buildings are added by the
+// save migration (N0) for their host zone.
+export type ExclusiveBuildingKey = "invernadero" | "perforadora" | "laboratorio" | "hormigonera";
+
+export type AnyBuildingKey = BuildingKey | ExclusiveBuildingKey;
+
 // ============================================================
 // AFTERFALL — buildings. Six core buildings, local per zone,
 // levels 0–10, relative bonuses N1 +5 % → N10 +50 %.
@@ -8,12 +15,14 @@ import type { BuildingKey, ResourceKey } from "./types";
 // ============================================================
 
 export interface BuildingDef {
-  key: BuildingKey;
+  key: AnyBuildingKey;
   name: string;
   description: string;
   icon: string;
   /** Resource boosted by this building (relative bonus). */
   specializes: ResourceKey;
+  /** When set, this building only exists in that zone. */
+  exclusiveToZone?: number;
 }
 
 export const BUILDINGS: BuildingDef[] = [
@@ -63,16 +72,83 @@ export const BUILDINGS: BuildingDef[] = [
 
 export const BUILDING_BY_KEY: Record<BuildingKey, BuildingDef> = BUILDINGS.reduce(
   (acc, b) => {
-    acc[b.key] = b;
+    acc[b.key as BuildingKey] = b;
     return acc;
   },
   {} as Record<BuildingKey, BuildingDef>,
 );
 
-/** Relative bonus of a building at a given level: level 5 → +25 %. */
+// ============================================================
+// EXCLUSIVE BUILDINGS — one per host zone, thematically tied.
+// They specialize the same resource as the zone's focus and add
+// a flat +4 %/level on top of the core building bonus.
+// ============================================================
+export const EXCLUSIVE_BUILDINGS: BuildingDef[] = [
+  {
+    key: "invernadero",
+    name: "Invernadero Hidropónico",
+    description: "Cultivos protegidos bajo plástico recuperado. Solo posible en la cocina comunitaria de Z01.",
+    icon: "🌱",
+    specializes: "comida",
+    exclusiveToZone: 1,
+  },
+  {
+    key: "perforadora",
+    name: "Perforadora de Pozos",
+    description: "Taladra el acuífero profundo del depósito. Solo construible en Z09.",
+    icon: "🕳",
+    specializes: "agua",
+    exclusiveToZone: 9,
+  },
+  {
+    key: "laboratorio",
+    name: "Laboratorio de Campo",
+    description: "Síntesis de sueros a partir de los restos clínicos. Exclusivo del Hospital (Z04).",
+    icon: "🧪",
+    specializes: "medicamentos",
+    exclusiveToZone: 4,
+  },
+  {
+    key: "hormigonera",
+    name: "Hormigonera Industrial",
+    description: "Produce bloques prefabricados de alta resistencia. Exclusiva de la Zona Industrial (Z12).",
+    icon: "🧱",
+    specializes: "materiales",
+    exclusiveToZone: 12,
+  },
+];
+
+export const EXCLUSIVE_BUILDING_BY_ZONE: Partial<Record<number, BuildingDef>> = EXCLUSIVE_BUILDINGS.reduce(
+  (acc, b) => {
+    if (b.exclusiveToZone != null) acc[b.exclusiveToZone] = b;
+    return acc;
+  },
+  {} as Partial<Record<number, BuildingDef>>,
+);
+
+export const EXCLUSIVE_BUILDING_KEYS: ExclusiveBuildingKey[] = EXCLUSIVE_BUILDINGS.map((b) => b.key as ExclusiveBuildingKey);
+
+export const BUILDING_BY_KEY_ANY: Record<AnyBuildingKey, BuildingDef> = [...BUILDINGS, ...EXCLUSIVE_BUILDINGS].reduce(
+  (acc, b) => {
+    acc[b.key as AnyBuildingKey] = b;
+    return acc;
+  },
+  {} as Record<AnyBuildingKey, BuildingDef>,
+);
+
+/** Relative bonus of a building at a given level: level 5 → +25 %.
+ *  Exclusive buildings add +4 %/level on top (stronger per level). */
 export function buildingBonus(level: number): number {
   const clamped = Math.max(0, Math.min(BALANCE.buildingMaxLevel, level));
   return clamped * BALANCE.buildingBonusPerLevel;
+}
+
+/** Bonus of an exclusive building at a given level (+4 %/level). */
+export const EXCLUSIVE_BONUS_PER_LEVEL = 0.04;
+
+export function exclusiveBuildingBonus(level: number): number {
+  const clamped = Math.max(0, Math.min(BALANCE.buildingMaxLevel, level));
+  return clamped * EXCLUSIVE_BONUS_PER_LEVEL;
 }
 
 export function buildingUpgradeCost(level: number): {

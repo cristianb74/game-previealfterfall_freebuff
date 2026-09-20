@@ -8,10 +8,12 @@ import {
   buildingBonus,
   buildingUpgradeCost,
   buildingUpgradeMinutes,
+  EXCLUSIVE_BUILDING_BY_ZONE,
+  exclusiveBuildingBonus,
 } from "@/game/buildings";
 import { BALANCE } from "@/game/balance";
 import { RESOURCE_META } from "@/game/resources";
-import { getZone } from "@/game/zones";
+import { getZone, zoneFocusBonus } from "@/game/zones";
 import type { BuildingKey } from "@/game/types";
 import { cn } from "@/lib/utils";
 
@@ -32,7 +34,7 @@ const BUILDING_ORDER: BuildingKey[] = [
 ];
 
 export function BaseTab() {
-  const { state, upgradeBuilding, setScreen } = useGame();
+  const { state, upgradeBuilding, upgradeExclusiveBuilding, setScreen } = useGame();
   const [, force] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => force((v) => v + 1), 1000);
@@ -43,6 +45,18 @@ export function BaseTab() {
   const zoneId = state.currentZoneId;
   const zoneState = state.zones[zoneId];
   const zoneDef = getZone(zoneId);
+
+  // Zone-exclusive building (host zones only).
+  const exclDef = EXCLUSIVE_BUILDING_BY_ZONE[zoneId];
+  const excl = zoneState.exclusiveBuilding ?? (exclDef ? { key: exclDef.key, level: 0, upgradeFinishAt: null } : undefined);
+  const exclBusy = excl?.upgradeFinishAt != null;
+  const exclRemaining = exclBusy ? (excl!.upgradeFinishAt as number) - Date.now() : 0;
+  const exclMaxed = (excl?.level ?? 0) >= BALANCE.buildingMaxLevel;
+  const exclCost = buildingUpgradeCost(excl?.level ?? 0);
+  const exclAfford =
+    state.resources.materiales >= exclCost.materiales &&
+    state.resources.componentes >= exclCost.componentes;
+  const exclMinutes = buildingUpgradeMinutes(excl?.level ?? 0);
 
   return (
     <div className="flex flex-col gap-3">
@@ -63,7 +77,83 @@ export function BaseTab() {
         <p className="mt-0.5 text-[9px] text-zinc-600">
           Las construcciones y sus bonus pertenecen únicamente a esta zona.
         </p>
+        {/* Zone specialization banner */}
+        <div className="mt-2 flex items-center gap-2 rounded-sm border border-green-900/40 bg-green-950/20 px-2 py-1.5">
+          <span className="text-sm">{RESOURCE_META[zoneDef.focus].icon}</span>
+          <div className="min-w-0">
+            <p className="text-[9px] font-bold uppercase tracking-wider text-green-500">
+              Especialidad de la zona · {RESOURCE_META[zoneDef.focus].label}
+            </p>
+            <p className="text-[9px] text-zinc-500">
+              Los hallazgos de {RESOURCE_META[zoneDef.focus].label} aquí son +
+              {Math.round(zoneFocusBonus(zoneId) * 100)}% (exploración y NPC)
+            </p>
+          </div>
+        </div>
       </div>
+
+      {/* Exclusive building (host zones only) */}
+      {exclDef && excl && (
+        <section className="rounded-lg border border-amber-900/50 bg-[#12100c] p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-base">{exclDef.icon}</span>
+                <h3 className="text-sm font-bold text-amber-200">{exclDef.name}</h3>
+                <span
+                  className={cn(
+                    "rounded-sm px-1 text-[9px] font-black",
+                    excl.level > 0
+                      ? "bg-amber-500 text-black"
+                      : "bg-zinc-800 text-zinc-500",
+                  )}
+                >
+                  N{excl.level}
+                </span>
+                <span className="rounded-sm bg-amber-950/60 px-1 text-[8px] font-bold uppercase tracking-wider text-amber-500">
+                  Exclusivo Z{String(zoneId).padStart(2, "0")}
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] leading-4 text-zinc-500">{exclDef.description}</p>
+              <p className="mt-1 text-[10px] uppercase tracking-wider text-zinc-600">
+                Bonus actual:{" "}
+                <span className="text-amber-400">
+                  +{Math.round(exclusiveBuildingBonus(excl.level) * 100)}%
+                </span>
+                {!exclMaxed && (
+                  <span className="text-zinc-500">
+                    {" "}
+                    → siguiente +{Math.round(exclusiveBuildingBonus(excl.level + 1) * 100)}%
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              {exclBusy ? (
+                <span className="font-mono text-sm font-bold tabular-nums text-amber-400">
+                  {fmtCountdown(exclRemaining)}
+                </span>
+              ) : exclMaxed ? (
+                <span className="text-[10px] font-bold uppercase text-amber-600">Máx</span>
+              ) : (
+                <Button
+                  size="sm"
+                  disabled={!exclAfford}
+                  onClick={() => upgradeExclusiveBuilding(zoneId)}
+                  className="border border-amber-500/40 bg-amber-600/90 font-bold uppercase tracking-wider text-black hover:bg-amber-500"
+                >
+                  <span className="block text-[10px] leading-tight">
+                    Mejorar
+                    <span className="block font-mono text-[9px] font-bold opacity-80">
+                      {exclMinutes} min
+                    </span>
+                  </span>
+                </Button>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className="flex flex-col gap-2">
         {BUILDING_ORDER.map((key) => {
