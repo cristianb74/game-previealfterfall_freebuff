@@ -3,6 +3,7 @@ import { getZone, frontierZoneId, ZONES } from "./zones";
 import { rollNpcCycle } from "./npcTypes";
 import { applyEnergyRegen } from "./energySystem";
 import { npcDisplayName } from "./npcData";
+import { explorationMinutesWithAgility } from "./statEffects";
 import type { GameState, LogEvent, ResourceKey } from "./types";
 
 // ============================================================
@@ -85,7 +86,8 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
     if (!state.autoExplored[zid]) continue;
     const run = state.autoFarms?.[zid];
     if (run && now >= run.finishAt) {
-      const cycleMin = getZone(zid).explorationMinutes;
+      // Agilidad applies to offline auto-farm cycles too.
+      const cycleMin = explorationMinutesWithAgility(getZone(zid).explorationMinutes, state.survivor.stats.agilidad);
       const cycles = Math.max(0, Math.floor(minutesAway / cycleMin) - 1);
       const farmExp = Math.max(1, Math.round(getZone(zid).playerExpReward * BALANCE.autoExploreExpFactor));
       state.exp += farmExp * cycles;

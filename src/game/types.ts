@@ -135,6 +135,8 @@ export interface ExplorationFinding {
   damage?: number;
   cause?: string;
   npcId?: string;
+  /** Rare find (Percepción tier): amount was tripled. */
+  rare?: boolean;
 }
 
 export interface ExplorationOutcome {

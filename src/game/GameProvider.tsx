@@ -16,6 +16,7 @@ import {
 import { applyOfflineProgress } from "@/game/offlineProgress";
 import { tickNpcs } from "@/game/onlineTick";
 import { applyEnergyRegen, currentEnergy, spendEnergy, nextEnergyRegenAt } from "@/game/energySystem";
+import { explorationMinutesWithAgility } from "@/game/statEffects";
 import { rollExploration, npcChanceForCounter, discoverableNpcIds } from "@/game/explorationEngine";
 import {
   buildingUpgradeCost,
@@ -561,7 +562,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     // The manual run owns its zone; the farm retries on a later tick.
     if (s.explorationStates[zoneId]) return;
     if (s.health <= 0) return;
-    const minutes = getZone(zoneId).explorationMinutes;
+    // Agilidad reduces exploration duration (statEffects module).
+    const minutes = explorationMinutesWithAgility(getZone(zoneId).explorationMinutes, s.survivor.stats.agilidad);
     s.autoFarms[zoneId] = { zoneId, startedAt: now, finishAt: now + minutes * 60000 };
   }
 
@@ -638,7 +640,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
           return;
         }
         spendEnergy(s, 1, now);
-        const minutes = getZone(zoneId).explorationMinutes;
+        // Agilidad reduces exploration duration (statEffects module).
+        const minutes = explorationMinutesWithAgility(getZone(zoneId).explorationMinutes, s.survivor.stats.agilidad);
         s.currentZoneId = zoneId;
         const expId = s.nextExplorationId++;
         s.explorationStates[zoneId] = { zoneId, startedAt: now, finishAt: now + minutes * 60000, expId };

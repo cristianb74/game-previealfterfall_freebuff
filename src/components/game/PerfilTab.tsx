@@ -5,6 +5,7 @@ import { useNavigate } from "react-router";
 import { useGame } from "@/game/GameProvider";
 import { STAT_META, STAT_ORDER, RESOURCE_META } from "@/game/resources";
 import { STAT_RESOURCE } from "@/game/balance";
+import { statEffectRows } from "@/game/statEffects";
 import { GAME_INFO } from "@/game/gameConfig";
 import { getZone } from "@/game/zones";
 import { useAuth } from "@/hooks/use-auth";
@@ -137,6 +138,23 @@ export function PerfilTab() {
           Una estadística más alta mejora la probabilidad de encontrar su recurso asociado.
           Los edificios y los NPC multiplican esa probabilidad base (bonus relativo).
         </p>
+      </section>
+
+      {/* real stat effects (from statEffects.ts) */}
+      <section className="rounded-lg border border-zinc-800 bg-[#101213] p-4">
+        <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-zinc-300">
+          Efectos de tus estadísticas
+        </h3>
+        <ul className="flex flex-col gap-1.5 text-[11px]">
+          {statEffectRows(state.survivor.stats).map((row) => (
+            <li key={row.key} className="flex items-baseline justify-between gap-3">
+              <span className="shrink-0 font-bold uppercase tracking-wider text-green-500">
+                {STAT_META[row.key].label}
+              </span>
+              <span className="text-right text-zinc-400">{row.effect}</span>
+            </li>
+          ))}
+        </ul>
       </section>
 
       {/* rules / help */}

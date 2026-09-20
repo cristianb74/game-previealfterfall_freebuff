@@ -2,6 +2,13 @@ import { BALANCE, RESOURCE_STAT } from "./balance";
 import { getZone } from "./zones";
 import { buildingBonus } from "./buildings";
 import { NPC_BY_ID } from "./npcData";
+import {
+  incidentChanceFactor,
+  inteligenciaTechBonus,
+  maxUnitsPerFind,
+  mitigatedDamage,
+  rareFindChance,
+} from "./statEffects";
 import type {
   BuildingKey,
   ExplorationFinding,
@@ -28,13 +35,15 @@ export function findChanceForStat(stat: number): number {
 export function buildingMultiplierFor(
   zoneState: ZoneProgressState | undefined,
   resource: ResourceKey,
+  techBonus = 0,
 ): number {
   if (!zoneState) return 1;
   const keys = Object.keys(zoneState.buildings) as BuildingKey[];
   for (const k of keys) {
     const b = zoneState.buildings[k];
     if (b && BUILDING_SPECIALIZATION_MAP[k] === resource) {
-      return 1 + buildingBonus(b.level);
+      // techBonus: Inteligencia adds extra efficiency to Taller/Generador.
+      return 1 + buildingBonus(b.level) + techBonus;
     }
   }
   return 1;
@@ -94,27 +103,36 @@ export function rollExploration(state: GameState, zoneId: number): ExplorationOu
       const picked = pickWeightedResource(state.survivor.stats, candidates);
       const stat = state.survivor.stats[RESOURCE_STAT[picked]] ?? 1;
       const statMult = findChanceForStat(stat);
-      const buildingMult = buildingMultiplierFor(zoneState, picked);
+      // Inteligencia boosts Taller (componentes) & Generador (energía).
+      const techBonus =
+        picked === "componentes" || picked === "energia"
+          ? inteligenciaTechBonus(state.survivor.stats.inteligencia)
+          : 0;
+      const buildingMult = buildingMultiplierFor(zoneState, picked, techBonus);
       const finalChance = Math.min(
         0.95,
         BALANCE.explorationFindChance * statMult * buildingMult,
       );
       if (Math.random() < finalChance) {
-        const amount = isTime(picked)
+        // Rare find tier (Percepción): ×3 amount.
+        const rare = Math.random() < rareFindChance(state.survivor.stats.percepcion);
+        let amount = isTime(picked)
           ? BALANCE.findTimeMin + Math.floor(Math.random() * (BALANCE.findTimeMax - BALANCE.findTimeMin + 1))
-          : BALANCE.findUnitsMin + Math.floor(Math.random() * (BALANCE.findUnitsMax - BALANCE.findUnitsMin + 1));
-        findings.push({ kind: "resource", resource: picked, amount });
+          : BALANCE.findUnitsMin + Math.floor(Math.random() * (maxUnitsPerFind(state.survivor.stats.fuerza) - BALANCE.findUnitsMin + 1));
+        if (rare) amount *= 3;
+        findings.push({ kind: "resource", resource: picked, amount, rare });
       }
     }
   }
 
-  // Survival incident (no battle) — only when no resource was found
+  // Survival incident (no battle) — only when no resource was found.
+  // Chance scaled DOWN by Voluntad; severity reduced by Voluntad + Resistencia.
   const hasResource = findings.some((f) => f.kind === "resource");
-  if (!hasResource && Math.random() < BALANCE.explorationIncidentChance) {
+  if (!hasResource && Math.random() < BALANCE.explorationIncidentChance * incidentChanceFactor(state.survivor.stats.voluntad)) {
     const incident = randomIncident();
     findings.push({
       kind: "damage",
-      damage: incident.damage,
+      damage: mitigatedDamage(incident.damage, state.survivor.stats.voluntad, state.survivor.stats.resistencia),
       cause: incident.cause,
     });
   }
