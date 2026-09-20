@@ -1,26 +1,65 @@
 import { BALANCE } from "./balance";
 import { getZone, frontierZoneId, ZONES } from "./zones";
-import { rollNpcCycle } from "./npcTypes";
+import { rollNpcCycle, npcZoneSpeedFactor } from "./npcTypes";
 import { applyEnergyRegen } from "./energySystem";
 import { npcDisplayName } from "./npcData";
 import { explorationMinutesWithAgility } from "./statEffects";
 import { applySurvivalDrain } from "./survivalSystem";
-import { npcZoneSpeedFactor } from "./npcTypes";
+import { EXCLUSIVE_BUILDING_BY_ZONE } from "./buildings";
+import { RESOURCE_META } from "./resources";
 import type { GameState, LogEvent, ResourceKey } from "./types";
 
 // ============================================================
 // AFTERFALL — offline progression.
 // Everything derives from absolute timestamps so closing the app
-// never stops production. NPC offline production caps at 4 h.
+// never stops production.
+//
+// OFFLINE CAP (BALANCE.offlineCapHours = 8 h): consumption, auto-farm
+// EXP and survival drain settle as if the player returned at
+// lastTickAt + 8 h. Energy regen intentionally keeps running over the
+// real elapsed time (player-friendly, still clamped to maxEnergy).
+// NPC production keeps its own tighter cap (4 h).
 // ============================================================
+
+export interface OfflineResourceDelta {
+  resource: ResourceKey;
+  /** Units, or minutes for Comida/Agua. */
+  amount: number;
+}
+
+export interface OfflineSummary {
+  minutesAway: number;
+  /** Minutes actually credited (≤ minutesAway when capped). */
+  minutesCredited: boolean;
+  capped: boolean;
+  /** Exploration EXP earned offline (manual frontier completions are
+   *  re-rolled by the tick on boot — only farm EXP is pre-credited). */
+  expEarned: number;
+  explorationsCompleted: number;
+  energyGained: number;
+  buildingsCompleted: string[];
+  /** Net resource deltas (finds − consumption) for the summary modal. */
+  resourceDeltas: OfflineResourceDelta[];
+  foodSpent: number;
+  waterSpent: number;
+  /** Health lost to hunger/thirst tiers while away. */
+  healthLost: number;
+  hungerStruck: boolean;
+  thirstStruck: boolean;
+  npcFindsCount: number;
+}
 
 export interface OfflineResult {
   state: GameState;
   minutesAway: number;
-  npcFinds: { npcId: string; resource: ResourceKey; amount: number }[];
-  energyRegen: number;
-  explorationsCompleted: number;
-  buildingsCompleted: string[];
+  summary: OfflineSummary;
+}
+
+/** NPC production find (internal accumulation). */
+interface NpcFind {
+  npcId: string;
+  resource: ResourceKey;
+  amount: number;
 }
 
 /** Deterministic PRNG so offline rolls are stable per save+time. */
@@ -40,20 +79,66 @@ function pushLog(log: LogEvent[], ev: LogEvent): void {
   if (log.length > 60) log.length = 60;
 }
 
+/** Snapshot the meters we need to compute net deltas. */
+interface Snapshot {
+  resources: Record<ResourceKey, number>;
+  foodMin: number;
+  waterMin: number;
+  health: number;
+  expTotal: number;
+}
+
 export function applyOfflineProgress(state: GameState, now = Date.now()): OfflineResult {
   const last = state.lastTickAt || now;
-  const minutesAway = Math.max(0, (now - last) / 60000);
-  const npcFinds: OfflineResult["npcFinds"] = [];
+  const rawMinutes = Math.max(0, (now - last) / 60000);
+  const capMin = BALANCE.offlineCapHours * 60;
+  const capped = rawMinutes > capMin;
+  // The "effective return": everything except energy regen settles here.
+  const settleMs = last + Math.min(rawMinutes, capMin) * 60000;
+  const minutesAway = rawMinutes;
+
+  // Snapshot before settling (for the summary deltas).
+  const before: Snapshot = {
+    resources: { ...state.resources },
+    foodMin: state.foodMin,
+    waterMin: state.waterMin,
+    health: state.health,
+    expTotal: state.expTotal,
+  };
+
+  const npcFinds: NpcFind[] = [];
   const buildingsCompleted: string[] = [];
   let explorationsCompleted = 0;
-  let energyRegen = 0;
+  let healthLost = 0;
 
-  if (minutesAway < 0.01) return { state, minutesAway: 0, npcFinds, energyRegen, explorationsCompleted, buildingsCompleted };
+  const summary: OfflineSummary = {
+    minutesAway,
+    minutesCredited: false,
+    capped,
+    expEarned: 0,
+    explorationsCompleted: 0,
+    energyGained: 0,
+    buildingsCompleted: [],
+    resourceDeltas: [],
+    foodSpent: 0,
+    waterSpent: 0,
+    healthLost: 0,
+    hungerStruck: false,
+    thirstStruck: false,
+    npcFindsCount: 0,
+  };
+
+  if (minutesAway < 0.01) {
+    summary.minutesCredited = false;
+    return { state, minutesAway: 0, summary };
+  }
 
   const rnd = mulberry32(Math.floor(last / 1000) ^ 0x9e3779b9);
 
   // ---- Energy regeneration (discrete +1 blocks, up to max) ----
-  energyRegen = applyEnergyRegen(state, now);
+  // Player-friendly: computed over the REAL elapsed time, not the cap.
+  const energyRegen = applyEnergyRegen(state, now);
+  summary.energyGained = energyRegen;
   if (energyRegen >= 1) {
     const hoursAway = Math.floor(minutesAway / 60);
     const minsAway = Math.floor(minutesAway % 60);
@@ -65,13 +150,12 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
     });
   }
 
-  // ---- Per-zone exploration completion while away ----
+  // ---- Per-zone exploration completion while away (at settle time) ----
   // NOTE: runs are NOT cleared here — the GameProvider tick completes them
   // right after boot so the player receives the full EXP/resource rewards.
-  // Check each zone's exploration independently.
   for (const zid of Object.keys(state.explorationStates ?? {}).map(Number)) {
     const run = state.explorationStates[zid];
-    if (run && now >= run.finishAt) {
+    if (run && settleMs >= run.finishAt) {
       explorationsCompleted += 1;
       // A finished MANUAL frontier run may have reached a new zone while away.
       let maxUnlocked = 1;
@@ -82,19 +166,21 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
     }
   }
   // Offline auto-farm cycles per zone: credit reduced EXP for chained runs
-  // while away. Pending runs are completed by the tick after boot.
+  // while away (at settle time). Pending runs are completed by the tick.
   for (const zid of Object.keys(state.autoExplored ?? {}).map(Number)) {
     if (!state.autoExplored[zid]) continue;
     const run = state.autoFarms?.[zid];
-    if (run && now >= run.finishAt) {
+    if (run && settleMs >= run.finishAt) {
       // Agilidad + passive NPC benefit apply to offline auto-farm cycles too.
       const cycleMin =
         explorationMinutesWithAgility(getZone(zid).explorationMinutes, state.survivor.stats.agilidad) *
         npcZoneSpeedFactor(state, zid);
-      const cycles = Math.max(0, Math.floor(minutesAway / cycleMin) - 1);
+      const settleMin = Math.min(rawMinutes, capMin);
+      const cycles = Math.max(0, Math.floor(settleMin / cycleMin) - 1);
       const farmExp = Math.max(1, Math.round(getZone(zid).playerExpReward * BALANCE.autoExploreExpFactor));
       state.exp += farmExp * cycles;
       state.expTotal += farmExp * cycles;
+      summary.expEarned += farmExp * cycles;
       explorationsCompleted = Math.max(explorationsCompleted, 1);
     }
   }
@@ -104,22 +190,30 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
     const z = state.zones[Number(zoneIdKey)];
     for (const key of Object.keys(z.buildings)) {
       const b = z.buildings[key as keyof typeof z.buildings];
-      if (b && b.upgradeFinishAt && now >= b.upgradeFinishAt) {
+      if (b && b.upgradeFinishAt && settleMs >= b.upgradeFinishAt) {
         b.level = Math.min(BALANCE.buildingMaxLevel, b.level + 1);
         buildingsCompleted.push(`${key} N${b.level}`);
         b.upgradeFinishAt = null;
       }
     }
+    const excl = z.exclusiveBuilding;
+    if (excl && excl.upgradeFinishAt && settleMs >= excl.upgradeFinishAt) {
+      excl.level = Math.min(BALANCE.buildingMaxLevel, excl.level + 1);
+      const def = EXCLUSIVE_BUILDING_BY_ZONE[Number(zoneIdKey)];
+      buildingsCompleted.push(`${def?.name ?? excl.key} N${excl.level}`);
+      excl.upgradeFinishAt = null;
+    }
   }
 
-  // ---- NPC offline production (capped at 4 h) ----
-  const minutesForNpc = Math.min(minutesAway, BALANCE.offlineNpcCapHours * 60);
+  // ---- NPC offline production (capped at 4 h, settled at settle time) ----
+  const settleMinutes = Math.min(rawMinutes, capMin);
+  const minutesForNpc = Math.min(settleMinutes, BALANCE.offlineNpcCapHours * 60);
   const secondsForNpc = minutesForNpc * 60;
   const alive = state.npcs.length > 0;
   const canConsume = state.foodMin > BALANCE.npcMinimumFoodWaterMin && state.waterMin > BALANCE.npcMinimumFoodWaterMin;
 
   if (alive && secondsForNpc >= 5) {
-    const assigned = state.npcs.filter((n) => n.assignedZoneId);
+    const assigned = state.npcs.filter((n) => n.assignedZoneId && (n.status ?? "active") === "active");
     for (const npc of assigned) {
       const zoneId = Number(npc.assignedZoneId);
       const zoneState = state.zones[zoneId];
@@ -151,23 +245,46 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
     state.foodMin = Math.max(0, state.foodMin - upkeep);
     state.waterMin = Math.max(0, state.waterMin - upkeep);
     // Progressive hunger/thirst health drain while away (tier-based).
-    applySurvivalDrain(state, hours);
+    healthLost += applySurvivalDrain(state, hours);
   }
 
-  // ---- Player survival consumption while away ----
-  const hoursAway = minutesAway / 60;
+  // ---- Player survival consumption while away (at settle time) ----
+  const hoursAway = settleMinutes / 60;
   state.foodMin = Math.max(0, state.foodMin - BALANCE.survivorUpkeepPerHour * hoursAway);
   state.waterMin = Math.max(0, state.waterMin - BALANCE.survivorUpkeepPerHour * hoursAway);
+  if (state.foodMin <= 0) summary.hungerStruck = before.foodMin > 0;
+  if (state.waterMin <= 0) summary.thirstStruck = before.waterMin > 0;
+  // Additional drain for the remaining (uncapped) hours does NOT apply —
+  // the cap exists so the player isn't punished for long absences.
 
-  // ---- NPC EXP trickle from offline assigned NPCs (small, explorations dominate) ----
+  // ---- NPC EXP trickle from offline assigned NPCs ----
   for (const npc of state.npcs) {
     if (npc.assignedZoneId) {
       const zone = getZone(Number(npc.assignedZoneId));
       const trickle = (zone.npcExpReward / 12) * (minutesForNpc / 60);
       state.exp += trickle;
       state.expTotal += trickle;
+      summary.expEarned += trickle;
     }
   }
+
+  // ---- Summary deltas ----
+  summary.explorationsCompleted = explorationsCompleted;
+  summary.buildingsCompleted = buildingsCompleted;
+  summary.npcFindsCount = npcFinds.length;
+  summary.healthLost = Math.max(0, before.health - state.health);
+  summary.foodSpent = Math.max(0, before.foodMin - state.foodMin);
+  summary.waterSpent = Math.max(0, before.waterMin - state.waterMin);
+  const deltaKeys: ResourceKey[] = ["materiales", "medicamentos", "componentes", "energia", "dinero"];
+  summary.resourceDeltas = deltaKeys
+    .map((r) => ({ resource: r, amount: state.resources[r] - before.resources[r] }))
+    .filter((d) => Math.abs(d.amount) > 0.01);
+  // Comida/Agua net deltas (finds − consumption) as minutes.
+  const foodNet = state.foodMin - before.foodMin;
+  const waterNet = state.waterMin - before.waterMin;
+  if (Math.abs(foodNet) > 0.01) summary.resourceDeltas.push({ resource: "comida", amount: foodNet });
+  if (Math.abs(waterNet) > 0.01) summary.resourceDeltas.push({ resource: "agua", amount: waterNet });
+  summary.minutesCredited = true;
 
   // ---- Log ----
   if (explorationsCompleted > 0) {
@@ -203,7 +320,22 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
       kind: "build",
     });
   }
+  if (capped) {
+    pushLog(state.log, {
+      t: now,
+      msg: `[OFFLINE] Progreso limitado a ${BALANCE.offlineCapHours} h — el resto del tiempo no se contabilizó`,
+      kind: "info",
+    });
+  }
 
   state.lastTickAt = now;
-  return { state, minutesAway, npcFinds, energyRegen, explorationsCompleted, buildingsCompleted };
+  return { state, minutesAway, summary };
+}
+
+/** Format helper shared with the summary modal. */
+export function offlineDeltaLabel(d: OfflineResourceDelta): string {
+  const isTime = d.resource === "comida" || d.resource === "agua";
+  const sign = d.amount >= 0 ? "+" : "−";
+  const val = Math.abs(Math.round(d.amount));
+  return `${sign}${val}${isTime ? " min" : ""} ${RESOURCE_META[d.resource].label}`;
 }

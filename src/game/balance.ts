@@ -94,6 +94,11 @@ export const BALANCE = {
 
   /** Offline NPC production is capped at this many hours. */
   offlineNpcCapHours: 4,
+  /** TOTAL offline progression cap (hours): consumption, auto-farm EXP
+   *  and survival drain all settle as if the player returned at this
+   *  point. Energy regen keeps going up to the real elapsed time (it is
+   *  a player-friendly exception) but never beyond maxEnergy. */
+  offlineCapHours: 8,
 
   /** Building system. */
   buildingMaxLevel: 10,

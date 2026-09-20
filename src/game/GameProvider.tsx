@@ -14,6 +14,8 @@ import {
   wipeAllSaves,
 } from "@/game/cloudSave";
 import { applyOfflineProgress } from "@/game/offlineProgress";
+import type { OfflineSummary } from "@/game/offlineProgress";
+import { OfflineSummaryModal } from "@/components/game/OfflineSummaryModal";
 import { tickNpcs } from "@/game/onlineTick";
 import { applyEnergyRegen, currentEnergy, spendEnergy, nextEnergyRegenAt } from "@/game/energySystem";
 import { explorationMinutesWithAgility } from "@/game/statEffects";
@@ -75,6 +77,9 @@ export interface GameContextValue {
   syncNow: () => Promise<void>;
   /** Force-restore the cloud save over this device's copy. */
   restoreFromCloud: () => Promise<void>;
+  /** Offline progress summary (shown once per boot in a modal). */
+  offlineSummary: OfflineSummary | null;
+  dismissOfflineSummary: () => void;
   startExploration: (zoneId: number) => void;
   /** Toggle the background auto-exploration farm for a specific zone. */
   toggleAutoExplore: (zoneId: number) => void;
@@ -137,6 +142,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [hasSaveFile, setHasSaveFile] = useState(false);
   const [screen, setScreen] = useState<Screen>("explorar");
   const [rollOptions, setRollOptions] = useState<Survivor[]>(() => [rollSurvivor()]);
+  /** Offline progress summary shown once per boot in a modal. */
+  const [offlineSummary, setOfflineSummary] = useState<OfflineSummary | null>(null);
   const stateRef = useRef<GameState | null>(null);
   const saveTimer = useRef<number | null>(null);
   const bootOnceRef = useRef(false);
@@ -205,6 +212,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           stateRef.current = next;
           setState(next);
           setHasSaveFile(true);
+          if (offline.summary.minutesAway >= 1) setOfflineSummary(offline.summary);
           toast.success("PROGRESO RESTAURADO", {
             description: "Tu partida se ha sincronizado desde la nube.",
           });
@@ -269,11 +277,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
     try {
       const result = await pullCloudSave();
       if (result.kind === "restored") {
-        const next = result.state;
+        const offline = applyOfflineProgress(result.state, Date.now());
+        const next = offline.state;
         next.lastTickAt = Date.now();
         stateRef.current = next;
         setState(next);
         setHasSaveFile(true);
+        if (offline.summary.minutesAway >= 1) setOfflineSummary(offline.summary);
         toast.success("PROGRESO RESTAURADO", {
           description: "Se ha cargado la copia de la nube.",
         });
@@ -304,15 +314,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         setState(s);
         stateRef.current = s;
         setHasSaveFile(true);
-        if (result.minutesAway >= 1) {
-          const mins = Math.floor(result.minutesAway);
-          const h = Math.floor(mins / 60);
-          const m = mins % 60;
-          const away = h > 0 ? `${h} h ${m} min` : `${m} min`;
-          toast.info("BIENVENIDO DE VUELTA", {
-            description: `Estuviste fuera ${away}. ${result.npcFinds.length > 0 ? `Tu equipo produjo ${result.npcFinds.length} hallazgos.` : ""}${result.buildingsCompleted.length > 0 ? ` Construcciones completadas: ${result.buildingsCompleted.length}.` : ""}`,
-            duration: 6000,
-          });
+        if (result.summary.minutesAway >= 1) {
+          setOfflineSummary(result.summary);
         }
       } else {
         setHasSaveFile(false);
@@ -662,6 +665,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       stateRef.current = s;
       setHasSaveFile(true);
       setScreen("explorar");
+      if (result.summary.minutesAway >= 1) setOfflineSummary(result.summary);
       navigateRef.current?.("/juego");
     }
   }, []);
@@ -972,11 +976,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
       expelNpc,
       rollOptions,
       rerollSurvivors,
+      offlineSummary,
+      dismissOfflineSummary: () => setOfflineSummary(null),
     }),
-    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, upgradeBuilding, upgradeExclusiveBuilding, useMedicine, buyResource, sellResource, expelNpc, rollOptions, rerollSurvivors],
+    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, upgradeBuilding, upgradeExclusiveBuilding, useMedicine, buyResource, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary],
   );
 
-  return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+    </GameContext.Provider>
+  );
 }
 
 // Re-export helpers used by UI
