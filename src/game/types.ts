@@ -180,7 +180,6 @@ export interface ExplorationOutcome {
 }
 
 export type Screen =
-  | "explorar"
   | "zonas"
   | "equipo"
   | "base"

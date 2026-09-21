@@ -140,7 +140,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<GameState | null>(null);
   const [booted, setBooted] = useState(false);
   const [hasSaveFile, setHasSaveFile] = useState(false);
-  const [screen, setScreen] = useState<Screen>("explorar");
+  const [screen, setScreen] = useState<Screen>("zonas");
   const [rollOptions, setRollOptions] = useState<Survivor[]>(() => [rollSurvivor()]);
   /** Offline progress summary shown once per boot in a modal. */
   const [offlineSummary, setOfflineSummary] = useState<OfflineSummary | null>(null);
@@ -648,7 +648,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setState(s);
       stateRef.current = s;
       setHasSaveFile(true);
-      setScreen("explorar");
+      setScreen("zonas");
       await saveGame(s);
     },
     [],
@@ -664,7 +664,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setState(s);
       stateRef.current = s;
       setHasSaveFile(true);
-      setScreen("explorar");
+      setScreen("zonas");
       if (result.summary.minutesAway >= 1) setOfflineSummary(result.summary);
       navigateRef.current?.("/juego");
     }

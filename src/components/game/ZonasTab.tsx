@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useGame } from "@/game/GameProvider";
 import { ZONES, zoneImage } from "@/game/zones";
 import { BUILDING_BY_KEY, BUILDING_BY_KEY_ANY } from "@/game/buildings";
+import { currentEnergy } from "@/game/energySystem";
 import type { AnyBuildingKey } from "@/game/types";
 import { NPC_TYPE_MODIFIERS, npcProductionMultiplier } from "@/game/npcTypes";
 import { BUILDING_SPECIALIZATION } from "@/game/balance";
@@ -117,6 +118,7 @@ export function ZonasTab() {
     setScreen,
     maxUnlockedZoneId,
     toggleAutoExplore,
+    startExploration,
   } = useGame();
   const [, force] = useState(0);
   useEffect(() => {
@@ -131,7 +133,7 @@ export function ZonasTab() {
   return (
     <div className="flex flex-col gap-3">
       <p className="px-1 text-[10px] uppercase tracking-[0.25em] text-zinc-500">
-        Zonas desbloqueadas · {unlockedMax}/20 · toca una zona para viajar ·
+        Zonas desbloqueadas · {unlockedMax}/20 · toca para explorar ·
         doble toque para abrir la base
       </p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -169,6 +171,12 @@ export function ZonasTab() {
                   _lastTap.set(z.id, now);
                   if (now - prev < 300) return;
                   setCurrentZone(z.id);
+                  // Start exploration if not already exploring and has energy
+                  const zExploring = state.explorationStates[z.id] != null;
+                  const energy = currentEnergy(state, now);
+                  if (!zExploring && energy >= 1 && state.health > 0) {
+                    startExploration(z.id);
+                  }
                 }}
                 className={cn(
                   "group relative overflow-hidden rounded-lg border text-left transition-colors",
@@ -302,8 +310,8 @@ export function ZonasTab() {
         })}
       </div>
       <p className="px-1 text-[10px] leading-4 text-zinc-600">
-        Al viajar cambias de zona al instante. Cada zona guarda sus propias
-        construcciones. Doble toque sobre una zona abre directamente su base.
+        Toca una zona para explorarla. Doble toque para abrir la base de
+        construcciones. La exploración puede realizarse en varias zonas a la vez.
       </p>
     </div>
   );

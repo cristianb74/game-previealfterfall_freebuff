@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router";
 import { HUD } from "@/components/game/HUD";
-import { ExplorarTab } from "@/components/game/ExplorarTab";
 import { ZonasTab } from "@/components/game/ZonasTab";
 import { EquipoTab } from "@/components/game/EquipoTab";
 import { BaseTab } from "@/components/game/BaseTab";
@@ -10,7 +9,6 @@ import { MochilaTab } from "@/components/game/MochilaTab";
 import { PerfilTab } from "@/components/game/PerfilTab";
 import { RegistroTab } from "@/components/game/RegistroTab";
 import { useGame, MERCHANT_OFFERS } from "@/game/GameProvider";
-import { currentEnergy } from "@/game/energySystem";
 import { buildingUpgradeCost } from "@/game/buildings";
 import { BALANCE } from "@/game/balance";
 import { getZone, ZONES } from "@/game/zones";
@@ -18,7 +16,6 @@ import { cn } from "@/lib/utils";
 import type { Screen } from "@/game/types";
 
 const TABS: { key: Screen; label: string; glyph: string }[] = [
-  { key: "explorar", label: "Explorar", glyph: "🧭" },
   { key: "zonas", label: "Zonas", glyph: "🗺" },
   { key: "equipo", label: "Equipo", glyph: "👥" },
   { key: "base", label: "Base", glyph: "🏗" },
@@ -39,19 +36,12 @@ export default function Game() {
   }, [booted, state, hasSaveFile, navigate]);
 
   // ---- "something to do" badges per nav tab ----
-  let explorableNow = false;
   let zonesUnlockable = false;
   let equipoIdle = false;
   let baseUpgradable = false;
   let merchantAffordable = false;
   if (state) {
     const now = Date.now();
-    const zone = getZone(state.currentZoneId);
-    const currentZoneExploring = state.explorationStates[state.currentZoneId] != null;
-    explorableNow =
-      !currentZoneExploring &&
-      currentEnergy(state, now) >= 1 &&
-      state.health > 0;
     zonesUnlockable =
       state.pendingZoneUnlock != null && state.pendingZoneUnlock > state.currentZoneId;
     const assignedIds = new Set(state.npcs.filter((n) => n.assignedZoneId).map((n) => n.id));
@@ -75,7 +65,6 @@ export default function Game() {
     );
   }
   const TAB_ALERTS: Partial<Record<Screen, boolean>> = {
-    explorar: explorableNow,
     zonas: zonesUnlockable,
     equipo: equipoIdle,
     base: baseUpgradable,
@@ -97,7 +86,6 @@ export default function Game() {
           </aside>
 
           <main className="min-w-0">
-            {screen === "explorar" && <ExplorarTab />}
             {screen === "zonas" && <ZonasTab />}
             {screen === "equipo" && <EquipoTab />}
             {screen === "base" && <BaseTab />}
@@ -118,7 +106,7 @@ export default function Game() {
 
       {/* Bottom navigation — visible on mobile and desktop */}
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-800 bg-[#0c0e0f]/95 backdrop-blur">
-        <div className="mx-auto grid max-w-3xl grid-cols-8">
+        <div className="mx-auto grid max-w-3xl grid-cols-7">
           {TABS.map((t) => (
             <button
               key={t.key}
