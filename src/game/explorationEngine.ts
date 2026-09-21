@@ -255,13 +255,14 @@ function randomIncident(): { cause: string; damage: number } {
   return { cause: inc.cause, damage: min + Math.floor(Math.random() * (max - min + 1)) };
 }
 
-/** NPC discovery is now handled by GameProvider with a counter-based system. */
+/** NPC discovery probability from BALANCE.npcTiers (read from config, never hardcoded). */
 export function npcChanceForCounter(counter: number): number {
-  if (counter < 50) return 0;
-  if (counter < 100) return 0.01;
-  if (counter < 150) return 0.02;
-  if (counter < 200) return 0.04;
-  return 1; // guaranteed on 200th
+  const tiers = BALANCE.npcTiers;
+  let chance = 0;
+  for (const t of tiers) {
+    if (counter >= t.afterExplorations) chance = t.chance;
+  }
+  return chance;
 }
 
 export function discoverableNpcIds(state: GameState): string[] {

@@ -3,8 +3,8 @@ import { useGame } from "@/game/GameProvider";
 import { getZone } from "@/game/zones";
 import { NPC_TYPE_MODIFIERS } from "@/game/npcTypes";
 import { GAME_INFO } from "@/game/gameConfig";
-import { BUILDING_BY_KEY, buildingBonus } from "@/game/buildings";
 import { BALANCE } from "@/game/balance";
+import { BUILDING_BY_KEY, buildingBonus } from "@/game/buildings";
 import { currentEnergy, nextEnergyRegenAt } from "@/game/energySystem";
 import type { BuildingKey } from "@/game/types";
 
@@ -284,7 +284,7 @@ export function RegistroTab() {
           })}
           <div className="mt-1 flex items-center justify-between rounded-sm bg-[#0d0f10] px-2 py-1 text-[10px]">
             <span className="text-zinc-400">Contador NPC</span>
-            <span className="font-mono text-zinc-200">{state.explorationsSinceLastNPC ?? 0} / 200</span>
+            <span className="font-mono text-zinc-200">{state.explorationsSinceLastNPC ?? 0} / {BALANCE.npcTiers[BALANCE.npcTiers.length - 1].afterExplorations}</span>
           </div>
         </div>
       </section>

@@ -17,6 +17,23 @@ function fmtCountdown(ms: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+/** Human-readable NPC chance from BALANCE.npcTiers. */
+function npcChanceDisplay(counter: number): string {
+  const tiers = BALANCE.npcTiers;
+  let chance = 0;
+  for (const t of tiers) {
+    if (counter >= t.afterExplorations) chance = t.chance;
+  }
+  if (chance === 0) {
+    // Find the next tier
+    const next = tiers.find((t) => t.afterExplorations > counter);
+    if (next) return `${Math.round(chance * 100)}% (próximo umbral: ${next.afterExplorations} exp)`;
+    return `${Math.round(chance * 100)}%`;
+  }
+  if (chance >= 1) return "Garantizado";
+  return `${Math.round(chance * 100)}%`;
+}
+
 export function ExplorarTab() {
   const { state, startExploration, useMedicine, setScreen } = useGame();
   const [, force] = useState(0);
@@ -165,7 +182,7 @@ export function ExplorarTab() {
               NPC · {state.explorationsSinceLastNPC ?? 0} exploraciones desde último NPC
             </p>
             <p className="text-[10px] text-zinc-500">
-              Próximo chance: {((state.explorationsSinceLastNPC ?? 0) < 50 ? "exploración #50" : `${Math.round(((state.explorationsSinceLastNPC ?? 0) < 100 ? 0.01 : (state.explorationsSinceLastNPC ?? 0) < 150 ? 0.02 : (state.explorationsSinceLastNPC ?? 0) < 200 ? 0.04 : 1) * 100)}%`)}
+              Chance: {npcChanceDisplay(state.explorationsSinceLastNPC ?? 0)}
             </p>
           </div>
         </div>

@@ -49,10 +49,15 @@ export const BALANCE = {
   /** Resource find: min/max added survival time (minutes) for Comida/Agua. */
   findTimeMin: 10,
   findTimeMax: 30,
-  /** Base probability of discovering an NPC per exploration. */
-  npcDiscoverChance: 0.05,
-  /** First NPC guaranteed within roughly this many explorations. */
-  npcFirstGuarantee: 10,
+  /** NPC discovery: tier thresholds (explorations since last NPC). */
+  npcTiers: [
+    { afterExplorations: 0, chance: 0 },       // 0–4: 0 %
+    { afterExplorations: 5, chance: 0.02 },     // 5–9: 2 %
+    { afterExplorations: 10, chance: 0.05 },    // 10–14: 5 %
+    { afterExplorations: 15, chance: 0.10 },    // 15–19: 10 %
+    { afterExplorations: 20, chance: 0.25 },    // 20–24: 25 %
+    { afterExplorations: 25, chance: 1 },       // 25+: guaranteed
+  ] as const,
 
   /** Money find base chance per exploration, and amount range. */
   moneyFindChance: 0.03,
