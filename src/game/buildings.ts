@@ -173,3 +173,18 @@ export function buildingUpgradeMinutes(level: number): number {
 export function buildingCostLabel(cost: { materiales: number; componentes: number }): string {
   return `${cost.materiales} MAT · ${cost.componentes} CMP`;
 }
+
+/** How many buildings in a zone are currently under construction
+ *  (core buildings + zone-exclusive building share the same per-zone quota).
+ *  Existing runs in old saves above the limit are allowed to finish. */
+export function activeConstructionsInZone(z: {
+  buildings: Record<string, { upgradeFinishAt: number | null }>;
+  exclusiveBuilding?: { upgradeFinishAt: number | null } | undefined;
+}): number {
+  let n = 0;
+  for (const b of Object.values(z.buildings)) {
+    if (b.upgradeFinishAt != null) n += 1;
+  }
+  if (z.exclusiveBuilding?.upgradeFinishAt != null) n += 1;
+  return n;
+}

@@ -58,6 +58,9 @@ export const BALANCE = {
     { afterExplorations: 20, chance: 0.25 },    // 20–24: 25 %
     { afterExplorations: 25, chance: 1 },       // 25+: guaranteed
   ] as const,
+  /** AUTO-farm NPC discovery: the manual chance (npcTiers) is multiplied by
+   *  this factor. One roll per auto-run completion, same shared counter. */
+  autoNpcChanceFactor: 0.3,
 
   /** Money find base chance per exploration, and amount range. */
   moneyFindChance: 0.03,
@@ -107,6 +110,9 @@ export const BALANCE = {
 
   /** Building system. */
   buildingMaxLevel: 10,
+  /** Max simultaneous constructions per zone (core + exclusive share the
+   *  same quota). Only gates NEW upgrades; existing runs finish normally. */
+  maxConcurrentConstructionsPerZone: 1,
   /** Relative bonus per level: N1 = +5 % … N10 = +50 %. */
   buildingBonusPerLevel: 0.05,
   /** Upgrade duration scaling, in minutes (level → minutes). */

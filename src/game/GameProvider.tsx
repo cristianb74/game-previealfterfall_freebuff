@@ -15,6 +15,14 @@ import {
 } from "@/game/cloudSave";
 import { applyOfflineProgress } from "@/game/offlineProgress";
 import type { OfflineSummary } from "@/game/offlineProgress";
+import {
+  vnow,
+  setSpeedMultiplier,
+  getSpeedMultiplier,
+  tickVirtualClock,
+  resetVirtualClock,
+  type SpeedMultiplier,
+} from "@/game/virtualClock";
 import { OfflineSummaryModal } from "@/components/game/OfflineSummaryModal";
 import { tickNpcs } from "@/game/onlineTick";
 import { applyEnergyRegen, currentEnergy, spendEnergy, nextEnergyRegenAt } from "@/game/energySystem";
@@ -32,6 +40,7 @@ import { rollExploration, npcChanceForCounter, discoverableNpcIds } from "@/game
 import {
   buildingUpgradeCost,
   buildingUpgradeMinutes,
+  activeConstructionsInZone,
   BUILDING_BY_KEY,
   EXCLUSIVE_BUILDING_BY_ZONE,
 } from "@/game/buildings";
@@ -71,6 +80,9 @@ export interface GameContextValue {
   startNewGame: (survivor: Survivor) => Promise<void>;
   continueGame: () => Promise<void>;
   eraseSave: () => Promise<void>;
+  /** Dev/QA session speed (x1/x2/x4). Session-only, never persisted. */
+  speedMultiplier: SpeedMultiplier;
+  setSpeed: (m: SpeedMultiplier) => void;
   /** Cloud save status (Convex auth + last sync). */
   cloud: { connected: boolean; syncing: boolean; lastSyncAt: number | null };
   /** Manual full sync: merge with cloud (newest wins) and push local state. */
@@ -144,6 +156,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [rollOptions, setRollOptions] = useState<Survivor[]>(() => [rollSurvivor()]);
   /** Offline progress summary shown once per boot in a modal. */
   const [offlineSummary, setOfflineSummary] = useState<OfflineSummary | null>(null);
+  /** Session-only game speed (dev tool). Resets to x1 on every reload. */
+  const [speedMultiplier, setSpeedMultiplierState] = useState<SpeedMultiplier>(() => getSpeedMultiplier());
   const stateRef = useRef<GameState | null>(null);
   const saveTimer = useRef<number | null>(null);
   const bootOnceRef = useRef(false);
@@ -205,6 +219,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (result.kind === "restored") {
           // Adopt the cloud state (offline progression is applied by the boot
           // flow on the next mount; here we simply take the newer copy).
+          resetVirtualClock(); // cloud timeline is real time
           const s = result.state;
           const offline = applyOfflineProgress(s, Date.now());
           const next = offline.state;
@@ -251,6 +266,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       await saveGame(s);
       const result = await pullCloudSave();
       if (result.kind === "restored") {
+        resetVirtualClock(); // cloud timeline is real time
         const next = result.state;
         next.lastTickAt = Date.now();
         stateRef.current = next;
@@ -277,6 +293,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     try {
       const result = await pullCloudSave();
       if (result.kind === "restored") {
+        resetVirtualClock(); // cloud timeline is real time
         const offline = applyOfflineProgress(result.state, Date.now());
         const next = offline.state;
         next.lastTickAt = Date.now();
@@ -298,6 +315,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   // ---- boot: load save, apply offline progression ----
   useEffect(() => {
     let cancelled = false;
+    resetVirtualClock(); // session clock starts aligned with real time
     (async () => {
       const envelope = await loadGame();
       if (cancelled) return;
@@ -344,7 +362,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const id = window.setInterval(() => {
       const s = stateRef.current;
       if (!s) return;
-      const now = Date.now();
+      // Virtual session clock: accumulate fast-forward (x2/x4) from real
+      // elapsed time, then run the whole simulation on virtual time.
+      tickVirtualClock();
+      const now = vnow();
       const energyBefore = Math.floor(s.resources.energia);
       const gained = applyEnergyRegen(s, now);
       const energyAfter = Math.floor(s.resources.energia);
@@ -542,6 +563,58 @@ export function GameProvider({ children }: { children: ReactNode }) {
     return parts.join(" · ");
   }
 
+  /** Shared NPC-check helper: one roll per completed exploration (manual
+   *  or auto). Counter is shared between both paths so a pure auto-farmer
+   *  is never stuck with a frozen chance. fromAuto only affects the log
+   *  label and the chance factor (autoNpcChanceFactor). */
+  function npcCheck(s: GameState, expId: number, startedAt: number, fromAuto: boolean) {
+    const counter = (s.explorationsSinceLastNPC ?? 0) + 1;
+    const baseChance = npcChanceForCounter(counter);
+    const chance = fromAuto ? baseChance * BALANCE.autoNpcChanceFactor : baseChance;
+    const pool = discoverableNpcIds(s);
+    if (pool.length === 0) {
+      // Pool exhausted: consume the exploration for the counter anyway.
+      s.explorationsSinceLastNPC = counter;
+      return;
+    }
+    if (Math.random() >= chance) {
+      s.explorationsSinceLastNPC = counter;
+      const via = fromAuto ? "AUTO" : "MANUAL";
+      pushLog(
+        s,
+        `[EXP #${expId}] NPC CHECK | contador ${counter} | ${via} | probabilidad ${(chance * 100).toFixed(1)}% | resultado NO`,
+        "info",
+        startedAt,
+      );
+      return;
+    }
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    const seed = NPC_BY_ID[pick];
+    if (!seed) {
+      s.explorationsSinceLastNPC = counter;
+      return;
+    }
+    const npc: NpcSurvivor = {
+      ...seed,
+      assignedZoneId: null,
+      // New finds are CANDIDATES: they must be recruited in Equipo
+      // before they can be assigned to a zone.
+      status: "candidate",
+      discoveredAt: vnow(),
+      productionTotals: { materiales: 0, agua: 0, comida: 0, medicamentos: 0, componentes: 0, energia: 0, dinero: 0 },
+    };
+    s.npcs.push(npc);
+    const via = fromAuto ? "AUTO-FARM" : "MANUAL";
+    pushLog(s, `[EXP #${expId}] NPC OBTENIDO (${via}) | ${npc.id} · ${npc.name} · ${NPC_TYPE_MODIFIERS[npc.type].label}`, "npc", startedAt);
+    narrNpcFound(s, npc.name, npc.alias);
+    pushLog(s, `[NPC] contador reiniciado a 0`, "info", vnow());
+    s.explorationsSinceLastNPC = 0;
+    toast.info(fromAuto ? "SUPERVIVIENTE ENCONTRADO (AUTO)" : "SUPERVIVIENTE ENCONTRADO", {
+      description: `${npc.name} «${npc.alias}» · ${NPC_TYPE_MODIFIERS[npc.type].label}`,
+      duration: 6000,
+    });
+  }
+
   /** Complete the MANUAL exploration: roll, apply (full rewards), log, toast.
    *  NPC discovery uses the counter-based system (one roll per completion). */
   function completeExploration(s: GameState, zoneId: number, startedAt: number) {
@@ -551,40 +624,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     // MANUAL run: full EXP, rare tier, special events, find bonus.
     const outcome = rollExploration(s, zoneId);
     applyOutcome(s, outcome, startedAt, { expId });
-    // Single NPC check per exploration completion (counter-based)
-    const counter = (s.explorationsSinceLastNPC ?? 0) + 1;
-    const chance = npcChanceForCounter(counter);
-    const pool = discoverableNpcIds(s);
-    let npcFound = false;
-    if (pool.length > 0 && Math.random() < chance) {
-      const pick = pool[Math.floor(Math.random() * pool.length)];
-      const seed = NPC_BY_ID[pick];
-      if (seed) {
-        const npc: NpcSurvivor = {
-          ...seed,
-          assignedZoneId: null,
-          // New finds are CANDIDATES: they must be recruited in Equipo
-          // before they can be assigned to a zone.
-          status: "candidate",
-          discoveredAt: Date.now(),
-          productionTotals: { materiales: 0, agua: 0, comida: 0, medicamentos: 0, componentes: 0, energia: 0, dinero: 0 },
-        };
-        s.npcs.push(npc);
-        pushLog(s, `[EXP #${expId}] NPC OBTENIDO | ${npc.id} · ${npc.name} · ${NPC_TYPE_MODIFIERS[npc.type].label}`, "npc", startedAt);
-        narrNpcFound(s, npc.name, npc.alias);
-        pushLog(s, `[NPC] contador reiniciado a 0`, "info", Date.now());
-        s.explorationsSinceLastNPC = 0;
-        npcFound = true;
-        toast.info("SUPERVIVIENTE ENCONTRADO", {
-          description: `${npc.name} «${npc.alias}» · ${NPC_TYPE_MODIFIERS[npc.type].label}`,
-          duration: 6000,
-        });
-      }
-    }
-    if (!npcFound) {
-      s.explorationsSinceLastNPC = counter;
-      pushLog(s, `[EXP #${expId}] NPC CHECK | contador ${counter} | probabilidad ${Math.round(chance * 100)}% | resultado NO`, "info", startedAt);
-    }
+    // Single NPC check per exploration completion (counter-based).
+    npcCheck(s, expId, startedAt, false);
     s.explorationsDone += 1;
     s.manualExplorationsDone += 1;
     delete s.explorationStates[zoneId];
@@ -595,7 +636,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }
 
   /** Complete one BACKGROUND auto-farm run for a specific zone: reduced EXP,
-   *  no NPC discovery, no frontier changes. Chain continues via tick. */
+   *  reduced NPC discovery chance, no frontier changes. Chain continues via tick. */
   function completeAutoRun(s: GameState, zoneId: number, startedAt: number) {
     if (!s.autoFarms[zoneId]) return;
     const expId = s.nextExplorationId++;
@@ -603,13 +644,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const outcome = rollExploration(s, zoneId, { auto: true });
     outcome.exp = Math.max(1, Math.round(outcome.exp * BALANCE.autoExploreExpFactor));
     applyOutcome(s, outcome, startedAt, { auto: true, expId });
+    // NPC check with reduced chance (autoNpcChanceFactor), same shared counter.
+    npcCheck(s, expId, startedAt, true);
     s.explorationsDone += 1;
     s.autoFarms[zoneId] = null;
   }
 
   /** Start the next auto-farm run for a specific zone (must be unlocked). */
   function scheduleAutoFarm(s: GameState, zoneId: number) {
-    const now = Date.now();
+    const now = vnow();
     const maxUnlocked = computeZoneUnlocks(s);
     if (zoneId < 1 || zoneId > maxUnlocked) return;
     if (s.autoFarms[zoneId]) return;
@@ -628,10 +671,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const startNewGame = useCallback(
     async (survivor: Survivor) => {
-      const now = Date.now();
+      const now = vnow();
       bootOnceRef.current = true;
       const s = createInitialState(survivor, now);
-      // starting package: 2 distinct types from Comida/Agua/Materiales/Medicamentos
       const pool: ResourceKey[] = ["comida", "agua", "materiales", "medicamentos"];
       const shuffled = pool.sort(() => Math.random() - 0.5);
       const picks = shuffled.slice(0, BALANCE.startingPackage.count);
@@ -658,9 +700,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const envelope = await loadGame();
     if (envelope?.state) {
       bootOnceRef.current = true;
-      const result = applyOfflineProgress(envelope.state, Date.now());
+      resetVirtualClock(); // fresh session: real timeline
+      const now = Date.now();
+      const result = applyOfflineProgress(envelope.state, now);
       const s = result.state;
-      s.lastTickAt = Date.now();
+      s.lastTickAt = now;
       setState(s);
       stateRef.current = s;
       setHasSaveFile(true);
@@ -672,11 +716,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const eraseSave = useCallback(async () => {
     await wipeAllSaves();
+    resetVirtualClock(); // fresh account → fresh real timeline
     setHasSaveFile(false);
     setState(null);
     stateRef.current = null;
     bootOnceRef.current = false;
     setRollOptions([rollSurvivor()]);
+  }, []);
+
+  /** Dev/QA: change session speed. Session-only — never saved or synced. */
+  const setSpeed = useCallback((m: SpeedMultiplier) => {
+    setSpeedMultiplier(m);
+    setSpeedMultiplierState(m);
   }, []);
 
   const rerollSurvivors = useCallback(() => {
@@ -686,7 +737,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const startExploration = useCallback(
     (zoneId: number) => {
       setAndSave((s) => {
-        const now = Date.now();
+        const now = vnow();
         // Per-zone: only prevent if THIS zone is already exploring
         if (s.explorationStates[zoneId]) return;
         if (currentEnergy(s, now) < 1) {
@@ -763,7 +814,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
               if (other) other.assignedZoneId = null;
             }
             z.assignedNpcId = npcId;
-            s.npcCycles[npcId] = Date.now();
+            s.npcCycles[npcId] = vnow();
             pushLog(s, `${npcDisplayName(npc)} asignado a ${getZone(zoneId).name}`, "npc");
           }
         } else if (npcWasAssigned) {
@@ -781,6 +832,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (!z) return;
         const b = z.buildings[key];
         if (!b || b.level >= BALANCE.buildingMaxLevel || b.upgradeFinishAt) return;
+        // Per-zone concurrency quota (core + exclusive share it).
+        const active = activeConstructionsInZone(z);
+        if (active >= BALANCE.maxConcurrentConstructionsPerZone) {
+          toast.error("Construcción en curso", {
+            description: `Límite: ${BALANCE.maxConcurrentConstructionsPerZone} por zona · ${active} activa${active === 1 ? "" : "s"} ahora`,
+          });
+          return;
+        }
         const cost = buildingUpgradeCost(b.level);
         if (s.resources.materiales < cost.materiales || s.resources.componentes < cost.componentes) {
           toast.error("Recursos insuficientes", {
@@ -791,7 +850,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         s.resources.materiales -= cost.materiales;
         s.resources.componentes -= cost.componentes;
         const minutes = buildingUpgradeMinutes(b.level);
-        b.upgradeFinishAt = Date.now() + minutes * 60000;
+        b.upgradeFinishAt = vnow() + minutes * 60000;
         pushLog(s, `Mejora iniciada: ${BUILDING_BY_KEY[key].name} N${b.level + 1}`, "build");
       });
     },
@@ -806,6 +865,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (!z) return;
         const excl = z.exclusiveBuilding;
         if (!excl || excl.level >= BALANCE.buildingMaxLevel || excl.upgradeFinishAt) return;
+        // Same per-zone concurrency quota as core buildings.
+        const active = activeConstructionsInZone(z);
+        if (active >= BALANCE.maxConcurrentConstructionsPerZone) {
+          toast.error("Construcción en curso", {
+            description: `Límite: ${BALANCE.maxConcurrentConstructionsPerZone} por zona · ${active} activa${active === 1 ? "" : "s"} ahora`,
+          });
+          return;
+        }
         const cost = buildingUpgradeCost(excl.level);
         if (s.resources.materiales < cost.materiales || s.resources.componentes < cost.componentes) {
           toast.error("Recursos insuficientes", {
@@ -816,7 +883,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         s.resources.materiales -= cost.materiales;
         s.resources.componentes -= cost.componentes;
         const minutes = buildingUpgradeMinutes(excl.level);
-        excl.upgradeFinishAt = Date.now() + minutes * 60000;
+        excl.upgradeFinishAt = vnow() + minutes * 60000;
         const def = EXCLUSIVE_BUILDING_BY_ZONE[zoneId];
         pushLog(s, `Mejora iniciada: ${def?.name ?? excl.key} N${excl.level + 1}`, "build");
       });
@@ -978,8 +1045,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
       rerollSurvivors,
       offlineSummary,
       dismissOfflineSummary: () => setOfflineSummary(null),
+      speedMultiplier,
+      setSpeed,
     }),
-    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, upgradeBuilding, upgradeExclusiveBuilding, useMedicine, buyResource, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary],
+    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, upgradeBuilding, upgradeExclusiveBuilding, useMedicine, buyResource, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, speedMultiplier, setSpeed],
   );
 
   return (

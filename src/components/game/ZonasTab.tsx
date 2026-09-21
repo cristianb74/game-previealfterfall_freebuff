@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useGame } from "@/game/GameProvider";
 import { ZONES, zoneImage } from "@/game/zones";
 import { BUILDING_BY_KEY, BUILDING_BY_KEY_ANY } from "@/game/buildings";
+import { vnow } from "@/game/virtualClock";
 import { currentEnergy } from "@/game/energySystem";
 import type { AnyBuildingKey } from "@/game/types";
 import { NPC_TYPE_MODIFIERS, npcProductionMultiplier } from "@/game/npcTypes";
@@ -30,7 +31,7 @@ function getActiveBuildings(
     | undefined,
   exclusive?: { key: string; level: number; upgradeFinishAt: number | null },
 ) {
-  const now = Date.now();
+  const now = vnow();
   const list: { key: string; name: string; level: number; remaining: number }[] = [];
   if (buildings) {
     for (const key of Object.keys(buildings) as BuildingKey[]) {
@@ -167,7 +168,7 @@ export function ZonasTab() {
                   if (!unlocked) return;
                   // Double-tap guard: if onDoubleClick already fired, skip single-tap
                   const prev = _lastTap.get(z.id) ?? 0;
-                  const now = Date.now();
+                  const now = vnow();
                   _lastTap.set(z.id, now);
                   if (now - prev < 300) return;
                   setCurrentZone(z.id);
@@ -206,7 +207,7 @@ export function ZonasTab() {
                       </span>
                       <span className="block font-mono text-[11px] font-black leading-tight tabular-nums">
                         {fmtCountdown(
-                          state.explorationStates[z.id].finishAt - Date.now(),
+                          state.explorationStates[z.id].finishAt - vnow(),
                         )}
                       </span>
                     </span>

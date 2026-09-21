@@ -1,6 +1,7 @@
 import { Progress } from "@/components/ui/progress";
 import { BALANCE } from "@/game/balance";
 import { ZONES, getZone } from "@/game/zones";
+import { vnow } from "@/game/virtualClock";
 import { useGame } from "@/game/GameProvider";
 import { currentEnergy } from "@/game/energySystem";
 import { hungerTier, thirstTier, TIER_META } from "@/game/survivalSystem";
@@ -54,9 +55,9 @@ function nextLockedZone(state: GameState) {
 }
 
 export function HUD() {
-  const { state, setScreen } = useGame();
+  const { state, setScreen, speedMultiplier } = useGame();
   if (!state) return null;
-  const now = Date.now();
+  const now = vnow();
   const energy = currentEnergy(state, now);
   const msSinceLastRegen = Math.max(0, now - state.lastEnergyRegenAt);
   const msPerPoint = BALANCE.energyRegenMinutesPerPoint * 60000;
@@ -85,6 +86,14 @@ export function HUD() {
             </span>
           </div>
           <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+            {speedMultiplier > 1 && (
+              <span
+                className="animate-pulse rounded-sm border border-amber-400/60 bg-amber-500/15 px-1.5 py-0.5 font-black tabular-nums text-amber-300"
+                title="Velocidad de testeo activa"
+              >
+                ⏩ x{speedMultiplier}
+              </span>
+            )}
             <span className="tabular-nums">{Math.floor(state.expTotal).toLocaleString("es")} EXP</span>
             <span className="text-green-500 tabular-nums">{Math.floor(energy)}/{BALANCE.maxEnergy} ⚡</span>
           </div>

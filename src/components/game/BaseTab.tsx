@@ -12,6 +12,7 @@ import {
   exclusiveBuildingBonus,
 } from "@/game/buildings";
 import { BALANCE } from "@/game/balance";
+import { vnow } from "@/game/virtualClock";
 import { RESOURCE_META } from "@/game/resources";
 import { getZone, zoneFocusBonus } from "@/game/zones";
 import type { BuildingKey } from "@/game/types";
@@ -50,7 +51,7 @@ export function BaseTab() {
   const exclDef = EXCLUSIVE_BUILDING_BY_ZONE[zoneId];
   const excl = zoneState.exclusiveBuilding ?? (exclDef ? { key: exclDef.key, level: 0, upgradeFinishAt: null } : undefined);
   const exclBusy = excl?.upgradeFinishAt != null;
-  const exclRemaining = exclBusy ? (excl!.upgradeFinishAt as number) - Date.now() : 0;
+  const exclRemaining = exclBusy ? (excl!.upgradeFinishAt as number) - vnow() : 0;
   const exclMaxed = (excl?.level ?? 0) >= BALANCE.buildingMaxLevel;
   const exclCost = buildingUpgradeCost(excl?.level ?? 0);
   const exclAfford =
@@ -165,7 +166,7 @@ export function BaseTab() {
             prevKey === null ||
             (zoneState.buildings[prevKey]?.level ?? 0) >= 1;
           const busy = b.upgradeFinishAt != null;
-          const remaining = busy ? (b.upgradeFinishAt as number) - Date.now() : 0;
+          const remaining = busy ? (b.upgradeFinishAt as number) - vnow() : 0;
           const cost = buildingUpgradeCost(b.level);
           const maxed = b.level >= BALANCE.buildingMaxLevel;
           const canAfford =

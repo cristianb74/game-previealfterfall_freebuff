@@ -1,4 +1,7 @@
+import { useState } from "react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { HUD } from "@/components/game/HUD";
 import { StatsGrid } from "@/components/game/StatsGrid";
 import { useNavigate } from "react-router";
@@ -9,12 +12,14 @@ import { statEffectRows } from "@/game/statEffects";
 import { GAME_INFO } from "@/game/gameConfig";
 import { getZone } from "@/game/zones";
 import { useAuth } from "@/hooks/use-auth";
-import { CloudUpload, CloudDownload, Loader2, LogIn, LogOut, ShieldCheck } from "lucide-react";
+import { CloudUpload, CloudDownload, Loader2, LogIn, LogOut, ShieldCheck, AlertTriangle } from "lucide-react";
 
 export function PerfilTab() {
-  const { state, cloud, syncNow, restoreFromCloud } = useGame();
+  const { state, cloud, syncNow, restoreFromCloud, eraseSave, speedMultiplier, setSpeed } = useGame();
   const { user, isAuthenticated, signOut } = useAuth();
   const navigate = useNavigate();
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetAck, setResetAck] = useState(false);
   if (!state) return null;
 
   const fullLog = state.log;
@@ -199,6 +204,113 @@ export function PerfilTab() {
           </ul>
         )}
       </section>
+
+      {/* ===== TEST ZONE (dev/QA tooling — public for now) ===== */}
+      <section className="rounded-lg border border-red-900/60 bg-red-950/20 p-4">
+        <h3 className="mb-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-red-400">
+          <AlertTriangle className="size-3.5" />
+          Zona de testeo
+        </h3>
+        <p className="mb-3 text-[10px] leading-4 text-subtle">
+          Herramientas de desarrollo. Estas acciones son destructivas y no forman
+          parte del juego normal.
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setResetAck(false);
+            setResetOpen(true);
+          }}
+          className="border-red-800/70 text-red-300 hover:border-red-500 hover:bg-red-950/40 hover:text-red-200"
+        >
+          Reiniciar cuenta
+        </Button>
+
+        <div className="mt-3">
+          <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-400">
+            Velocidad del juego (solo esta sesión)
+          </p>
+          <div className="flex gap-2">
+            {([1, 2, 4] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setSpeed(m)}
+                className={cn(
+                  "flex-1 rounded-sm border px-2 py-1.5 text-xs font-bold uppercase tracking-widest transition-colors",
+                  speedMultiplier === m
+                    ? "border-amber-400/70 bg-amber-500/15 text-amber-300"
+                    : "border-zinc-700 text-zinc-400 hover:border-amber-500/50 hover:text-amber-300",
+                )}
+              >
+                x{m}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[10px] leading-4 text-subtle">
+            Acelera el tiempo del juego x2 o x4 (exploraciones, construcción,
+            energía y consumo). Vuelve a x1 automáticamente al recargar.
+          </p>
+        </div>
+      </section>
+
+      {/* reset confirmation: double confirm (ack checkbox + button) */}
+      <Dialog
+        open={resetOpen}
+        onOpenChange={(o) => {
+          if (!o) setResetOpen(false);
+        }}
+      >
+        <DialogContent className="max-w-sm rounded-lg border-red-900/60 bg-[#101213] text-zinc-200">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-400">
+              <AlertTriangle className="size-4" />
+              Reiniciar cuenta
+            </DialogTitle>
+            <DialogDescription className="text-faint">
+              Esta acción borra tu partida y empieza de cero.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md border border-red-900/40 bg-red-950/20 p-3 text-xs leading-5 text-zinc-300">
+            <p className="font-bold">Se perderá TODO el progreso:</p>
+            <p>· Superviviente, stats, EXP y zonas desbloqueadas</p>
+            <p>· Recursos, edificios y NPC del refugio</p>
+            <p>· El guardado local Y la copia en la nube (si hay sesión iniciada)</p>
+            <p className="mt-1 text-[10px] text-red-400">
+              Esta acción es permanente e irreversible.
+            </p>
+          </div>
+          <label className="flex cursor-pointer items-start gap-2 text-xs text-zinc-300">
+            <input
+              type="checkbox"
+              checked={resetAck}
+              onChange={(e) => setResetAck(e.target.checked)}
+              className="mt-0.5 size-4 accent-red-600"
+            />
+            <span>Entiendo que se perderá todo el progreso y no se puede recuperar.</span>
+          </label>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setResetOpen(false)}
+              className="flex-1 border-zinc-700 text-zinc-300"
+            >
+              Cancelar
+            </Button>
+            <Button
+              disabled={!resetAck}
+              onClick={() => {
+                setResetOpen(false);
+                void eraseSave().then(() => navigate("/", { replace: true }));
+              }}
+              className="flex-1 border border-red-500/40 bg-red-600/90 font-bold uppercase tracking-widest text-white hover:bg-red-500 disabled:opacity-40"
+            >
+              Reiniciar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <p className="pb-2 text-center text-[10px] uppercase tracking-[0.25em] text-zinc-700">
         {GAME_INFO.title} v{GAME_INFO.version} · guardado local + nube

@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useGame } from "@/game/GameProvider";
 import { getZone } from "@/game/zones";
 import { NPC_TYPE_MODIFIERS } from "@/game/npcTypes";
+import { vnow } from "@/game/virtualClock";
 import { GAME_INFO } from "@/game/gameConfig";
 import { BALANCE } from "@/game/balance";
 import { BUILDING_BY_KEY, buildingBonus } from "@/game/buildings";
@@ -54,7 +55,7 @@ export function RegistroTab() {
   /** Log channel filter: tech (debug) | narr (player-facing) | both. */
   const [channelFilter, setChannelFilter] = useState<"tech" | "narr" | "both">("both");
 
-  const now = Date.now();
+  const now = vnow();
 
   /** Build the full summary header for export. */
   const summary = useMemo(() => {
@@ -74,10 +75,10 @@ export function RegistroTab() {
     lines.push(`Agua: ${Math.floor(state.waterMin)} min`);
     lines.push(`Medicamentos: ${Math.floor(state.resources.medicamentos)}`);
     lines.push(`Componentes: ${Math.floor(state.resources.componentes)}`);
-    const energy = currentEnergy(state, Date.now());
+    const energy = currentEnergy(state, vnow());
     lines.push(`Energía: ${Math.floor(energy)}/${BALANCE.maxEnergy}`);
     const nextAt = nextEnergyRegenAt(state);
-    const nextRegenMs = Math.max(0, nextAt - Date.now());
+    const nextRegenMs = Math.max(0, nextAt - vnow());
     const nextRegenMin = Math.ceil(nextRegenMs / 60000);
     lines.push(`Última regeneración de energía: ${fmtDate(state.lastEnergyRegenAt)}`);
     lines.push(`Próxima regeneración en: ${nextRegenMin} min`);

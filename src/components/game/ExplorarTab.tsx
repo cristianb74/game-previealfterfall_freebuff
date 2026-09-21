@@ -5,6 +5,7 @@ import { HUD } from "@/components/game/HUD";
 import { useGame } from "@/game/GameProvider";
 import { getZone, zoneImage } from "@/game/zones";
 import { currentEnergy } from "@/game/energySystem";
+import { vnow } from "@/game/virtualClock";
 import { BALANCE } from "@/game/balance";
 import { cn } from "@/lib/utils";
 
@@ -43,7 +44,7 @@ export function ExplorarTab() {
   }, []);
 
   if (!state) return null;
-  const now = Date.now();
+  const now = vnow();
   const zone = getZone(state.currentZoneId);
   // Per-zone: check if THIS zone is exploring
   const currentExploration = state.explorationStates[state.currentZoneId];
