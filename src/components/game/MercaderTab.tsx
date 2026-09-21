@@ -37,15 +37,15 @@ export function MercaderTab() {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="px-1 text-[10px] uppercase tracking-[0.25em] text-zinc-500">
+      <p className="px-1 text-[10px] uppercase tracking-[0.25em] text-subtle">
         Comercio de supervivencia · sin dinero premium
       </p>
 
       {/* Wallet */}
       <section className="rounded-lg border border-green-500/30 bg-[#101213] p-4">
-        <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500">Tu dinero</p>
+        <p className="text-[10px] uppercase tracking-[0.25em] text-subtle">Tu dinero</p>
         <p className="mt-1 font-mono text-3xl font-black text-green-500">$ {money}</p>
-        <p className="mt-1 text-[10px] text-zinc-600">
+        <p className="mt-1 text-[10px] text-subtle">
           Se encuentra explorando zonas. No existe dinero premium ni compras reales.
         </p>
       </section>
@@ -105,9 +105,9 @@ export function MercaderTab() {
               >
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-bold text-zinc-200">{offer.label}</span>
-                  <span className="text-[10px] text-zinc-600">Stock: {currentStock}</span>
+                  <span className="text-[10px] text-subtle">Stock: {currentStock}</span>
                 </div>
-                <p className="mt-1 text-[10px] text-zinc-500">
+                <p className="mt-1 text-[10px] text-subtle">
                   Precio unitario: ${offer.price} · {totalAmount} {key === "comida" || key === "agua" ? `min ${key}` : key}
                 </p>
 
@@ -134,7 +134,7 @@ export function MercaderTab() {
                       >
                         +
                       </button>
-                      <span className="ml-auto text-[10px] text-zinc-600">
+                      <span className="ml-auto text-[10px] text-subtle">
                         Recibirás: <span className="font-mono font-bold text-amber-400">${totalMoney}</span>
                       </span>
                     </div>
@@ -154,26 +154,26 @@ export function MercaderTab() {
                 )}
 
                 {!hasStock && (
-                  <p className="mt-2 text-[10px] text-zinc-600">No tienes este recurso</p>
+                  <p className="mt-2 text-[10px] text-subtle">No tienes este recurso</p>
                 )}
               </div>
             );
           })}
         </div>
-        <p className="mt-3 text-[10px] leading-4 text-zinc-600">
+        <p className="mt-3 text-[10px] leading-4 text-subtle">
           Comida y Agua solo se pueden vender en bloques de 30 minutos.
         </p>
       </section>
 
       {/* Health snapshot */}
-      <section className="rounded-lg border border-zinc-800 bg-[#101213] p-3 text-[11px] leading-5 text-zinc-500">
+      <section className="rounded-lg border border-zinc-800 bg-[#101213] p-3 text-[11px] leading-5 text-subtle">
         <p className="mb-1 text-xs font-bold uppercase tracking-widest text-zinc-300">Salud</p>
         <p>
           Salud actual: <span className="font-mono text-zinc-200">{state.health}/{BALANCE.maxHealth}</span>
           {" · "}Medicinas en mochila:{" "}
           <span className="font-mono text-zinc-200">{Math.floor(state.resources.medicamentos)}</span>
         </p>
-        <p className="mt-1 text-[10px] text-zinc-600">Usa "USAR MEDICINA" desde la pantalla de Explorar.</p>
+        <p className="mt-1 text-[10px] text-subtle">Usa "USAR MEDICINA" desde la pantalla de Explorar.</p>
       </section>
     </div>
   );

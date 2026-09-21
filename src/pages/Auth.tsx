@@ -195,7 +195,7 @@ function Auth({ redirectAfterAuth = "/juego" }: AuthProps) {
               <h2 className="text-center text-sm font-bold uppercase tracking-widest text-zinc-100">
                 Revisa tu correo
               </h2>
-              <p className="mt-1 text-center text-xs text-zinc-500">
+              <p className="mt-1 text-center text-xs text-faint">
                 Hemos enviado un código a {otpSentTo}
               </p>
               <form onSubmit={handleOtpVerify} className="mt-4 flex flex-col gap-4">
@@ -226,7 +226,7 @@ function Auth({ redirectAfterAuth = "/juego" }: AuthProps) {
                     setOtp("");
                     setError(null);
                   }}
-                  className="h-8 text-xs uppercase tracking-widest text-zinc-500"
+                  className="h-8 text-xs uppercase tracking-widest text-faint"
                 >
                   Usar otro método
                 </Button>
@@ -237,12 +237,12 @@ function Auth({ redirectAfterAuth = "/juego" }: AuthProps) {
               <h2 className="text-center text-sm font-bold uppercase tracking-widest text-zinc-100">
                 Código por correo
               </h2>
-              <p className="mt-1 text-center text-xs text-zinc-500">
+              <p className="mt-1 text-center text-xs text-faint">
                 Sin contraseña: te enviamos un código de un solo uso.
               </p>
               <form onSubmit={handleOtpSend} className="mt-4 flex flex-col gap-3">
                 <div className="relative">
-                  <Mail className="absolute left-3 top-2.5 size-4 text-zinc-600" />
+                  <Mail className="absolute left-3 top-2.5 size-4 text-subtle" />
                   <Input
                     name="email"
                     type="email"
@@ -250,7 +250,7 @@ function Auth({ redirectAfterAuth = "/juego" }: AuthProps) {
                     placeholder="tu@correo.com"
                     autoComplete="email"
                     disabled={isLoading}
-                    className="border-zinc-700 bg-black/50 pl-9 text-zinc-200 placeholder:text-zinc-600"
+                    className="border-zinc-700 bg-black/50 pl-9 text-zinc-200 placeholder:text-faint"
                   />
                 </div>
                 {error && <p className="text-xs text-red-400">{error}</p>}
@@ -268,7 +268,7 @@ function Auth({ redirectAfterAuth = "/juego" }: AuthProps) {
                     setShowOtp(false);
                     setError(null);
                   }}
-                  className="h-8 text-xs uppercase tracking-widest text-zinc-500"
+                  className="h-8 text-xs uppercase tracking-widest text-faint"
                 >
                   Volver
                 </Button>
@@ -285,7 +285,7 @@ function Auth({ redirectAfterAuth = "/juego" }: AuthProps) {
                 className={
                   mode === "signIn"
                     ? "rounded-sm bg-green-600/90 px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-black"
-                    : "rounded-sm px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-zinc-500 hover:text-zinc-300"
+                    : "rounded-sm px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-subtle hover:text-zinc-300"
                 }
               >
                 Entrar
@@ -296,7 +296,7 @@ function Auth({ redirectAfterAuth = "/juego" }: AuthProps) {
                 className={
                   mode === "signUp"
                     ? "rounded-sm bg-green-600/90 px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-black"
-                    : "rounded-sm px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-zinc-500 hover:text-zinc-300"
+                    : "rounded-sm px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-subtle hover:text-zinc-300"
                 }
               >
                 Crear cuenta
@@ -305,11 +305,11 @@ function Auth({ redirectAfterAuth = "/juego" }: AuthProps) {
 
             <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="email" className="text-[10px] uppercase tracking-widest text-zinc-500">
+                <Label htmlFor="email" className="text-[10px] uppercase tracking-widest text-subtle">
                   Correo electrónico
                 </Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-2.5 size-4 text-zinc-600" />
+                  <Mail className="absolute left-3 top-2.5 size-4 text-subtle" />
                   <Input
                     id="email"
                     name="email"
@@ -318,16 +318,16 @@ function Auth({ redirectAfterAuth = "/juego" }: AuthProps) {
                     placeholder="tu@correo.com"
                     autoComplete="email"
                     disabled={isLoading}
-                    className="border-zinc-700 bg-black/50 pl-9 text-zinc-200 placeholder:text-zinc-600"
+                    className="border-zinc-700 bg-black/50 pl-9 text-zinc-200 placeholder:text-faint"
                   />
                 </div>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="password" className="text-[10px] uppercase tracking-widest text-zinc-500">
+                <Label htmlFor="password" className="text-[10px] uppercase tracking-widest text-subtle">
                   Contraseña
                 </Label>
                 <div className="relative">
-                  <KeyRound className="absolute left-3 top-2.5 size-4 text-zinc-600" />
+                  <KeyRound className="absolute left-3 top-2.5 size-4 text-subtle" />
                   <Input
                     id="password"
                     name="password"
@@ -337,7 +337,7 @@ function Auth({ redirectAfterAuth = "/juego" }: AuthProps) {
                     placeholder={mode === "signUp" ? "Mínimo 8 caracteres" : "••••••••"}
                     autoComplete={mode === "signUp" ? "new-password" : "current-password"}
                     disabled={isLoading}
-                    className="border-zinc-700 bg-black/50 pl-9 text-zinc-200 placeholder:text-zinc-600"
+                    className="border-zinc-700 bg-black/50 pl-9 text-zinc-200 placeholder:text-faint"
                   />
                 </div>
               </div>
@@ -367,7 +367,7 @@ function Auth({ redirectAfterAuth = "/juego" }: AuthProps) {
               <>
                 <div className="my-4 flex items-center gap-3">
                   <span className="h-px flex-1 bg-zinc-800" />
-                  <span className="text-[10px] uppercase tracking-widest text-zinc-600">o</span>
+                  <span className="text-[10px] uppercase tracking-widest text-faint">o</span>
                   <span className="h-px flex-1 bg-zinc-800" />
                 </div>
                 <Button
@@ -387,7 +387,7 @@ function Auth({ redirectAfterAuth = "/juego" }: AuthProps) {
               <button
                 type="button"
                 onClick={() => setShowOtp(true)}
-                className="flex items-center gap-2 text-xs text-zinc-500 transition-colors hover:text-green-400"
+                className="flex items-center gap-2 text-xs text-subtle transition-colors hover:text-green-400"
               >
                 <Mail className="size-3.5" />
                 Entrar con código por correo (sin contraseña)
@@ -396,7 +396,7 @@ function Auth({ redirectAfterAuth = "/juego" }: AuthProps) {
                 type="button"
                 onClick={handleGuest}
                 disabled={isLoading}
-                className="flex items-center gap-2 text-xs text-zinc-500 transition-colors hover:text-zinc-300"
+                className="flex items-center gap-2 text-xs text-subtle transition-colors hover:text-zinc-300"
               >
                 <UserX className="size-3.5" />
                 Continuar como invitado (solo este dispositivo)
@@ -411,7 +411,7 @@ function Auth({ redirectAfterAuth = "/juego" }: AuthProps) {
           </section>
         )}
 
-        <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-[10px] uppercase tracking-[0.25em] text-zinc-600">
+        <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-[10px] uppercase tracking-[0.25em] text-subtle">
           <CloudOff className="size-3" />
           Tu partida también se guarda en este dispositivo
         </p>

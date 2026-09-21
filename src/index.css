@@ -113,6 +113,14 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* AFTERFALL semantic text tokens (contrast-safe on dark backgrounds).
+   Primary = text-foreground (existing). Do NOT reuse the names `primary`/
+   `secondary` here: those are already shadcn theme colors (green / dark gray). */
+@theme inline {
+  --color-subtle: #a1a1aa; /* secondary text — descriptions, labels, metadata (~7.2:1) */
+  --color-faint: #8b8b93;  /* tertiary text — timestamps, support text (~5.5:1) */
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

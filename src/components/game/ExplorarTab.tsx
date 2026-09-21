@@ -91,15 +91,15 @@ export function ExplorarTab() {
 
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-sm border border-white/5 bg-black/40 px-2 py-1.5">
-              <p className="text-[9px] uppercase tracking-wider text-zinc-500">Duración</p>
+              <p className="text-[9px] uppercase tracking-wider text-subtle">Duración</p>
               <p className="text-sm font-bold text-zinc-200">{zone.explorationMinutes} min</p>
             </div>
             <div className="rounded-sm border border-white/5 bg-black/40 px-2 py-1.5">
-              <p className="text-[9px] uppercase tracking-wider text-zinc-500">EXP</p>
+              <p className="text-[9px] uppercase tracking-wider text-subtle">EXP</p>
               <p className="text-sm font-bold text-green-500">+{zone.playerExpReward}</p>
             </div>
             <div className="rounded-sm border border-white/5 bg-black/40 px-2 py-1.5">
-              <p className="text-[9px] uppercase tracking-wider text-zinc-500">Recursos</p>
+              <p className="text-[9px] uppercase tracking-wider text-subtle">Recursos</p>
               <p className="truncate text-sm font-bold text-zinc-200">{zone.resources.filter((r) => r !== "dinero").length} tipos</p>
             </div>
           </div>
@@ -113,7 +113,7 @@ export function ExplorarTab() {
                 </span>
               </div>
               <Progress value={pct} className="h-2 bg-zinc-800" />
-              <p className="text-[10px] text-zinc-500">
+              <p className="text-[10px] text-subtle">
                 Puedes cerrar la app. La exploración termina sola a las{" "}
                 {new Date(currentExploration.finishAt).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}.
               </p>
@@ -136,7 +136,7 @@ export function ExplorarTab() {
           {/* Show all active manual explorations across zones */}
           {activeExplorations.length > 1 && (
             <div className="flex flex-col gap-1">
-              <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">
+              <p className="text-[9px] font-bold uppercase tracking-wider text-subtle">
                 Otras exploraciones activas
               </p>
               {activeExplorations.filter((zid) => zid !== state.currentZoneId).map((zid) => {
@@ -178,10 +178,10 @@ export function ExplorarTab() {
 
           {/* NPC counter display */}
           <div className="rounded-md border border-zinc-800 bg-[#0d0f10] px-3 py-2">
-            <p className="text-[9px] uppercase tracking-wider text-zinc-600">
+            <p className="text-[9px] uppercase tracking-wider text-subtle">
               NPC · {state.explorationsSinceLastNPC ?? 0} exploraciones desde último NPC
             </p>
-            <p className="text-[10px] text-zinc-500">
+            <p className="text-[10px] text-subtle">
               Chance: {npcChanceDisplay(state.explorationsSinceLastNPC ?? 0)}
             </p>
           </div>
@@ -192,7 +192,7 @@ export function ExplorarTab() {
       <section className="flex items-center justify-between rounded-lg border border-zinc-800 bg-[#101213] p-3">
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-zinc-300">Salud</p>
-          <p className="text-[10px] text-zinc-500">
+          <p className="text-[10px] text-subtle">
             {Math.round(state.health)}/100 · {Math.floor(state.resources.medicamentos)} Medicamentos (1 = +1 Salud)
           </p>
         </div>
@@ -213,12 +213,12 @@ export function ExplorarTab() {
           Registro de exploración
         </h3>
         {log.length === 0 ? (
-          <p className="text-xs text-zinc-600">Aún no hay eventos. Empieza a explorar.</p>
+          <p className="text-xs text-subtle">Aún no hay eventos. Empieza a explorar.</p>
         ) : (
           <ul className="flex flex-col gap-1.5">
             {log.map((e, i) => (
               <li key={`${e.t}-${i}`} className="flex items-baseline gap-2 text-xs">
-                <span className="shrink-0 font-mono text-[10px] text-zinc-600">
+                <span className="shrink-0 font-mono text-[10px] text-subtle">
                   {new Date(e.t).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}
                 </span>
                 <span
@@ -229,7 +229,7 @@ export function ExplorarTab() {
                         ? "text-green-400"
                         : e.kind === "resource"
                           ? "text-zinc-300"
-                          : "text-zinc-500"
+                          : "text-subtle"
                   }
                 >
                   {e.msg}
@@ -240,7 +240,7 @@ export function ExplorarTab() {
         )}
         <button
           onClick={() => setScreen("registro")}
-          className="mt-2 text-[10px] uppercase tracking-wider text-zinc-600 hover:text-zinc-400"
+          className="mt-2 text-[10px] uppercase tracking-wider text-subtle hover:text-zinc-400"
         >
           Ver registro completo →
         </button>

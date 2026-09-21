@@ -27,7 +27,7 @@ export function OfflineSummaryModal() {
           <DialogTitle className="tracking-wider text-zinc-100">
             BIENVENIDO DE VUELTA
           </DialogTitle>
-          <DialogDescription className="text-zinc-500">
+          <DialogDescription className="text-faint">
             Estuviste fuera {fmtAway(s.minutesAway)}
             {s.capped ? ` — el progreso se limitó a ${BALANCE.offlineCapHours} h` : ""}
           </DialogDescription>
@@ -39,7 +39,7 @@ export function OfflineSummaryModal() {
             <p className="text-[10px] font-bold uppercase tracking-widest text-amber-400">
               Tope de {BALANCE.offlineCapHours} h alcanzado
             </p>
-            <p className="mt-0.5 text-[10px] leading-4 text-zinc-500">
+            <p className="mt-0.5 text-[10px] leading-4 text-subtle">
               El consumo y la producción durante el resto de tu ausencia no se
               contabilizaron. La energía sí se recuperó completa.
             </p>
@@ -52,24 +52,24 @@ export function OfflineSummaryModal() {
             Exploraciones
           </p>
           <div className="flex items-baseline justify-between text-xs">
-            <span className="text-zinc-500">Completadas</span>
+            <span className="text-subtle">Completadas</span>
             <span className="font-bold text-zinc-200">{s.explorationsCompleted}</span>
           </div>
           {expDelta > 0 && (
             <div className="flex items-baseline justify-between text-xs">
-              <span className="text-zinc-500">EXP de auto-farm</span>
+              <span className="text-subtle">EXP de auto-farm</span>
               <span className="font-bold text-green-400">+{expDelta}</span>
             </div>
           )}
           {s.energyGained >= 1 && (
             <div className="flex items-baseline justify-between text-xs">
-              <span className="text-zinc-500">Energía recuperada</span>
+              <span className="text-subtle">Energía recuperada</span>
               <span className="font-bold text-green-400">+{s.energyGained}</span>
             </div>
           )}
           {s.npcFindsCount > 0 && (
             <div className="flex items-baseline justify-between text-xs">
-              <span className="text-zinc-500">Hallazgos del equipo</span>
+              <span className="text-subtle">Hallazgos del equipo</span>
               <span className="font-bold text-purple-400">{s.npcFindsCount}</span>
             </div>
           )}
@@ -84,7 +84,7 @@ export function OfflineSummaryModal() {
             <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
               {s.resourceDeltas.map((d) => (
                 <div key={d.resource} className="flex items-baseline justify-between gap-2">
-                  <span className="truncate text-zinc-500">
+                  <span className="truncate text-subtle">
                     {offlineDeltaLabel(d).replace(/^[+−]/, "")}
                   </span>
                   <span

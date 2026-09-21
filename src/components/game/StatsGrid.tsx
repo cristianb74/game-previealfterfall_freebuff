@@ -10,7 +10,7 @@ export function StatsGrid({ stats, className }: { stats: Stats; className?: stri
           key={k}
           className="flex items-center justify-between rounded-sm border border-white/5 bg-black/40 px-2 py-1"
         >
-          <span className="text-[10px] uppercase tracking-wider text-zinc-500">{STAT_META[k].short}</span>
+          <span className="text-[10px] uppercase tracking-wider text-subtle">{STAT_META[k].short}</span>
           <span className="text-xs font-semibold text-zinc-200 tabular-nums">{stats[k]}</span>
         </div>
       ))}

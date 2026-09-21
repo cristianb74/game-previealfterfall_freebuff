@@ -85,7 +85,7 @@ export default function Landing() {
             variant="ghost"
             disabled={disabled}
             onClick={() => setSettingsOpen(true)}
-            className="h-11 text-sm font-semibold uppercase tracking-widest text-zinc-500 hover:text-zinc-300"
+            className="h-11 text-sm font-semibold uppercase tracking-widest text-subtle hover:text-zinc-300"
           >
             Configuración
           </Button>
@@ -105,7 +105,7 @@ export default function Landing() {
             <button
               type="button"
               onClick={() => navigate("/auth?returnTo=%2Fjuego")}
-              className="mx-auto mt-1 flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-zinc-500 transition-colors hover:text-zinc-300"
+              className="mx-auto mt-1 flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-subtle transition-colors hover:text-zinc-300"
             >
               <LogIn className="size-3.5" />
               Guardar progreso en la nube
@@ -113,7 +113,7 @@ export default function Landing() {
           )}
         </div>
 
-        <p className="mt-10 text-[10px] uppercase tracking-[0.25em] text-zinc-600">
+        <p className="mt-10 text-[10px] uppercase tracking-[0.25em] text-subtle">
           {GAME_INFO.tagline}
         </p>
       </div>
@@ -124,7 +124,7 @@ export default function Landing() {
         <DialogContent className="max-w-sm rounded-lg border-zinc-800 bg-[#101213] text-zinc-200">
           <DialogHeader>
             <DialogTitle className="tracking-widest text-zinc-100">CONFIGURACIÓN</DialogTitle>
-            <DialogDescription className="text-zinc-500">
+            <DialogDescription className="text-faint">
               Ajustes locales de la aplicación.
             </DialogDescription>
           </DialogHeader>
@@ -138,7 +138,7 @@ export default function Landing() {
           </div>
           <Separator className="bg-zinc-800" />
           <div className="flex flex-col gap-2">
-            <p className="text-xs uppercase tracking-widest text-zinc-500">Zona de peligro</p>
+            <p className="text-xs uppercase tracking-widest text-subtle">Zona de peligro</p>
             {confirmErase ? (
               <div className="flex gap-2">
                 <Button
@@ -168,7 +168,7 @@ export default function Landing() {
                 Borrar partida
               </Button>
             )}
-            <p className="text-[10px] text-zinc-600">
+            <p className="text-[10px] text-subtle">
               v{GAME_INFO.version} · Partida guardada en este dispositivo
             </p>
           </div>

@@ -34,7 +34,7 @@ function SurvivalBar({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-baseline justify-between">
-        <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-zinc-500">{label}</span>
+        <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-subtle">{label}</span>
         <span className={cn("text-[10px] font-bold tabular-nums", danger ? "text-red-400" : "text-zinc-300")}>
           {display}
         </span>
@@ -136,17 +136,17 @@ export function HUD() {
               <p className="truncate text-[10px] font-bold uppercase tracking-wider text-zinc-300">
                 Superviviente · {state.survivor.name}
               </p>
-              <p className="truncate text-[9px] uppercase tracking-wider text-zinc-500">
+              <p className="truncate text-[9px] uppercase tracking-wider text-subtle">
                 Equipo · {state.npcs.length} · {assigned} activos
               </p>
             </div>
           </div>
           <div className="w-36 shrink-0 sm:w-52">
             <div className="mb-0.5 flex items-baseline justify-between">
-              <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+              <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-subtle">
                 {nextZone ? "Próxima zona" : "Todas las zonas"}
               </span>
-              <span className="text-[9px] tabular-nums text-zinc-500">
+              <span className="text-[9px] tabular-nums text-subtle">
                 {nextZone
                   ? `${Math.floor(state.expTotal).toLocaleString("es")}/${nextZone.unlockExp.toLocaleString("es")}`
                   : "20/20"}
@@ -159,7 +159,7 @@ export function HUD() {
         <button
           type="button"
           onClick={() => setScreen("mochila")}
-          className="flex items-center gap-3 overflow-x-auto rounded-sm py-0.5 text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-500 transition-colors hover:text-zinc-300"
+          className="flex items-center gap-3 overflow-x-auto rounded-sm py-0.5 text-left text-[10px] font-semibold uppercase tracking-wider text-subtle transition-colors hover:text-zinc-300"
           title="Ver Mochila"
         >
           <span>⚒ {Math.floor(state.resources.materiales)}</span>

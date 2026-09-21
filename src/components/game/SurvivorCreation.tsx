@@ -24,7 +24,7 @@ export default function SurvivorCreation({
       <DialogContent className="max-h-[92dvh] overflow-hidden rounded-lg border-zinc-800 bg-[#101213] text-zinc-200 sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="tracking-widest text-zinc-100">TU SUPERVIVIENTE</DialogTitle>
-          <DialogDescription className="text-zinc-500">
+          <DialogDescription className="text-faint">
             Se han detectado {rollOptions.length} perfiles compatibles. Elige con quién sobrevivirás.
           </DialogDescription>
         </DialogHeader>
@@ -45,7 +45,7 @@ export default function SurvivorCreation({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-2">
                     <p className="truncate text-sm font-bold text-zinc-100">{s.name}</p>
-                    <span className="shrink-0 text-[10px] uppercase tracking-wider text-zinc-500">
+                    <span className="shrink-0 text-[10px] uppercase tracking-wider text-subtle">
                       Perfil {i + 1}
                     </span>
                   </div>
@@ -58,7 +58,7 @@ export default function SurvivorCreation({
         </ScrollArea>
 
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[10px] uppercase tracking-wider text-zinc-600">
+          <p className="text-[10px] uppercase tracking-wider text-subtle">
             Máximo {SURVIVOR_MAX_ROLLS} lanzamientos
           </p>
           <Button

@@ -49,7 +49,7 @@ export function EquipoTab() {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="px-1 text-[10px] uppercase tracking-[0.25em] text-zinc-500">
+      <p className="px-1 text-[10px] uppercase tracking-[0.25em] text-subtle">
         EQUIPO · {active.length} · {assigned.length} asignados
       </p>
 
@@ -87,10 +87,10 @@ export function EquipoTab() {
                     <p className="truncate text-sm font-bold text-zinc-100">
                       {n.name} «{n.alias}»
                     </p>
-                    <p className="truncate text-[10px] text-zinc-500">
+                    <p className="truncate text-[10px] text-subtle">
                       {n.profession} · {n.id}
                     </p>
-                    <p className="mt-0.5 text-[9px] text-zinc-600">
+                    <p className="mt-0.5 text-[9px] text-subtle">
                       Costo: {matCost} ⚒ · {foodCost} min ▣
                     </p>
                   </div>
@@ -106,7 +106,7 @@ export function EquipoTab() {
               );
             })}
           </div>
-          <p className="mt-2 text-[9px] leading-4 text-zinc-600">
+          <p className="mt-2 text-[9px] leading-4 text-subtle">
             Los supervivientes encontrados explorando necesitan ser reclutados antes
             de poder asignarlos a una zona.
           </p>
@@ -116,7 +116,7 @@ export function EquipoTab() {
       {state.npcs.length === 0 ? (
         <div className="rounded-lg border border-dashed border-zinc-800 bg-[#101213] p-6 text-center">
           <p className="text-sm font-bold uppercase tracking-widest text-zinc-400">Sin supervivientes</p>
-          <p className="mt-2 text-xs leading-5 text-zinc-600">
+          <p className="mt-2 text-xs leading-5 text-subtle">
             Explora zonas para encontrar supervivientes que automaticen la recolección.
             El primero suele aparecer en las primeras 10 exploraciones.
           </p>
@@ -152,10 +152,10 @@ export function EquipoTab() {
                     <p className="truncate text-sm font-bold text-zinc-100">
                       {n.name} «{n.alias}»
                     </p>
-                    <span className="shrink-0 text-[10px] font-bold text-zinc-500">{n.id}</span>
+                    <span className="shrink-0 text-[10px] font-bold text-subtle">{n.id}</span>
                   </div>
                   <p className="truncate text-[11px] text-zinc-400">{n.profession}</p>
-                  <p className="truncate text-[10px] uppercase tracking-wider text-zinc-600">
+                  <p className="truncate text-[10px] uppercase tracking-wider text-subtle">
                     {n.assignedZoneId
                       ? working
                         ? `● ${zoneName}`
@@ -163,7 +163,7 @@ export function EquipoTab() {
                       : "○ Sin asignar"}
                   </p>
                   <StatsGrid stats={n.stats} className="mt-1.5" />
-                  <p className="mt-1 truncate text-[9px] text-zinc-600">{totalsLabel(n)}</p>
+                  <p className="mt-1 truncate text-[9px] text-subtle">{totalsLabel(n)}</p>
                 </div>
               </button>
             );
@@ -181,16 +181,16 @@ export function EquipoTab() {
                   <img src={npc.portrait} alt={npc.name} className="size-12 rounded-sm border border-zinc-800 object-cover" />
                   <span>
                     {npc.name} «{npc.alias}»
-                    <span className="ml-2 text-xs text-zinc-500">{npc.id}</span>
+                    <span className="ml-2 text-xs text-faint">{npc.id}</span>
                   </span>
                 </DialogTitle>
-                <DialogDescription className="text-zinc-500">
+                <DialogDescription className="text-faint">
                   {NPC_TYPE_MODIFIERS[npc.type].label} · ciclo {NPC_TYPE_MODIFIERS[npc.type].cycleSeconds}s · bonus +
                   {Math.round(NPC_TYPE_MODIFIERS[npc.type].bonus * 100)}%
                 </DialogDescription>
               </DialogHeader>
               <StatsGrid stats={npc.stats} />
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-faint">
                 Especialización:{" "}
                 <span className="text-zinc-300">
                   {BUILDING_BY_KEY[npc.specialization].name} ({RESOURCE_META[
@@ -208,7 +208,7 @@ export function EquipoTab() {
                   )
                 </span>
               </p>
-              <div className="rounded-md border border-white/5 bg-black/40 p-2 text-[11px] text-zinc-500">
+              <div className="rounded-md border border-white/5 bg-black/40 p-2 text-[11px] text-subtle">
                 <p className="mb-1 font-bold uppercase tracking-wider text-zinc-400">Producción acumulada</p>
                 <p>{totalsLabel(npc)}</p>
               </div>
@@ -218,7 +218,7 @@ export function EquipoTab() {
                   <p className="text-xs font-bold uppercase tracking-widest text-amber-400">
                     Sin reclutar
                   </p>
-                  <p className="mt-1 text-[10px] text-zinc-500">
+                  <p className="mt-1 text-[10px] text-subtle">
                     Recluta a este superviviente desde la lista "Por reclutar" para
                     poder asignarlo a una zona.
                   </p>
@@ -246,14 +246,14 @@ export function EquipoTab() {
                       <span className="truncate">
                         {String(z.id).padStart(2, "0")} · {z.name}
                       </span>
-                      <span className="shrink-0 text-[10px] text-zinc-500">
+                      <span className="shrink-0 text-[10px] text-subtle">
                         {isSelf ? "✔ Asignado" : occupant ? `Ocupado (${occupant})` : "Libre"}
                       </span>
                     </button>
                   );
                 })}
               </div>
-              <p className="text-[10px] leading-4 text-zinc-600">
+              <p className="text-[10px] leading-4 text-subtle">
                 Máximo 1 superviviente por zona. Los NPC asignados a zonas distintas trabajan a la vez.
                 Bonus pasivo: mientras trabaja en una zona, sus exploraciones son más rápidas
                 (según su rareza).
@@ -301,7 +301,7 @@ export function EquipoTab() {
               <>
                 <DialogHeader>
                   <DialogTitle className="text-red-400">Expulsar superviviente</DialogTitle>
-                  <DialogDescription className="text-zinc-500">
+                  <DialogDescription className="text-faint">
                     ¿Seguro que quieres expulsar a este superviviente?
                   </DialogDescription>
                 </DialogHeader>
@@ -309,7 +309,7 @@ export function EquipoTab() {
                   <p className="text-sm font-bold text-zinc-200">
                     {npc.name} «{npc.alias}» ({npc.id})
                   </p>
-                  <p className="mt-1 text-xs text-zinc-500">
+                  <p className="mt-1 text-xs text-faint">
                     {NPC_TYPE_MODIFIERS[npc.type].label} · {npc.profession}
                   </p>
                   <p className="mt-2 text-[10px] text-red-400">
@@ -351,7 +351,7 @@ export function EquipoTab() {
               <>
                 <DialogHeader>
                   <DialogTitle>Mercado de NPC</DialogTitle>
-                  <DialogDescription className="text-zinc-500">
+                  <DialogDescription className="text-faint">
                     Próximamente — intercambio entre jugadores
                   </DialogDescription>
                 </DialogHeader>
@@ -360,17 +360,17 @@ export function EquipoTab() {
                     <img src={npc.portrait} alt={npc.name} className="size-10 rounded-sm border border-zinc-800 object-cover" />
                     <div>
                       <p className="text-sm font-bold text-zinc-200">{npc.name} «{npc.alias}»</p>
-                      <p className="text-[10px] text-zinc-500">{npc.id}</p>
+                      <p className="text-[10px] text-subtle">{npc.id}</p>
                     </div>
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-2 text-[10px]">
-                    <div className="text-zinc-500">Rareza</div>
+                    <div className="text-faint">Rareza</div>
                     <div style={{ color: info.color }} className="font-bold">{info.label}</div>
-                    <div className="text-zinc-500">Especialidad</div>
+                    <div className="text-faint">Especialidad</div>
                     <div className="text-zinc-300">{BUILDING_BY_KEY[npc.specialization].name}</div>
-                    <div className="text-zinc-500">Valor base</div>
+                    <div className="text-faint">Valor base</div>
                     <div className="text-amber-400">—</div>
-                    <div className="text-zinc-500">Estado</div>
+                    <div className="text-faint">Estado</div>
                     <div className="text-zinc-400">En refugio</div>
                   </div>
                 </div>
@@ -378,7 +378,7 @@ export function EquipoTab() {
                   <p className="text-xs font-bold uppercase tracking-widest text-amber-400">
                     Mercado de NPC próximamente
                   </p>
-                  <p className="mt-1 text-[10px] text-zinc-600">
+                  <p className="mt-1 text-[10px] text-subtle">
                     El sistema futuro permitirá publicar NPC a la venta.
                     El propietario podrá pedir como máximo 2 tipos de recursos.
                   </p>

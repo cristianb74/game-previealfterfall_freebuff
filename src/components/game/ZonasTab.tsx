@@ -78,7 +78,7 @@ function NpcIndicator({
 
   if (!npc) {
     return (
-      <span className="absolute bottom-1.5 left-1.5 rounded-sm bg-black/70 px-1 text-[7px] font-bold uppercase tracking-wider text-zinc-600">
+      <span className="absolute bottom-1.5 left-1.5 rounded-sm bg-black/70 px-1 text-[7px] font-bold uppercase tracking-wider text-subtle">
         Sin NPC
       </span>
     );
@@ -132,7 +132,7 @@ export function ZonasTab() {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="px-1 text-[10px] uppercase tracking-[0.25em] text-zinc-500">
+      <p className="px-1 text-[10px] uppercase tracking-[0.25em] text-subtle">
         Zonas desbloqueadas · {unlockedMax}/20 · toca para explorar ·
         doble toque para abrir la base
       </p>
@@ -234,7 +234,7 @@ export function ZonasTab() {
                   <p className="truncate text-[11px] font-bold text-zinc-200">
                     {z.name}
                   </p>
-                  <p className="text-[9px] uppercase tracking-wider text-zinc-500">
+                  <p className="text-[9px] uppercase tracking-wider text-subtle">
                     {unlocked
                       ? `${z.explorationMinutes} min · +${z.playerExpReward} EXP`
                       : expReady
@@ -280,7 +280,7 @@ export function ZonasTab() {
                   <span
                     className={cn(
                       "text-[8px] font-bold uppercase tracking-widest",
-                      autoEnabled ? "text-green-500" : "text-zinc-600",
+                      autoEnabled ? "text-green-500" : "text-subtle",
                     )}
                   >
                     {autoEnabled && autoRunning
@@ -309,7 +309,7 @@ export function ZonasTab() {
           );
         })}
       </div>
-      <p className="px-1 text-[10px] leading-4 text-zinc-600">
+      <p className="px-1 text-[10px] leading-4 text-subtle">
         Toca una zona para explorarla. Doble toque para abrir la base de
         construcciones. La exploración puede realizarse en varias zonas a la vez.
       </p>

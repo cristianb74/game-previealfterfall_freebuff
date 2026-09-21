@@ -80,7 +80,7 @@ export default function Game() {
         <div className="lg:grid lg:grid-cols-[minmax(260px,340px)_minmax(0,1fr)_minmax(260px,340px)] lg:items-start lg:gap-4">
           <aside className="hidden lg:block">
             <div className="sticky top-[130px]">
-              <h2 className="mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.25em] text-zinc-600">Zonas</h2>
+              <h2 className="mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.25em] text-subtle">Zonas</h2>
               <ZonasTab />
             </div>
           </aside>
@@ -97,7 +97,7 @@ export default function Game() {
 
           <aside className="hidden lg:block">
             <div className="sticky top-[130px]">
-              <h2 className="mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.25em] text-zinc-600">Construcciones</h2>
+              <h2 className="mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.25em] text-subtle">Construcciones</h2>
               <BaseTab />
             </div>
           </aside>
@@ -113,7 +113,7 @@ export default function Game() {
               onClick={() => setScreen(t.key)}
               className={cn(
                 "relative flex flex-col items-center gap-0.5 py-2.5 text-[9px] font-bold uppercase tracking-wider transition-colors",
-                screen === t.key ? "text-green-500" : "text-zinc-500 hover:text-zinc-300",
+                screen === t.key ? "text-green-500" : "text-subtle hover:text-zinc-300",
               )}
             >
               {TAB_ALERTS[t.key] && (

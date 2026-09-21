@@ -63,10 +63,10 @@ export function BaseTab() {
       {/* Prominent zone identification header */}
       <div className="rounded-lg border border-zinc-800/70 bg-[#101213] px-3 py-2.5">
         <div className="flex items-baseline gap-2">
-          <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-zinc-500">
+          <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-subtle">
             Base
           </span>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-600">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-subtle">
             ·
           </span>
           <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-green-500">
@@ -74,7 +74,7 @@ export function BaseTab() {
           </span>
         </div>
         <p className="mt-0.5 text-sm font-bold text-zinc-200">{zoneDef.name}</p>
-        <p className="mt-0.5 text-[9px] text-zinc-600">
+        <p className="mt-0.5 text-[9px] text-subtle">
           Las construcciones y sus bonus pertenecen únicamente a esta zona.
         </p>
         {/* Zone specialization banner */}
@@ -84,7 +84,7 @@ export function BaseTab() {
             <p className="text-[9px] font-bold uppercase tracking-wider text-green-500">
               Especialidad de la zona · {RESOURCE_META[zoneDef.focus].label}
             </p>
-            <p className="text-[9px] text-zinc-500">
+            <p className="text-[9px] text-subtle">
               Los hallazgos de {RESOURCE_META[zoneDef.focus].label} aquí son +
               {Math.round(zoneFocusBonus(zoneId) * 100)}% (exploración y NPC)
             </p>
@@ -105,7 +105,7 @@ export function BaseTab() {
                     "rounded-sm px-1 text-[9px] font-black",
                     excl.level > 0
                       ? "bg-amber-500 text-black"
-                      : "bg-zinc-800 text-zinc-500",
+                      : "bg-zinc-800 text-subtle",
                   )}
                 >
                   N{excl.level}
@@ -114,14 +114,14 @@ export function BaseTab() {
                   Exclusivo Z{String(zoneId).padStart(2, "0")}
                 </span>
               </div>
-              <p className="mt-1 text-[11px] leading-4 text-zinc-500">{exclDef.description}</p>
-              <p className="mt-1 text-[10px] uppercase tracking-wider text-zinc-600">
+              <p className="mt-1 text-[11px] leading-4 text-subtle">{exclDef.description}</p>
+              <p className="mt-1 text-[10px] uppercase tracking-wider text-subtle">
                 Bonus actual:{" "}
                 <span className="text-amber-400">
                   +{Math.round(exclusiveBuildingBonus(excl.level) * 100)}%
                 </span>
                 {!exclMaxed && (
-                  <span className="text-zinc-500">
+                  <span className="text-subtle">
                     {" "}
                     → siguiente +{Math.round(exclusiveBuildingBonus(excl.level + 1) * 100)}%
                   </span>
@@ -196,27 +196,27 @@ export function BaseTab() {
                         "rounded-sm px-1 text-[9px] font-black",
                         b.level > 0
                           ? "bg-green-600/90 text-black"
-                          : "bg-zinc-800 text-zinc-500",
+                          : "bg-zinc-800 text-subtle",
                       )}
                     >
                       N{b.level}
                     </span>
                     {!available && (
-                      <span className="rounded-sm bg-zinc-900 px-1 text-[8px] uppercase tracking-wider text-zinc-600">
+                      <span className="rounded-sm bg-zinc-900 px-1 text-[8px] uppercase tracking-wider text-subtle">
                         No disponible aquí
                       </span>
                     )}
                   </div>
-                  <p className="mt-1 text-[11px] leading-4 text-zinc-500">
+                  <p className="mt-1 text-[11px] leading-4 text-subtle">
                     {def.description}
                   </p>
-                  <p className="mt-1 text-[10px] uppercase tracking-wider text-zinc-600">
+                  <p className="mt-1 text-[10px] uppercase tracking-wider text-subtle">
                     Bonus actual:{" "}
                     <span className="text-green-500">
                       +{Math.round(buildingBonus(b.level) * 100)}%
                     </span>
                     {!maxed && (
-                      <span className="text-zinc-500">
+                      <span className="text-subtle">
                         {" "}
                         → siguiente {nextBonus}
                       </span>
@@ -273,7 +273,7 @@ export function BaseTab() {
                               )}
                             >
                               {need} {RESOURCE_META[rKey].icon}
-                              <span className="text-[9px] font-normal text-zinc-600">
+                              <span className="text-[9px] font-normal text-subtle">
                                 ({have})
                               </span>
                             </span>
@@ -302,7 +302,7 @@ export function BaseTab() {
         })}
       </div>
 
-      <section className="rounded-lg border border-zinc-800 bg-[#101213] p-3 text-[11px] leading-5 text-zinc-500">
+      <section className="rounded-lg border border-zinc-800 bg-[#101213] p-3 text-[11px] leading-5 text-subtle">
         <p className="mb-1 text-xs font-bold uppercase tracking-widest text-zinc-300">
           Inventario
         </p>
@@ -317,11 +317,11 @@ export function BaseTab() {
           <span className="text-green-500">
             $ {Math.floor(state.resources.dinero)}
           </span>
-          <span className="ml-1 text-[9px] uppercase tracking-wider text-zinc-600">
+          <span className="ml-1 text-[9px] uppercase tracking-wider text-subtle">
             ver Mochila ›
           </span>
         </button>
-        <p className="mt-1 text-[10px] text-zinc-600">
+        <p className="mt-1 text-[10px] text-subtle">
           Las construcciones usan solo Materiales y Componentes. Nunca Comida
           ni Agua.
         </p>

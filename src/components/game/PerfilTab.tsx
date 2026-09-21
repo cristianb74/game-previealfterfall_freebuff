@@ -32,7 +32,7 @@ export function PerfilTab() {
           <div className="min-w-0">
             <h2 className="text-lg font-black tracking-wider text-zinc-100">{state.survivor.name}</h2>
             <p className="text-sm text-green-500">{state.survivor.profession}</p>
-            <p className="mt-1 text-[10px] uppercase tracking-wider text-zinc-500">
+            <p className="mt-1 text-[10px] uppercase tracking-wider text-subtle">
               EXP total {Math.floor(state.expTotal).toLocaleString("es")} · Exploraciones {state.explorationsDone}
             </p>
           </div>
@@ -100,7 +100,7 @@ export function PerfilTab() {
           </>
         ) : (
           <div className="flex flex-col gap-2">
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-faint">
               Guardando solo en este dispositivo. Inicia sesión para proteger tu progreso y
               continuar en cualquier móvil, tablet u ordenador.
             </p>
@@ -114,7 +114,7 @@ export function PerfilTab() {
             </Button>
           </div>
         )}
-        <p className="mt-3 text-[10px] leading-4 text-zinc-600">
+        <p className="mt-3 text-[10px] leading-4 text-subtle">
           La partida se guarda automáticamente en el dispositivo y, con la sesión iniciada,
           también se sube a la nube. Si dos copias chocan, gana la más reciente.
         </p>
@@ -129,12 +129,12 @@ export function PerfilTab() {
           {STAT_ORDER.map((k) => (
             <div key={k} className="flex items-center justify-between gap-2">
               <span className="text-zinc-400">{STAT_META[k].label}</span>
-              <span className="text-zinc-600">→</span>
+              <span className="text-subtle">→</span>
               <span className="text-zinc-300">{RESOURCE_META[STAT_RESOURCE[k]].label}</span>
             </div>
           ))}
         </div>
-        <p className="mt-2 text-[10px] leading-4 text-zinc-600">
+        <p className="mt-2 text-[10px] leading-4 text-subtle">
           Una estadística más alta mejora la probabilidad de encontrar su recurso asociado.
           Los edificios y los NPC multiplican esa probabilidad base (bonus relativo).
         </p>
@@ -158,7 +158,7 @@ export function PerfilTab() {
       </section>
 
       {/* rules / help */}
-      <section className="rounded-lg border border-zinc-800 bg-[#101213] p-4 text-[11px] leading-5 text-zinc-500">
+      <section className="rounded-lg border border-zinc-800 bg-[#101213] p-4 text-[11px] leading-5 text-subtle">
         <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-zinc-300">Cómo se juega</h3>
         <p>· Explora: gasta 1 ⚡ y gana EXP, recursos y a veces supervivientes.</p>
         <p>· Comida y Agua son tiempo de supervivencia; se consumen siempre, incluso cerrando la app.</p>
@@ -173,12 +173,12 @@ export function PerfilTab() {
           Registro de exploración
         </h3>
         {fullLog.length === 0 ? (
-          <p className="text-xs text-zinc-600">Sin eventos todavía.</p>
+          <p className="text-xs text-subtle">Sin eventos todavía.</p>
         ) : (
           <ul className="flex max-h-96 flex-col gap-1.5 overflow-y-auto">
             {fullLog.map((e, i) => (
               <li key={`${e.t}-${i}`} className="flex items-baseline gap-2 text-xs">
-                <span className="shrink-0 font-mono text-[10px] text-zinc-600">
+                <span className="shrink-0 font-mono text-[10px] text-subtle">
                   {new Date(e.t).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}
                 </span>
                 <span
@@ -189,7 +189,7 @@ export function PerfilTab() {
                         ? "text-green-400"
                         : e.kind === "resource"
                           ? "text-zinc-300"
-                          : "text-zinc-500"
+                          : "text-subtle"
                   }
                 >
                   {e.msg}

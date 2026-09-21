@@ -52,7 +52,7 @@ export function MochilaTab() {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="px-1 text-[10px] uppercase tracking-[0.25em] text-zinc-500">
+      <p className="px-1 text-[10px] uppercase tracking-[0.25em] text-subtle">
         Todo lo que llevas encima y lo acumulado por tu equipo
       </p>
 
@@ -68,10 +68,10 @@ export function MochilaTab() {
                   <span className="text-base">{meta.icon}</span>
                   <div>
                     <p className="text-xs font-bold uppercase tracking-wider text-zinc-200">{meta.label}</p>
-                    <p className={cn("text-[10px]", danger ? "text-red-400" : "text-zinc-600")}>
+                    <p className={cn("text-[10px]", danger ? "text-red-400" : "text-subtle")}>
                       −{Math.round(upkeep)} min/h · {state.npcs.length} bocas
                     </p>
-                    <p className="text-[10px] text-zinc-600">+{BALANCE.survivorUpkeepPerHour} min/h por superviviente · NPC ×{BALANCE.npcConsumptionFactor}</p>
+                    <p className="text-[10px] text-subtle">+{BALANCE.survivorUpkeepPerHour} min/h por superviviente · NPC ×{BALANCE.npcConsumptionFactor}</p>
                   </div>
                 </div>
                 <div className="text-right">
@@ -99,12 +99,12 @@ export function MochilaTab() {
                 <span className="text-base">{meta.icon}</span>
                 <p className="text-2xl font-black tabular-nums text-zinc-100">{value.toLocaleString("es")}</p>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">{meta.label}</p>
-                {hint && <p className="text-[9px] text-zinc-600">{hint}</p>}
+                {hint && <p className="text-[9px] text-subtle">{hint}</p>}
               </div>
             );
           })}
         </div>
-        <p className="mt-2 text-[10px] text-zinc-600">
+        <p className="mt-2 text-[10px] text-subtle">
           ⚡ Energía: {Math.floor(state.resources.energia)}/24 · regenera 1 cada {BALANCE.energyRegenMinutesPerPoint} min, incluso con la app cerrada.
         </p>
       </section>
@@ -118,7 +118,7 @@ export function MochilaTab() {
           );
           if (producers.length === 0) {
             return (
-              <p className="text-xs text-zinc-600">
+              <p className="text-xs text-subtle">
                 Aún no hay producción acumulada. Asigna supervivientes a zonas en Equipo.
               </p>
             );
@@ -139,7 +139,7 @@ export function MochilaTab() {
                       <p className="text-xs font-bold text-zinc-200">
                         {npc.id} «{npc.alias}»
                       </p>
-                      <p className="text-[10px] uppercase tracking-wider text-zinc-600">
+                      <p className="text-[10px] uppercase tracking-wider text-subtle">
                         {npc.assignedZoneId ? `Zona ${npc.assignedZoneId.padStart(2, "0")}` : "Sin asignar"}
                       </p>
                       <p className="mt-1 flex flex-wrap gap-x-3 text-[11px] tabular-nums text-zinc-400">

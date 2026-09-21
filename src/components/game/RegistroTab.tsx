@@ -170,7 +170,7 @@ export function RegistroTab() {
     <div className="flex flex-col gap-3">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <p className="px-1 text-[10px] uppercase tracking-[0.25em] text-zinc-500">
+        <p className="px-1 text-[10px] uppercase tracking-[0.25em] text-subtle">
           📋 Registro de prueba · {state.log.length} eventos
         </p>
         <div className="flex gap-1.5">
@@ -200,31 +200,31 @@ export function RegistroTab() {
           Estado del jugador
         </p>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
-          <div className="text-zinc-500">Zona actual</div>
+          <div className="text-faint">Zona actual</div>
           <div className="text-zinc-200">
             {String(state.currentZoneId).padStart(2, "0")} · {getZone(state.currentZoneId).name}
           </div>
-          <div className="text-zinc-500">EXP total</div>
+          <div className="text-faint">EXP total</div>
           <div className="text-zinc-200">{Math.round(state.expTotal)}</div>
-          <div className="text-zinc-500">Salud</div>
+          <div className="text-faint">Salud</div>
           <div className="text-zinc-200">{state.health}/{BALANCE.maxHealth}</div>
-          <div className="text-zinc-500">Dinero</div>
+          <div className="text-faint">Dinero</div>
           <div className="text-green-400">${Math.floor(state.resources.dinero)}</div>
-          <div className="text-zinc-500">Energía</div>
+          <div className="text-faint">Energía</div>
           <div className="text-zinc-200">{Math.floor(energy)}/{BALANCE.maxEnergy}</div>
-          <div className="text-zinc-500">Próxima regen</div>
+          <div className="text-faint">Próxima regen</div>
           <div className="text-zinc-200">{nextRegenMin} min</div>
-          <div className="text-zinc-500">Materiales</div>
+          <div className="text-faint">Materiales</div>
           <div className="text-zinc-200">{Math.floor(state.resources.materiales)}</div>
-          <div className="text-zinc-500">Comida</div>
+          <div className="text-faint">Comida</div>
           <div className="text-zinc-200">{Math.floor(state.foodMin)} min</div>
-          <div className="text-zinc-500">Agua</div>
+          <div className="text-faint">Agua</div>
           <div className="text-zinc-200">{Math.floor(state.waterMin)} min</div>
-          <div className="text-zinc-500">Medicamentos</div>
+          <div className="text-faint">Medicamentos</div>
           <div className="text-zinc-200">{Math.floor(state.resources.medicamentos)}</div>
-          <div className="text-zinc-500">Componentes</div>
+          <div className="text-faint">Componentes</div>
           <div className="text-zinc-200">{Math.floor(state.resources.componentes)}</div>
-          <div className="text-zinc-500">NPC</div>
+          <div className="text-faint">NPC</div>
           <div className="text-zinc-200">{state.npcs.length} obtenidos</div>
         </div>
       </section>
@@ -235,15 +235,15 @@ export function RegistroTab() {
           Exploraciones
         </p>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
-          <div className="text-zinc-500">Manuales</div>
+          <div className="text-faint">Manuales</div>
           <div className="text-zinc-200">{state.manualExplorationsDone ?? 0}</div>
-          <div className="text-zinc-500">Automáticas</div>
+          <div className="text-faint">Automáticas</div>
           <div className="text-zinc-200">{autoDone}</div>
-          <div className="text-zinc-500">Totales</div>
+          <div className="text-faint">Totales</div>
           <div className="text-zinc-200">{state.explorationsDone ?? 0}</div>
-          <div className="text-zinc-500">Desde último NPC</div>
+          <div className="text-faint">Desde último NPC</div>
           <div className="text-zinc-200">{state.explorationsSinceLastNPC ?? 0}</div>
-          <div className="text-zinc-500">Próximo ID</div>
+          <div className="text-faint">Próximo ID</div>
           <div className="text-zinc-200">#{state.nextExplorationId ?? 1}</div>
         </div>
       </section>
@@ -268,7 +268,7 @@ export function RegistroTab() {
               );
             })
           ) : (
-            <p className="text-[10px] text-zinc-600">Sin exploraciones activas</p>
+            <p className="text-[10px] text-subtle">Sin exploraciones activas</p>
           )}
           {Object.keys(state.autoFarms ?? {}).map(Number).filter((zid) => state.autoFarms[zid]).map((zid) => {
             const run = state.autoFarms[zid]!;
@@ -310,7 +310,7 @@ export function RegistroTab() {
                     {npc.id}
                   </span>
                   <span className="text-zinc-300">{npc.name}</span>
-                  <span className="text-zinc-600">«{npc.alias}»</span>
+                  <span className="text-subtle">«{npc.alias}»</span>
                   <span
                     className="ml-auto rounded-sm px-1 text-[8px] font-bold uppercase"
                     style={{ color: typeInfo.color }}
@@ -322,7 +322,7 @@ export function RegistroTab() {
                       "rounded-sm px-1 text-[8px] font-bold",
                       npc.assignedZoneId
                         ? "bg-green-900/40 text-green-400"
-                        : "bg-zinc-800 text-zinc-600",
+                        : "bg-zinc-800 text-subtle",
                     )}
                   >
                     {zone}
@@ -356,7 +356,7 @@ export function RegistroTab() {
                 "rounded-sm px-2 py-1 text-[9px] font-bold uppercase tracking-widest transition-colors",
                 channelFilter === opt.key
                   ? "bg-green-600/90 text-black"
-                  : "text-zinc-500 hover:text-zinc-300",
+                  : "text-subtle hover:text-zinc-300",
               )}
             >
               {opt.label}
@@ -371,11 +371,11 @@ export function RegistroTab() {
               return ch === channelFilter;
             });
             if (filtered.length === 0) {
-              return <p className="text-zinc-600">Sin eventos en este canal</p>;
+              return <p className="text-subtle">Sin eventos en este canal</p>;
             }
             return filtered.map((e, i) => (
               <div key={i} className="flex gap-2 border-b border-zinc-900 py-0.5">
-                <span className="shrink-0 text-zinc-600">[{fmtTs(e.t)}]</span>
+                <span className="shrink-0 text-subtle">[{fmtTs(e.t)}]</span>
                 <span
                   className={
                     e.channel === "narr"
