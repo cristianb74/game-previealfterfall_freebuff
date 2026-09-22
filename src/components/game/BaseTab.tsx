@@ -4,6 +4,7 @@ import { Progress } from "@/components/ui/progress";
 import { HUD } from "@/components/game/HUD";
 import { useGame } from "@/game/GameProvider";
 import {
+  activeConstructionsInZone,
   BUILDING_BY_KEY,
   buildingBonus,
   buildingUpgradeCost,
@@ -23,6 +24,40 @@ function fmtCountdown(ms: number): string {
   const m = Math.floor(totalSec / 60);
   const s = totalSec % 60;
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+/** Shared cost breakdown: "need icon (have)" rows — green/amber when the
+ *  player can afford it, red when short. Used by core and exclusive cards. */
+function CostBreakdown({
+  cost,
+  tone,
+}: {
+  cost: { materiales: number; componentes: number };
+  tone: "green" | "amber";
+}) {
+  const { state } = useGame();
+  if (!state) return null;
+  const toneClass = tone === "green" ? "text-green-500" : "text-amber-400";
+  return (
+    <div className="flex flex-col items-end gap-0.5">
+      {(["materiales", "componentes"] as const).map((rKey) => {
+        const have = Math.floor(state.resources[rKey]);
+        const need = cost[rKey];
+        return (
+          <span
+            key={rKey}
+            className={cn(
+              "flex items-center gap-1 font-mono text-[10px] font-bold tabular-nums",
+              have >= need ? toneClass : "text-red-400",
+            )}
+          >
+            {need} {RESOURCE_META[rKey].icon}
+            <span className="text-[9px] font-normal text-subtle">({have})</span>
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 const BUILDING_ORDER: BuildingKey[] = [
@@ -46,6 +81,11 @@ export function BaseTab() {
   const zoneId = state.currentZoneId;
   const zoneState = state.zones[zoneId];
   const zoneDef = getZone(zoneId);
+
+  // Per-zone construction quota (core + exclusive buildings share it).
+  // When the zone is busy, new upgrades are blocked — cards must show it.
+  const zoneBusy =
+    activeConstructionsInZone(zoneState) >= BALANCE.maxConcurrentConstructionsPerZone;
 
   // Zone-exclusive building (host zones only).
   const exclDef = EXCLUSIVE_BUILDING_BY_ZONE[zoneId];
@@ -95,7 +135,14 @@ export function BaseTab() {
 
       {/* Exclusive building (host zones only) */}
       {exclDef && excl && (
-        <section className="rounded-lg border border-amber-900/50 bg-[#12100c] p-3">
+        <section
+          className={cn(
+            "rounded-lg border bg-[#12100c] p-3",
+            !exclBusy && zoneBusy
+              ? "border-amber-900/30 opacity-50"
+              : "border-amber-900/50",
+          )}
+        >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -114,6 +161,11 @@ export function BaseTab() {
                 <span className="rounded-sm bg-amber-950/60 px-1 text-[8px] font-bold uppercase tracking-wider text-amber-500">
                   Exclusivo Z{String(zoneId).padStart(2, "0")}
                 </span>
+                {!exclBusy && zoneBusy && (
+                  <span className="rounded-sm bg-amber-950/60 px-1 text-[8px] font-bold uppercase tracking-wider text-amber-500">
+                    Zona ocupada
+                  </span>
+                )}
               </div>
               <p className="mt-1 text-[11px] leading-4 text-subtle">{exclDef.description}</p>
               <p className="mt-1 text-[10px] uppercase tracking-wider text-subtle">
@@ -136,20 +188,27 @@ export function BaseTab() {
                 </span>
               ) : exclMaxed ? (
                 <span className="text-[10px] font-bold uppercase text-amber-600">Máx</span>
+              ) : zoneBusy ? (
+                <span className="text-[8px] font-bold uppercase tracking-wider text-amber-500">
+                  Zona ocupada
+                </span>
               ) : (
-                <Button
-                  size="sm"
-                  disabled={!exclAfford}
-                  onClick={() => upgradeExclusiveBuilding(zoneId)}
-                  className="border border-amber-500/40 bg-amber-600/90 font-bold uppercase tracking-wider text-black hover:bg-amber-500"
-                >
-                  <span className="block text-[10px] leading-tight">
-                    Mejorar
-                    <span className="block font-mono text-[9px] font-bold opacity-80">
-                      {exclMinutes} min
+                <div className="flex flex-col items-end gap-1.5">
+                  <CostBreakdown cost={exclCost} tone="amber" />
+                  <Button
+                    size="sm"
+                    disabled={!exclAfford}
+                    onClick={() => upgradeExclusiveBuilding(zoneId)}
+                    className="border border-amber-500/40 bg-amber-600/90 font-bold uppercase tracking-wider text-black hover:bg-amber-500"
+                  >
+                    <span className="block text-[10px] leading-tight">
+                      Mejorar
+                      <span className="block font-mono text-[9px] font-bold opacity-80">
+                        {exclMinutes} min
+                      </span>
                     </span>
-                  </span>
-                </Button>
+                  </Button>
+                </div>
               )}
             </div>
           </div>
@@ -166,6 +225,10 @@ export function BaseTab() {
             prevKey === null ||
             (zoneState.buildings[prevKey]?.level ?? 0) >= 1;
           const busy = b.upgradeFinishAt != null;
+          // Zone at construction quota: block visually too (not when THIS
+          // building is the one constructing — countdown still shows).
+          const quotaBlocked = zoneBusy && !busy;
+          const shownAvailable = available && !quotaBlocked;
           const remaining = busy ? (b.upgradeFinishAt as number) - vnow() : 0;
           const cost = buildingUpgradeCost(b.level);
           const maxed = b.level >= BALANCE.buildingMaxLevel;
@@ -180,7 +243,7 @@ export function BaseTab() {
               key={key}
               className={cn(
                 "rounded-lg border bg-[#101213] p-3",
-                available
+                shownAvailable
                   ? "border-zinc-800"
                   : "border-zinc-800/50 opacity-50",
               )}
@@ -207,6 +270,11 @@ export function BaseTab() {
                         No disponible aquí
                       </span>
                     )}
+                    {available && quotaBlocked && (
+                      <span className="rounded-sm bg-amber-950/60 px-1 text-[8px] font-bold uppercase tracking-wider text-amber-500">
+                        Zona ocupada
+                      </span>
+                    )}
                   </div>
                   <p className="mt-1 text-[11px] leading-4 text-subtle">
                     {def.description}
@@ -225,7 +293,7 @@ export function BaseTab() {
                   </p>
                 </div>
 
-                {available && (
+                {shownAvailable && (
                   <div className="shrink-0 text-right">
                     {busy ? (
                       <div className="flex flex-col items-end gap-1">
@@ -249,37 +317,7 @@ export function BaseTab() {
                       </span>
                     ) : (
                       <div className="flex flex-col items-end gap-1.5">
-                        <div className="flex flex-col items-end gap-0.5">
-                          {(
-                            [
-                              {
-                                key: "materiales" as const,
-                                need: cost.materiales,
-                                have: Math.floor(state.resources.materiales),
-                              },
-                              {
-                                key: "componentes" as const,
-                                need: cost.componentes,
-                                have: Math.floor(state.resources.componentes),
-                              },
-                            ] as const
-                          ).map(({ key: rKey, need, have }) => (
-                            <span
-                              key={rKey}
-                              className={cn(
-                                "flex items-center gap-1 font-mono text-[10px] font-bold tabular-nums",
-                                have >= need
-                                  ? "text-green-500"
-                                  : "text-red-400",
-                              )}
-                            >
-                              {need} {RESOURCE_META[rKey].icon}
-                              <span className="text-[9px] font-normal text-subtle">
-                                ({have})
-                              </span>
-                            </span>
-                          ))}
-                        </div>
+                        <CostBreakdown cost={cost} tone="green" />
                         <Button
                           size="sm"
                           disabled={!canAfford}
