@@ -28,6 +28,15 @@ export function regenCycleMs(state: GameState): number {
  * mid-cycle), so the UI countdown stays accurate.
  */
 export function applyEnergyRegen(state: GameState, now = Date.now()): number {
+  // While at max, nothing can be accrued — keep the regen anchor tracking
+  // the clock. Otherwise the anchor freezes at the moment energy hit the
+  // cap and phantom "pending" points pile up: currentEnergy adds them on
+  // top of the capped value (display stuck at max) and spendEnergy's
+  // deduction (24 → 23) gets masked by that same pending amount.
+  if (state.resources.energia >= BALANCE.maxEnergy) {
+    state.lastEnergyRegenAt = now;
+    return 0;
+  }
   const msPerPoint = regenCycleMs(state);
   let elapsed = Math.max(0, now - state.lastEnergyRegenAt);
   let gained = 0;
