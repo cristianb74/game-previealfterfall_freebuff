@@ -20,6 +20,7 @@ import {
   setSpeedMultiplier,
   getSpeedMultiplier,
   tickVirtualClock,
+  rebaseToRealTime,
   resetVirtualClock,
   type SpeedMultiplier,
 } from "@/game/virtualClock";
@@ -184,7 +185,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setState(next);
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
-      void saveGame(next);
+      // Persist the LIVE state normalized to the real timeline: saved
+      // timestamps must stay comparable with Date.now() (offline progress,
+      // cloud "newest wins") even while x2/x4 is active.
+      const live = stateRef.current ?? next;
+      rebaseToRealTime(live);
+      void saveGame(live);
       scheduleCloudPush();
     }, 400);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -197,6 +203,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     cloudPushTimer.current = window.setTimeout(() => {
       const s = stateRef.current;
       if (!s || !cloudConnected) return;
+      rebaseToRealTime(s); // push real-timeline timestamps
       // Skip if nothing changed since the last push.
       if (s.lastTickAt <= lastPushedAt.current) return;
       lastPushedAt.current = s.lastTickAt;
@@ -245,6 +252,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (!cloudConnected) return;
     const s = stateRef.current;
     if (!s) return;
+    rebaseToRealTime(s);
     if (lastPushedAt.current === 0) {
       lastPushedAt.current = s.lastTickAt;
       void pushCloudSave(s).then(() => setLastSyncAt(Date.now()));
@@ -263,6 +271,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setCloudSyncing(true);
     try {
       if (cloudPushTimer.current) window.clearTimeout(cloudPushTimer.current);
+      rebaseToRealTime(s); // save & compare on the real timeline
       await saveGame(s);
       const result = await pullCloudSave();
       if (result.kind === "restored") {
@@ -350,6 +359,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (!cloudConnected) return;
     const s = stateRef.current;
     if (!s) return;
+    rebaseToRealTime(s);
     if (s.lastTickAt > lastPushedAt.current) {
       lastPushedAt.current = s.lastTickAt;
       void pushCloudSave(s).then(() => setLastSyncAt(Date.now()));
@@ -363,8 +373,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const s = stateRef.current;
       if (!s) return;
       // Virtual session clock: accumulate fast-forward (x2/x4) from real
-      // elapsed time, then run the whole simulation on virtual time.
+      // elapsed time, then fold the accumulated lead into the state (a
+      // uniform, exact shift) so the whole tick — and every save it
+      // triggers — runs on the REAL timeline. The tick delta still equals
+      // realΔ × multiplier, so the speedup is fully preserved.
       tickVirtualClock();
+      rebaseToRealTime(s);
       const now = vnow();
       const energyBefore = Math.floor(s.resources.energia);
       const gained = applyEnergyRegen(s, now);
@@ -469,7 +483,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onHide = () => {
       const s = stateRef.current;
-      if (s) void saveGame(s);
+      if (s) {
+        rebaseToRealTime(s);
+        void saveGame(s);
+      }
     };
     const onVis = () => {
       if (document.hidden) onHide();
@@ -691,6 +708,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       stateRef.current = s;
       setHasSaveFile(true);
       setScreen("zonas");
+      rebaseToRealTime(s); // persist the new account on the real timeline
       await saveGame(s);
     },
     [],
