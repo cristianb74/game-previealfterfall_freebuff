@@ -157,7 +157,7 @@ export function ZonasTab() {
           );
 
           return (
-            <div key={z.id} className="flex flex-col gap-1">
+            <div key={z.id} className="flex h-[202px] flex-col gap-1 sm:h-[218px]">
               <button
                 onDoubleClick={() => {
                   if (!unlocked) return;
@@ -180,7 +180,7 @@ export function ZonasTab() {
                   }
                 }}
                 className={cn(
-                  "group relative overflow-hidden rounded-lg border text-left transition-colors",
+                  "group relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border text-left transition-colors",
                   isCurrent
                     ? "border-green-500/70"
                     : unlocked
@@ -188,7 +188,7 @@ export function ZonasTab() {
                       : "border-zinc-800/60 opacity-45",
                 )}
               >
-                <div className="relative h-20 w-full sm:h-24">
+                <div className="relative h-20 w-full shrink-0 sm:h-24">
                   <img
                     src={zoneImage(z.id)}
                     alt={z.name}
@@ -231,11 +231,11 @@ export function ZonasTab() {
                     />
                   )}
                 </div>
-                <div className="p-2">
-                  <p className="truncate text-[11px] font-bold text-zinc-200">
+                <div className="flex min-h-0 flex-1 flex-col p-2">
+                  <p className="truncate text-[11px] font-bold leading-[14px] text-zinc-200">
                     {z.name}
                   </p>
-                  <p className="text-[9px] uppercase tracking-wider text-subtle">
+                  <p className="truncate text-[9px] uppercase leading-[12px] tracking-wider text-subtle">
                     {unlocked
                       ? `${z.explorationMinutes} min · +${z.playerExpReward} EXP`
                       : expReady
@@ -243,36 +243,47 @@ export function ZonasTab() {
                         : `🔒 ${z.unlockExp.toLocaleString("es")} EXP`}
                   </p>
 
-                  {/* Construction status indicator */}
-                  {unlocked && activeBuildings.length > 0 && (
-                    <div className="mt-1.5 rounded-sm border border-amber-800/40 bg-amber-950/50 px-1.5 py-1">
-                      <p className="text-[8px] font-bold uppercase tracking-wider text-amber-500">
-                        🔨 Construyendo
-                      </p>
-                      <p className="text-[10px] font-bold tabular-nums text-amber-300">
-                        {activeBuildings[0].name} N{activeBuildings[0].level}{" "}
-                        <span className="font-mono text-amber-400">
-                          {fmtCountdown(activeBuildings[0].remaining)}
-                        </span>
-                      </p>
-                      {activeBuildings.length > 1 && (
-                        <p className="text-[8px] text-amber-600">
-                          +{activeBuildings.length - 1} construcción
-                          {activeBuildings.length - 1 > 1 ? "es" : ""} activa
-                          {activeBuildings.length - 1 > 1 ? "s" : ""}
+                  {/* Construction status slot: always reserves the same
+                      space (44px + margin) so the presence or absence of
+                      the "Construyendo" bar never shifts the card size. */}
+                  <div
+                    className={cn(
+                      "mt-1.5 h-11 shrink-0 overflow-hidden rounded-sm px-1.5 py-1",
+                      unlocked && activeBuildings.length > 0
+                        ? "border border-amber-800/40 bg-amber-950/50"
+                        : "invisible border border-transparent",
+                    )}
+                  >
+                    {activeBuildings.length > 0 && (
+                      <>
+                        <p className="text-[8px] font-bold uppercase leading-[11px] tracking-wider text-amber-500">
+                          🔨 Construyendo
                         </p>
-                      )}
-                    </div>
-                  )}
+                        <p className="text-[10px] font-bold leading-[14px] tabular-nums text-amber-300">
+                          {activeBuildings[0].name} N{activeBuildings[0].level}{" "}
+                          <span className="font-mono text-amber-400">
+                            {fmtCountdown(activeBuildings[0].remaining)}
+                          </span>
+                        </p>
+                        {activeBuildings.length > 1 && (
+                          <p className="text-[8px] leading-[11px] text-amber-600">
+                            +{activeBuildings.length - 1} construcción
+                            {activeBuildings.length - 1 > 1 ? "es" : ""} activa
+                            {activeBuildings.length - 1 > 1 ? "s" : ""}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
               </button>
 
-              {unlocked && (
+              {unlocked ? (
                 <button
                   type="button"
                   onClick={() => toggleAutoExplore(z.id)}
                   className={cn(
-                    "flex items-center justify-between rounded-md border px-2 py-1 text-left transition-colors",
+                    "flex h-[26px] shrink-0 items-center justify-between rounded-md border px-2 text-left transition-colors",
                     autoEnabled
                       ? "border-green-700/60 bg-green-950/30"
                       : "border-zinc-800/60 bg-[#0d0f10] hover:border-zinc-700",
@@ -305,6 +316,8 @@ export function ZonasTab() {
                     />
                   </span>
                 </button>
+              ) : (
+                <div className="h-[26px] shrink-0" aria-hidden />
               )}
             </div>
           );
