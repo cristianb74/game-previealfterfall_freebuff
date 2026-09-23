@@ -23,6 +23,7 @@ function SurvivalBar({
   display,
   color,
   danger,
+  action,
 }: {
   label: string;
   value: number;
@@ -30,6 +31,8 @@ function SurvivalBar({
   display: string;
   color: string;
   danger?: boolean;
+  /** Optional always-rendered slot (e.g. USAR MEDICINA) so the HUD height never shifts. */
+  action?: React.ReactNode;
 }) {
   const pct = Math.max(0, Math.min(100, (value / max) * 100));
   return (
@@ -46,6 +49,7 @@ function SurvivalBar({
           style={{ width: `${pct}%`, backgroundColor: color }}
         />
       </div>
+      {action ?? null}
     </div>
   );
 }
@@ -55,7 +59,7 @@ function nextLockedZone(state: GameState) {
 }
 
 export function HUD() {
-  const { state, setScreen, speedMultiplier } = useGame();
+  const { state, setScreen, speedMultiplier, useMedicine } = useGame();
   if (!state) return null;
   const now = vnow();
   const energy = currentEnergy(state, now);
@@ -65,6 +69,9 @@ export function HUD() {
   const nextRegenMMSS = `${String(Math.floor(msUntilNext / 60000)).padStart(2, "0")}:${String(Math.floor((msUntilNext % 60000) / 1000)).padStart(2, "0")}`;
   const nextZone = nextLockedZone(state);
   const assigned = state.npcs.filter((n) => n.assignedZoneId).length;
+  const meds = Math.floor(state.resources.medicamentos);
+  const canHeal = meds >= 1 && state.health < BALANCE.maxHealth;
+  const medicineHint = meds < 1 ? "Sin medicamentos" : state.health >= BALANCE.maxHealth ? "Salud completa" : "Usar 1 medicina · +1 Salud";
 
   const expForNext = nextZone ? nextZone.unlockExp : state.expTotal;
   const prevUnlock = nextZone
@@ -131,6 +138,22 @@ export function HUD() {
             display={`${Math.round(state.health)}/100`}
             color={state.health < 30 ? "#ef4444" : "#e4e4e7"}
             danger={state.health < 30}
+            action={
+              <button
+                type="button"
+                onClick={useMedicine}
+                disabled={!canHeal}
+                title={medicineHint}
+                className={cn(
+                  "flex h-5 w-full cursor-pointer items-center justify-center gap-1 rounded-sm border text-[9px] font-bold uppercase tracking-wider transition-colors",
+                  canHeal
+                    ? "border-red-500/50 bg-red-950/40 text-red-300 hover:bg-red-900/50 hover:text-red-200 active:bg-red-900/60"
+                    : "cursor-not-allowed border-zinc-800 bg-black/20 text-zinc-600",
+                )}
+              >
+                ✚ Usar medicina · {meds}
+              </button>
+            }
           />
         </div>
 

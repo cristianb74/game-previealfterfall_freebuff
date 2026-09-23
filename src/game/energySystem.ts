@@ -4,7 +4,8 @@ import type { GameState } from "./types";
 
 // ============================================================
 // AFTERFALL — energy. Max 24, regenerates in discrete +1 blocks
-// every 15 minutes using a persistent reference timestamp.
+// every BALANCE.energyRegenMinutesPerPoint minutes using a persistent
+// reference timestamp.
 // lastEnergyRegenAt only advances when a full point is earned,
 // so the UI countdown (nextRegenAt - Date.now()) ticks down
 // correctly and survives tab switches / backgrounding.
@@ -24,7 +25,7 @@ export function regenCycleMs(state: GameState): number {
 /**
  * Advance energy by discrete +1 blocks. Returns the number of
  * whole points gained. Only mutates state when points are earned;
- * lastEnergyRegenAt advances in fixed 15-min steps (never to `now`
+ * lastEnergyRegenAt advances in fixed regen-cycle steps (never to `now`
  * mid-cycle), so the UI countdown stays accurate.
  */
 export function applyEnergyRegen(state: GameState, now = Date.now()): number {
@@ -75,7 +76,7 @@ export function canExplore(state: GameState, now = Date.now()): boolean {
 /**
  * Spend 1 energy point. Settles pending regen first (so no earned
  * point is lost), then deducts. Advances lastEnergyRegenAt to `now`
- * only when energy is spent, anchoring the next 15-min cycle to
+ * only when energy is spent, anchoring the next regen cycle to
  * the moment of the last spend (or the last earned point).
  */
 export function spendEnergy(state: GameState, amount = 1, now = Date.now()): void {
@@ -83,4 +84,5 @@ export function spendEnergy(state: GameState, amount = 1, now = Date.now()): voi
   state.resources.energia = Math.max(0, state.resources.energia - amount);
   // Anchor next cycle: if energy is now depleted, the countdown starts fresh from now
   // If energy remains, the reference stays where it was (countdown continues naturally).
+  // (Regen cycle length comes from BALANCE.energyRegenMinutesPerPoint.)
 }

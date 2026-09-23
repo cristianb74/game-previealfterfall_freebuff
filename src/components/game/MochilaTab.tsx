@@ -28,12 +28,11 @@ const UNIT_KEYS: ResourceKey[] = ["materiales", "medicamentos", "componentes", "
 function buildingHint(key: ResourceKey): string | null {
   if (key === "materiales") return "Construcciones";
   if (key === "componentes") return "Construcciones";
-  if (key === "medicamentos") return "Usar medicina (+1 Salud)";
   return null;
 }
 
 export function MochilaTab() {
-  const { state } = useGame();
+  const { state, useMedicine } = useGame();
   const [, force] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => force((v) => v + 1), 1000);
@@ -94,18 +93,37 @@ export function MochilaTab() {
             const meta = RESOURCE_META[key];
             const value = Math.floor(state.resources[key]);
             const hint = buildingHint(key);
+            const isMedicine = key === "medicamentos";
+            const canHeal = isMedicine && value >= 1 && state.health < BALANCE.maxHealth;
             return (
               <div key={key} className="flex flex-col gap-0.5 rounded-sm border border-white/5 bg-black/40 px-3 py-2">
                 <span className="text-base">{meta.icon}</span>
                 <p className="text-2xl font-black tabular-nums text-zinc-100">{value.toLocaleString("es")}</p>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">{meta.label}</p>
-                {hint && <p className="text-[9px] text-subtle">{hint}</p>}
+                {isMedicine ? (
+                  <button
+                    type="button"
+                    onClick={useMedicine}
+                    disabled={!canHeal}
+                    title={canHeal ? "Usa 1 Medicamento · +1 Salud" : value < 1 ? "Sin medicamentos" : "Salud completa"}
+                    className={cn(
+                      "mt-0.5 flex h-6 cursor-pointer items-center justify-center rounded-sm border text-[9px] font-bold uppercase tracking-wider transition-colors",
+                      canHeal
+                        ? "border-red-500/50 bg-red-950/40 text-red-300 hover:bg-red-900/50 hover:text-red-200 active:bg-red-900/60"
+                        : "cursor-not-allowed border-zinc-800 bg-black/20 text-zinc-600",
+                    )}
+                  >
+                    ✚ Usar medicina
+                  </button>
+                ) : (
+                  hint && <p className="text-[9px] text-subtle">{hint}</p>
+                )}
               </div>
             );
           })}
         </div>
         <p className="mt-2 text-[10px] text-subtle">
-          ⚡ Energía: {Math.floor(state.resources.energia)}/24 · regenera 1 cada {BALANCE.energyRegenMinutesPerPoint} min, incluso con la app cerrada.
+          ⚡ Energía: {Math.floor(state.resources.energia)}/{BALANCE.maxEnergy} · regenera 1 cada {BALANCE.energyRegenMinutesPerPoint} min, incluso con la app cerrada.
         </p>
       </section>
 
