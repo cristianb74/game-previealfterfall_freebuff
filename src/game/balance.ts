@@ -123,6 +123,14 @@ export const BALANCE = {
   buildingCostMaterialPerLevel: 3,
   buildingCostComponentBase: 1,
   buildingCostComponentPerLevel: 1.5,
+  /** Zone-thematic buildings: bonus per level (LOCAL to their zone).
+   *  Same curve as core buildings — their extra power comes from stacking
+   *  with the global base bonus on the zone's focus resource. */
+  thematicBonusPerLevel: 0.05,
+  /** Max simultaneous constructions in the GLOBAL base (core buildings).
+   *  Separate quota from the per-zone thematic one. Only gates NEW
+   *  upgrades; existing runs finish normally. */
+  maxConcurrentConstructionsInBase: 1,
 
   /** Unlock thresholds are derived from zone definitions (see zones.ts). */
   zoneUnlockToastLabel: "NUEVA ZONA DESBLOQUEADA",
@@ -186,6 +194,11 @@ export const MERCHANT_SELL_PRICES: Partial<Record<ResourceKey, { amount: number;
   comida: { amount: 30, price: 7, label: "Vender 30 min Comida" },
   agua: { amount: 30, price: 7, label: "Vender 30 min Agua" },
 };
+
+/** Save migration (v1→v2): duplicate core-building levels collapsed into
+ *  the global base are refunded at this factor of their cumulative cost
+ *  (1 = full refund, nothing the player paid is lost). */
+export const migrationRefundFactor = 1.0;
 
 /** Merchant battery: +energy on purchase. Not a ResourceKey — goes through
  *  gainEnergy() to respect the regen system invariants (see energySystem.ts).

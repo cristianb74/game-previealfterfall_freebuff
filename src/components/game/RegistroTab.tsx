@@ -5,7 +5,7 @@ import { NPC_TYPE_MODIFIERS } from "@/game/npcTypes";
 import { vnow } from "@/game/virtualClock";
 import { GAME_INFO } from "@/game/gameConfig";
 import { BALANCE } from "@/game/balance";
-import { BUILDING_BY_KEY, buildingBonus } from "@/game/buildings";
+import { BUILDING_BY_KEY, buildingBonus, THEMATIC_BY_KEY, thematicBonus } from "@/game/buildings";
 import { currentEnergy, nextEnergyRegenAt } from "@/game/energySystem";
 import type { BuildingKey } from "@/game/types";
 
@@ -104,17 +104,31 @@ export function RegistroTab() {
       lines.push(`${npc.id} · ${npc.name} «${npc.alias}» · ${typeInfo.label} · ${zone} · Esp: ${npc.specialization}`);
     }
     lines.push("");
-    lines.push("--- CONSTRUCCIONES POR ZONA ---");
+    lines.push("--- BASE GLOBAL (comunes · aplican en todas las zonas) ---");
+    {
+      const builds: string[] = [];
+      for (const key of BUILDING_ORDER) {
+        const b = state.base?.[key];
+        const def = BUILDING_BY_KEY[key];
+        if (b && (b.level > 0 || b.upgradeFinishAt)) {
+          const bonus = Math.round(buildingBonus(b.level) * 100);
+          builds.push(`${def.name} N${b.level} (+${bonus}%)${b.upgradeFinishAt ? " [construyendo...]" : ""}`);
+        }
+      }
+      lines.push(builds.length > 0 ? builds.join(" · ") : "Sin construcciones aún");
+    }
+    lines.push("");
+    lines.push("--- INSTALACIONES POR ZONA (temáticos · solo su zona) ---");
     for (const zid of Object.keys(state.zones).map(Number).sort((a, b) => a - b)) {
       const zs = state.zones[zid];
       const zone = getZone(zid);
       const builds: string[] = [];
-      for (const key of BUILDING_ORDER) {
-        const b = zs.buildings[key];
-        const def = BUILDING_BY_KEY[key];
+      for (const key of Object.keys(zs.thematic ?? {})) {
+        const b = zs.thematic[key];
+        const def = THEMATIC_BY_KEY[key];
         if (b.level > 0 || b.upgradeFinishAt) {
-          const bonus = Math.round(buildingBonus(b.level) * 100);
-          builds.push(`${def.name} N${b.level} (+${bonus}%)${b.upgradeFinishAt ? " [construyendo...]" : ""}`);
+          const bonus = Math.round(thematicBonus(b.level) * 100);
+          builds.push(`${def?.name ?? key} N${b.level} (+${bonus}%)${b.upgradeFinishAt ? " [construyendo...]" : ""}`);
         }
       }
       if (builds.length > 0) {

@@ -168,7 +168,7 @@ export function PerfilTab() {
         <p>· Explora: gasta 1 ⚡ y gana EXP, recursos y a veces supervivientes.</p>
         <p>· Comida y Agua son tiempo de supervivencia; se consumen siempre, incluso cerrando la app.</p>
         <p>· Los NPC asignados a zonas producen solos (más débiles que tu exploración).</p>
-        <p>· Mejora edificios en cada zona para multiplicar los hallazgos de esa zona.</p>
+        <p>· La Base global (tab 🏗) mejora hallazgos en todas las zonas; las Instalaciones de cada zona (doble toque) solo benefician a su zona.</p>
         <p>· Alcanza EXP para desbloquear las 20 zonas hasta la Base Militar.</p>
       </section>
 

@@ -25,7 +25,7 @@
 // resets to x1 on reload.
 // ============================================================
 
-import type { BuildingKey, GameState } from "./types";
+import type { BuildingKey, GameState, ThematicBuildingKey } from "./types";
 
 export type SpeedMultiplier = 1 | 2 | 4;
 
@@ -99,15 +99,19 @@ function shiftStateTimestamps(state: GameState, leadMs: number): void {
       run.finishAt -= leadMs;
     }
   }
+  // Global base (core buildings).
+  for (const bKey of Object.keys(state.base ?? {}) as BuildingKey[]) {
+    const b = state.base?.[bKey];
+    if (b?.upgradeFinishAt != null) b.upgradeFinishAt -= leadMs;
+  }
+  // Per-zone thematic buildings.
   for (const key of Object.keys(state.zones)) {
     const zs = state.zones[Number(key)];
     if (!zs) continue;
-    for (const bKey of Object.keys(zs.buildings) as BuildingKey[]) {
-      const b = zs.buildings[bKey];
+    for (const bKey of Object.keys(zs.thematic ?? {}) as ThematicBuildingKey[]) {
+      const b = zs.thematic[bKey];
       if (b?.upgradeFinishAt != null) b.upgradeFinishAt -= leadMs;
     }
-    const excl = zs.exclusiveBuilding;
-    if (excl && excl.upgradeFinishAt != null) excl.upgradeFinishAt -= leadMs;
   }
   for (const npc of state.npcs) {
     npc.discoveredAt -= leadMs;

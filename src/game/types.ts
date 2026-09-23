@@ -28,7 +28,8 @@ export type ResourceMeta = {
 
 export type Stats = Record<StatKey, number>;
 
-/** One of the 6 core buildings, local to each zone. */
+/** One of the 6 core buildings — GLOBAL since save v2: a single shared
+ *  instance per character (GameState.base); its bonus applies in every zone. */
 export type BuildingKey =
   | "cocina"
   | "tanque"
@@ -37,12 +38,10 @@ export type BuildingKey =
   | "taller"
   | "generador";
 
-/** Zone-exclusive buildings (see buildings.ts for their host zones).
- *  Present only in the zones that host them; old saves get them via
- *  the save migration at level 0. */
-export type ExclusiveBuildingKey = "invernadero" | "perforadora" | "laboratorio" | "hormigonera";
-
-export type AnyBuildingKey = BuildingKey | ExclusiveBuildingKey;
+/** Zone-thematic building id (defs in buildings.ts). Includes the four
+ *  former "exclusive" keys (invernadero, laboratorio, perforadora,
+ *  hormigonera) unchanged, so old investments carry over untouched. */
+export type ThematicBuildingKey = string;
 
 export type NpcTypeCode = "B" | "G" | "A" | "R" | "D";
 
@@ -74,8 +73,8 @@ export interface NpcSurvivor {
 }
 
 export interface BuildingState {
-  /** Core or exclusive key (exclusiveBuilding uses an exclusive key). */
-  key: AnyBuildingKey;
+  /** Core key (GameState.base) or thematic id (zones[].thematic). */
+  key: BuildingKey | ThematicBuildingKey;
   level: number; // 0–10
   upgradeFinishAt: number | null; // absolute timestamp
 }
@@ -83,11 +82,10 @@ export interface BuildingState {
 export type ZoneStatus = "locked" | "unlocked";
 
 export interface ZoneProgressState {
-  buildings: Record<BuildingKey, BuildingState>;
-  /** Zone-exclusive building (only for zones that host one). Absent in
-   *  zones without an exclusive and in pre-migration saves until upgraded
-   *  — treat as level 0 when missing. */
-  exclusiveBuilding?: BuildingState;
+  /** Zone-thematic buildings (1–2 per zone). LOCAL: they only boost finds
+   *  in this zone. Old saves migrate here from buildings[] +
+   *  exclusiveBuilding (see saveSystem.migrate, SAVE_VERSION 2). */
+  thematic: Record<ThematicBuildingKey, BuildingState>;
   assignedNpcId: string | null;
 }
 
@@ -139,6 +137,9 @@ export interface GameState {
   nextExplorationId: number;
   /** Counter since last NPC discovery (for balanced spawn system). */
   explorationsSinceLastNPC: number;
+  /** GLOBAL core buildings (cocina, tanque, …): one shared instance per
+   *  character, bonus applies to every zone (SAVE_VERSION ≥ 2). */
+  base: Record<BuildingKey, BuildingState>;
   zones: Record<number, ZoneProgressState>;
   npcs: NpcSurvivor[];
   /** Per-NPC production accumulator timestamps (absolute ms). */
@@ -183,6 +184,7 @@ export type Screen =
   | "zonas"
   | "equipo"
   | "base"
+  | "instalaciones"
   | "mercader"
   | "mochila"
   | "perfil"

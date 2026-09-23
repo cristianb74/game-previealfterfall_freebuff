@@ -5,9 +5,9 @@ import { applyEnergyRegen } from "./energySystem";
 import { npcDisplayName } from "./npcData";
 import { explorationMinutesWithAgility } from "./statEffects";
 import { applySurvivalDrain } from "./survivalSystem";
-import { EXCLUSIVE_BUILDING_BY_ZONE } from "./buildings";
+import { BUILDING_BY_KEY, THEMATIC_BY_KEY } from "./buildings";
 import { RESOURCE_META } from "./resources";
-import type { GameState, LogEvent, ResourceKey } from "./types";
+import type { BuildingKey, GameState, LogEvent, ResourceKey } from "./types";
 
 // ============================================================
 // AFTERFALL — offline progression.
@@ -186,22 +186,26 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
   }
 
   // ---- Building completions while away ----
+  // GLOBAL base (core buildings).
+  for (const key of Object.keys(state.base ?? {}) as BuildingKey[]) {
+    const b = state.base?.[key];
+    if (b && b.upgradeFinishAt && settleMs >= b.upgradeFinishAt) {
+      b.level = Math.min(BALANCE.buildingMaxLevel, b.level + 1);
+      buildingsCompleted.push(`${BUILDING_BY_KEY[key].name} N${b.level}`);
+      b.upgradeFinishAt = null;
+    }
+  }
+  // Per-zone THEMATIC buildings.
   for (const zoneIdKey of Object.keys(state.zones)) {
     const z = state.zones[Number(zoneIdKey)];
-    for (const key of Object.keys(z.buildings)) {
-      const b = z.buildings[key as keyof typeof z.buildings];
+    for (const key of Object.keys(z.thematic ?? {})) {
+      const b = z.thematic[key];
       if (b && b.upgradeFinishAt && settleMs >= b.upgradeFinishAt) {
         b.level = Math.min(BALANCE.buildingMaxLevel, b.level + 1);
-        buildingsCompleted.push(`${key} N${b.level}`);
+        const def = THEMATIC_BY_KEY[key];
+        buildingsCompleted.push(`${def?.name ?? key} N${b.level}`);
         b.upgradeFinishAt = null;
       }
-    }
-    const excl = z.exclusiveBuilding;
-    if (excl && excl.upgradeFinishAt && settleMs >= excl.upgradeFinishAt) {
-      excl.level = Math.min(BALANCE.buildingMaxLevel, excl.level + 1);
-      const def = EXCLUSIVE_BUILDING_BY_ZONE[Number(zoneIdKey)];
-      buildingsCompleted.push(`${def?.name ?? excl.key} N${excl.level}`);
-      excl.upgradeFinishAt = null;
     }
   }
 
@@ -225,7 +229,7 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
         // cap runaway loops
         const cycles = Math.min(Math.floor(elapsed / cycleSec), 1440);
         for (let c = 0; c < cycles; c++) {
-          const find = rollNpcCycle(npc, zoneState, rnd);
+          const find = rollNpcCycle(npc, state, rnd);
           if (find) {
             if (find.resource === "comida") state.foodMin += find.amount;
             else if (find.resource === "agua") state.waterMin += find.amount;

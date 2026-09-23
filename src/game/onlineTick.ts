@@ -3,6 +3,8 @@ import { rollNpcCycle } from "./npcTypes";
 import { getZone } from "./zones";
 import { npcDisplayName } from "./npcData";
 import { applySurvivalDrain, hungerTier, thirstTier, TIER_META } from "./survivalSystem";
+import { BUILDING_BY_KEY, THEMATIC_BY_KEY } from "./buildings";
+import type { BuildingKey } from "./types";
 import { narrNpcFind, narrSurvivalWarn } from "./narrativeLog";
 import type { GameState, LogEvent, ResourceKey } from "./types";
 
@@ -22,15 +24,25 @@ function pushLog(log: LogEvent[], ev: LogEvent): void {
   if (log.length > 60) log.length = 60;
 }
 
-/** Settle a building upgrade whose finish timestamp has passed. */
+/** Settle building upgrades whose finish timestamps have passed: the
+ *  GLOBAL base (core) and every zone's THEMATIC buildings. */
 export function settleBuildings(state: GameState, now: number, completed: string[]): void {
+  for (const key of Object.keys(state.base ?? {}) as BuildingKey[]) {
+    const b = state.base?.[key];
+    if (b && b.upgradeFinishAt && now >= b.upgradeFinishAt) {
+      b.level = Math.min(BALANCE.buildingMaxLevel, b.level + 1);
+      completed.push(`${BUILDING_BY_KEY[key].name} N${b.level}`);
+      b.upgradeFinishAt = null;
+    }
+  }
   for (const zoneIdKey of Object.keys(state.zones)) {
     const z = state.zones[Number(zoneIdKey)];
-    for (const key of Object.keys(z.buildings)) {
-      const b = z.buildings[key as keyof typeof z.buildings];
+    for (const key of Object.keys(z.thematic ?? {})) {
+      const b = z.thematic[key];
       if (b && b.upgradeFinishAt && now >= b.upgradeFinishAt) {
         b.level = Math.min(BALANCE.buildingMaxLevel, b.level + 1);
-        completed.push(`${key} N${b.level} (Zona ${zoneIdKey})`);
+        const def = THEMATIC_BY_KEY[key];
+        completed.push(`${def?.name ?? key} N${b.level} (Zona ${zoneIdKey})`);
         b.upgradeFinishAt = null;
       }
     }
@@ -88,7 +100,7 @@ export function tickNpcs(state: GameState, now: number): TickChanges {
     cycles = Math.min(cycles, 120); // safety cap per tick
 
     for (let c = 0; c < cycles; c++) {
-      const find = rollNpcCycle(npc, zoneState, Math.random);
+      const find = rollNpcCycle(npc, state, Math.random);
       if (find) {
         if (find.resource === "comida") state.foodMin += find.amount;
         else if (find.resource === "agua") state.waterMin += find.amount;

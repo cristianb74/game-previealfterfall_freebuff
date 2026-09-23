@@ -6,7 +6,7 @@ import { BALANCE, STAT_RESOURCE, MERCHANT_SELL_PRICES, MERCHANT_BATTERY_OFFER } 
 import { getZone, frontierZoneId, ZONES } from "@/game/zones";
 import { NPC_BY_ID, npcDisplayName } from "@/game/npcData";
 import { NPC_TYPE_MODIFIERS, npcProductionMultiplier, npcZoneSpeedFactor } from "@/game/npcTypes";
-import { createInitialState, loadGame, saveGame, deleteSave } from "@/game/saveSystem";
+import { createInitialState, loadGame, saveGame, deleteSave, migrateV1ToV2 } from "@/game/saveSystem";
 import {
   setConvexClient,
   pullCloudSave,
@@ -41,9 +41,10 @@ import { rollExploration, npcChanceForCounter, discoverableNpcIds } from "@/game
 import {
   buildingUpgradeCost,
   buildingUpgradeMinutes,
-  activeConstructionsInZone,
+  activeConstructionsInBase,
+  activeThematicConstructions,
   BUILDING_BY_KEY,
-  EXCLUSIVE_BUILDING_BY_ZONE,
+  THEMATIC_BY_KEY,
 } from "@/game/buildings";
 import { SURVIVOR_MAX_ROLLS, generateSurvivorOptions, rollSurvivor } from "@/game/survivorGenerator";
 import { RESOURCE_META } from "@/game/resources";
@@ -102,9 +103,10 @@ export interface GameContextValue {
   assignNpc: (npcId: string, zoneId: number | null) => void;
   /** Recruit a candidate NPC into the shelter (pays the recruit cost). */
   recruitNpc: (npcId: string) => void;
-  upgradeBuilding: (zoneId: number, key: BuildingKey) => void;
-  /** Upgrade the zone-exclusive building of a host zone. */
-  upgradeExclusiveBuilding: (zoneId: number) => void;
+  /** Upgrade a GLOBAL core building (GameState.base). Shares one base quota. */
+  upgradeBaseBuilding: (key: BuildingKey) => void;
+  /** Upgrade a zone THEMATIC building (zones[].thematic). Per-zone quota. */
+  upgradeThematicBuilding: (zoneId: number, key: string) => void;
   useMedicine: () => void;
   buyResource: (key: ResourceKey, qty?: number) => void;
   /** Buy a battery (MERCHANT_BATTERY_OFFER): +energy, blocked if it does
@@ -230,7 +232,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           // Adopt the cloud state (offline progression is applied by the boot
           // flow on the next mount; here we simply take the newer copy).
           resetVirtualClock(); // cloud timeline is real time
-          const s = result.state;
+          const s = migrateV1ToV2(result.state); // cloud saves may predate v2
           const offline = applyOfflineProgress(s, Date.now());
           const next = offline.state;
           next.lastTickAt = Date.now();
@@ -279,7 +281,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const result = await pullCloudSave();
       if (result.kind === "restored") {
         resetVirtualClock(); // cloud timeline is real time
-        const next = result.state;
+        const next = migrateV1ToV2(result.state); // cloud saves may predate v2
         next.lastTickAt = Date.now();
         stateRef.current = next;
         setState(next);
@@ -306,7 +308,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const result = await pullCloudSave();
       if (result.kind === "restored") {
         resetVirtualClock(); // cloud timeline is real time
-        const offline = applyOfflineProgress(result.state, Date.now());
+        const offline = applyOfflineProgress(migrateV1ToV2(result.state), Date.now());
         const next = offline.state;
         next.lastTickAt = Date.now();
         stateRef.current = next;
@@ -450,27 +452,29 @@ export function GameProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // BUILDING COMPLETION: check every zone's buildings for finished upgrades.
+      // BUILDING COMPLETION: global base first, then per-zone thematic.
+      for (const key of Object.keys(s.base ?? {}) as BuildingKey[]) {
+        const b = s.base?.[key];
+        if (b && b.upgradeFinishAt && now >= b.upgradeFinishAt) {
+          b.level = Math.min(BALANCE.buildingMaxLevel, b.level + 1);
+          b.upgradeFinishAt = null;
+          pushLog(s, `Construcción completada: ${BUILDING_BY_KEY[key].name} → N${b.level} (Base global)`, "build");
+          narrBuildDone(s, BUILDING_BY_KEY[key].name, b.level);
+          dirty = true;
+        }
+      }
       for (const zid of Object.keys(s.zones).map(Number)) {
-        const zb = s.zones[zid].buildings;
-        for (const key of Object.keys(zb) as BuildingKey[]) {
-          const b = zb[key];
-          if (b.upgradeFinishAt && now >= b.upgradeFinishAt) {
+        const z = s.zones[zid];
+        for (const key of Object.keys(z.thematic ?? {})) {
+          const b = z.thematic[key];
+          if (b && b.upgradeFinishAt && now >= b.upgradeFinishAt) {
             b.level = Math.min(BALANCE.buildingMaxLevel, b.level + 1);
             b.upgradeFinishAt = null;
-            pushLog(s, `Construcción completada: ${BUILDING_BY_KEY[key].name} → N${b.level} (Z${String(zid).padStart(2, "0")})`, "build");
-            narrBuildDone(s, BUILDING_BY_KEY[key].name, b.level);
+            const def = THEMATIC_BY_KEY[key];
+            pushLog(s, `Construcción completada: ${def?.name ?? key} → N${b.level} (Z${String(zid).padStart(2, "0")})`, "build");
+            if (def) narrBuildDone(s, def.name, b.level);
             dirty = true;
           }
-        }
-        // Exclusive building completion (host zones only).
-        const excl = s.zones[zid].exclusiveBuilding;
-        if (excl && excl.upgradeFinishAt && now >= excl.upgradeFinishAt) {
-          excl.level = Math.min(BALANCE.buildingMaxLevel, excl.level + 1);
-          excl.upgradeFinishAt = null;
-          const def = EXCLUSIVE_BUILDING_BY_ZONE[zid];
-          pushLog(s, `Construcción completada: ${def?.name ?? excl.key} → N${excl.level} (Z${String(zid).padStart(2, "0")})`, "build");
-          dirty = true;
         }
       }
 
@@ -846,15 +850,49 @@ export function GameProvider({ children }: { children: ReactNode }) {
     [setAndSave],
   );
 
-  const upgradeBuilding = useCallback(
-    (zoneId: number, key: BuildingKey) => {
+  /** Upgrade a GLOBAL core building (GameState.base). One shared base quota;
+   *  availability gated by the gate zone of each core building. */
+  const upgradeBaseBuilding = useCallback(
+    (key: BuildingKey) => {
+      setAndSave((s) => {
+        const b = s.base?.[key];
+        if (!b || b.level >= BALANCE.buildingMaxLevel || b.upgradeFinishAt) return;
+        // Base concurrency quota (global, independent of zone quotas).
+        const active = activeConstructionsInBase(s.base);
+        if (active >= BALANCE.maxConcurrentConstructionsInBase) {
+          toast.error("Construcción en curso", {
+            description: `Límite de la base: ${BALANCE.maxConcurrentConstructionsInBase} · ${active} activa${active === 1 ? "" : "s"} ahora`,
+          });
+          return;
+        }
+        const cost = buildingUpgradeCost(b.level);
+        if (s.resources.materiales < cost.materiales || s.resources.componentes < cost.componentes) {
+          toast.error("Recursos insuficientes", {
+            description: `${cost.materiales} Materiales · ${cost.componentes} Componentes`,
+          });
+          return;
+        }
+        s.resources.materiales -= cost.materiales;
+        s.resources.componentes -= cost.componentes;
+        const minutes = buildingUpgradeMinutes(b.level);
+        b.upgradeFinishAt = vnow() + minutes * 60000;
+        pushLog(s, `Mejora iniciada: ${BUILDING_BY_KEY[key].name} N${b.level + 1} (Base global)`, "build");
+      });
+    },
+    [setAndSave],
+  );
+
+  /** Upgrade a zone THEMATIC building (local, zones[].thematic). */
+  const upgradeThematicBuilding = useCallback(
+    (zoneId: number, key: string) => {
       setAndSave((s) => {
         const z = s.zones[zoneId];
         if (!z) return;
-        const b = z.buildings[key];
-        if (!b || b.level >= BALANCE.buildingMaxLevel || b.upgradeFinishAt) return;
-        // Per-zone concurrency quota (core + exclusive share it).
-        const active = activeConstructionsInZone(z);
+        const b = z.thematic?.[key];
+        const def = THEMATIC_BY_KEY[key];
+        if (!b || !def || b.level >= BALANCE.buildingMaxLevel || b.upgradeFinishAt) return;
+        // Per-zone concurrency quota (thematic buildings share it).
+        const active = activeThematicConstructions(z);
         if (active >= BALANCE.maxConcurrentConstructionsPerZone) {
           toast.error("Construcción en curso", {
             description: `Límite: ${BALANCE.maxConcurrentConstructionsPerZone} por zona · ${active} activa${active === 1 ? "" : "s"} ahora`,
@@ -872,41 +910,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         s.resources.componentes -= cost.componentes;
         const minutes = buildingUpgradeMinutes(b.level);
         b.upgradeFinishAt = vnow() + minutes * 60000;
-        pushLog(s, `Mejora iniciada: ${BUILDING_BY_KEY[key].name} N${b.level + 1}`, "build");
-      });
-    },
-    [setAndSave],
-  );
-
-  /** Upgrade the exclusive building of a host zone (same costs/times). */
-  const upgradeExclusiveBuilding = useCallback(
-    (zoneId: number) => {
-      setAndSave((s) => {
-        const z = s.zones[zoneId];
-        if (!z) return;
-        const excl = z.exclusiveBuilding;
-        if (!excl || excl.level >= BALANCE.buildingMaxLevel || excl.upgradeFinishAt) return;
-        // Same per-zone concurrency quota as core buildings.
-        const active = activeConstructionsInZone(z);
-        if (active >= BALANCE.maxConcurrentConstructionsPerZone) {
-          toast.error("Construcción en curso", {
-            description: `Límite: ${BALANCE.maxConcurrentConstructionsPerZone} por zona · ${active} activa${active === 1 ? "" : "s"} ahora`,
-          });
-          return;
-        }
-        const cost = buildingUpgradeCost(excl.level);
-        if (s.resources.materiales < cost.materiales || s.resources.componentes < cost.componentes) {
-          toast.error("Recursos insuficientes", {
-            description: `${cost.materiales} Materiales · ${cost.componentes} Componentes`,
-          });
-          return;
-        }
-        s.resources.materiales -= cost.materiales;
-        s.resources.componentes -= cost.componentes;
-        const minutes = buildingUpgradeMinutes(excl.level);
-        excl.upgradeFinishAt = vnow() + minutes * 60000;
-        const def = EXCLUSIVE_BUILDING_BY_ZONE[zoneId];
-        pushLog(s, `Mejora iniciada: ${def?.name ?? excl.key} N${excl.level + 1}`, "build");
+        pushLog(s, `Mejora iniciada: ${def.name} N${b.level + 1} (Z${String(zoneId).padStart(2, "0")})`, "build");
       });
     },
     [setAndSave],
@@ -1084,8 +1088,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setCurrentZone,
       assignNpc,
       recruitNpc,
-      upgradeBuilding,
-      upgradeExclusiveBuilding,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
       useMedicine,
       buyResource,
       buyBattery,
@@ -1098,7 +1102,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       speedMultiplier,
       setSpeed,
     }),
-    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, upgradeBuilding, upgradeExclusiveBuilding, useMedicine, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, speedMultiplier, setSpeed],
+    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, speedMultiplier, setSpeed],
   );
 
   return (

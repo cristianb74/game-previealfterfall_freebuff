@@ -1,6 +1,6 @@
-import { BALANCE, RESOURCE_STAT } from "./balance";
+import { BALANCE, RESOURCE_STAT, BUILDING_SPECIALIZATION } from "./balance";
 import { getZone, zoneFocusBonus } from "./zones";
-import { buildingBonus, exclusiveBuildingBonus, BUILDING_BY_KEY_ANY } from "./buildings";
+import { buildingBonus, thematicBonus, THEMATIC_BY_KEY } from "./buildings";
 import { NPC_BY_ID } from "./npcData";
 import {
   incidentChanceFactor,
@@ -18,7 +18,6 @@ import type {
   ResourceKey,
   SpecialEvent,
   Stats,
-  ZoneProgressState,
 } from "./types";
 
 // ============================================================
@@ -103,40 +102,32 @@ export function findChanceForStat(stat: number): number {
   return 1 + stat * BALANCE.statEffectFactor;
 }
 
+/** Total relative building bonus for a find of `resource` in `zoneId`:
+ *  GLOBAL base building (core, shared by the whole character) + the zone's
+ *  LOCAL thematic buildings of that resource (1–2, they stack).
+ *  techBonus: Inteligencia adds extra efficiency to Taller/Generador. */
 export function buildingMultiplierFor(
-  zoneState: ZoneProgressState | undefined,
+  state: Pick<GameState, "base" | "zones">,
+  zoneId: number,
   resource: ResourceKey,
   techBonus = 0,
 ): number {
-  if (!zoneState) return 1;
-  const keys = Object.keys(zoneState.buildings) as BuildingKey[];
-  for (const k of keys) {
-    const b = zoneState.buildings[k];
-    if (b && BUILDING_SPECIALIZATION_MAP[k] === resource) {
-      // techBonus: Inteligencia adds extra efficiency to Taller/Generador.
-      // Exclusive building (if the zone hosts one for this resource) stacks.
-      const excl = zoneState.exclusiveBuilding;
-      const exclBonus =
-        excl && BUILDING_BY_KEY_ANY[excl.key].specializes === resource
-          ? exclusiveBuildingBonus(excl.level)
-          : 0;
-      return 1 + buildingBonus(b.level) + techBonus + exclBonus;
+  let bonus = 0;
+  // Global core building of this resource (bonus applies in every zone).
+  for (const k of Object.keys(BUILDING_SPECIALIZATION) as BuildingKey[]) {
+    if (BUILDING_SPECIALIZATION[k] === resource) {
+      bonus += buildingBonus(state.base?.[k]?.level ?? 0);
+      break;
     }
   }
-  return 1;
-}
-
-const BUILDING_SPECIALIZATION_MAP: Record<BuildingKey, ResourceKey> = {
-  cocina: "comida",
-  tanque: "agua",
-  almacen: "materiales",
-  enfermeria: "medicamentos",
-  taller: "componentes",
-  generador: "energia",
-};
-
-function zoneStateOf(state: GameState, zoneId: number): ZoneProgressState | undefined {
-  return state.zones[zoneId];
+  // Local thematic buildings of this zone specialized in the resource.
+  const thematic = state.zones?.[zoneId]?.thematic ?? {};
+  for (const key of Object.keys(thematic)) {
+    if (THEMATIC_BY_KEY[key]?.specializes === resource) {
+      bonus += thematicBonus(thematic[key].level);
+    }
+  }
+  return 1 + bonus + techBonus;
 }
 
 /** Pick which resource the exploration targets, weighted by the governing stat:
@@ -164,7 +155,6 @@ export function rollExploration(
   opts: { auto?: boolean } = {},
 ): ExplorationOutcome {
   const zone = getZone(zoneId);
-  const zoneState = zoneStateOf(state, zoneId);
   const findings: ExplorationFinding[] = [];
   let exp = zone.playerExpReward;
   // Zone specialization: the focus resource is amplified in this zone.
@@ -195,7 +185,7 @@ export function rollExploration(
         picked === "componentes" || picked === "energia"
           ? inteligenciaTechBonus(state.survivor.stats.inteligencia)
           : 0;
-      const buildingMult = buildingMultiplierFor(zoneState, picked, techBonus);
+      const buildingMult = buildingMultiplierFor(state, zoneId, picked, techBonus);
       // Zone focus amplifies finds of its specialty resource.
       const focusMult = picked === zone.focus ? focusBonus : 1;
       // Hunger/thirst tier of the WORST meter reduces find efficiency.

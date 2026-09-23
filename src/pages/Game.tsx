@@ -4,16 +4,17 @@ import { HUD } from "@/components/game/HUD";
 import { ZonasTab } from "@/components/game/ZonasTab";
 import { EquipoTab } from "@/components/game/EquipoTab";
 import { BaseTab } from "@/components/game/BaseTab";
+import { InstalacionesTab } from "@/components/game/InstalacionesTab";
 import { MercaderTab } from "@/components/game/MercaderTab";
 import { MochilaTab } from "@/components/game/MochilaTab";
 import { PerfilTab } from "@/components/game/PerfilTab";
 import { RegistroTab } from "@/components/game/RegistroTab";
 import { useGame, MERCHANT_OFFERS } from "@/game/GameProvider";
-import { buildingUpgradeCost } from "@/game/buildings";
+import { buildingUpgradeCost, CORE_BUILDING_GATE_ZONE } from "@/game/buildings";
 import { BALANCE } from "@/game/balance";
 import { getZone, ZONES } from "@/game/zones";
 import { cn } from "@/lib/utils";
-import type { Screen } from "@/game/types";
+import type { BuildingKey, Screen } from "@/game/types";
 
 const TABS: { key: Screen; label: string; glyph: string }[] = [
   { key: "zonas", label: "Zonas", glyph: "🗺" },
@@ -58,15 +59,18 @@ export default function Game() {
       state.pendingZoneUnlock != null && state.pendingZoneUnlock > state.currentZoneId;
     const assignedIds = new Set(state.npcs.filter((n) => n.assignedZoneId).map((n) => n.id));
     equipoIdle = state.npcs.some((n) => !assignedIds.has(n.id));
-    const zState = state.zones[state.currentZoneId];
-    baseUpgradable = (Object.keys(zState.buildings) as (keyof typeof zState.buildings)[]).some((k) => {
-      const b = zState.buildings[k];
+    // Global base: any core building upgradable right now (gates + quota).
+    const order: BuildingKey[] = ["cocina", "tanque", "almacen", "enfermeria", "taller", "generador"];
+    baseUpgradable = order.some((k, idx) => {
+      const b = state.base?.[k];
       if (!b || b.level >= BALANCE.buildingMaxLevel || b.upgradeFinishAt) return false;
-      // Sequential unlock: cocina always, others need previous at Lv1+
-      const order: (keyof typeof zState.buildings)[] = ["cocina", "tanque", "almacen", "enfermeria", "taller", "generador"];
-      const idx = order.indexOf(k);
+      if (state.base && Object.values(state.base).filter((x) => x.upgradeFinishAt).length >= BALANCE.maxConcurrentConstructionsInBase) return false;
+      // Gate zone must be unlocked.
+      const gate = CORE_BUILDING_GATE_ZONE[k];
+      if (gate != null && state.expTotal < getZone(gate).unlockExp) return false;
+      // Sequential unlock: cocina always, others need previous at Lv1+.
       if (idx > 0) {
-        const prev = zState.buildings[order[idx - 1]];
+        const prev = state.base[order[idx - 1]];
         if (!prev || prev.level < 1) return false;
       }
       const cost = buildingUpgradeCost(b.level);
@@ -101,6 +105,7 @@ export default function Game() {
             {screen === "zonas" && <ZonasTab />}
             {screen === "equipo" && <EquipoTab />}
             {screen === "base" && <BaseTab />}
+            {screen === "instalaciones" && <InstalacionesTab />}
             {screen === "mercader" && <MercaderTab />}
             {screen === "mochila" && <MochilaTab />}
             {screen === "perfil" && <PerfilTab />}

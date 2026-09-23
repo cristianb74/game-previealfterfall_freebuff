@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { useGame } from "@/game/GameProvider";
 import { ZONES, zoneImage } from "@/game/zones";
-import { BUILDING_BY_KEY, BUILDING_BY_KEY_ANY } from "@/game/buildings";
+import { THEMATIC_BY_KEY } from "@/game/buildings";
 import { vnow } from "@/game/virtualClock";
 import { currentEnergy } from "@/game/energySystem";
-import type { AnyBuildingKey } from "@/game/types";
 import { NPC_TYPE_MODIFIERS, npcProductionMultiplier } from "@/game/npcTypes";
 import { BUILDING_SPECIALIZATION } from "@/game/balance";
 import type { BuildingKey } from "@/game/types";
@@ -20,41 +19,22 @@ function fmtCountdown(ms: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-/** Find active buildings in a zone (upgradeFinishAt != null).
- *  Includes the zone-exclusive building when present. */
+/** Active THEMATIC constructions of a zone (upgradeFinishAt != null). */
 function getActiveBuildings(
-  buildings:
-    | Record<
-        BuildingKey,
-        { level: number; upgradeFinishAt: number | null }
-      >
-    | undefined,
-  exclusive?: { key: string; level: number; upgradeFinishAt: number | null },
+  thematic: Record<string, { level: number; upgradeFinishAt: number | null }> | undefined,
 ) {
   const now = vnow();
   const list: { key: string; name: string; level: number; remaining: number }[] = [];
-  if (buildings) {
-    for (const key of Object.keys(buildings) as BuildingKey[]) {
-      const b = buildings[key];
+  if (thematic) {
+    for (const key of Object.keys(thematic)) {
+      const b = thematic[key];
       if (!b.upgradeFinishAt) continue;
       const remaining = b.upgradeFinishAt - now;
       if (remaining <= 0) continue;
-      const def = BUILDING_BY_KEY[key];
       list.push({
         key,
-        name: def?.name ?? key,
+        name: THEMATIC_BY_KEY[key]?.name ?? key,
         level: b.level + 1, // constructing to this level
-        remaining,
-      });
-    }
-  }
-  if (exclusive && exclusive.upgradeFinishAt) {
-    const remaining = exclusive.upgradeFinishAt - now;
-    if (remaining > 0) {
-      list.push({
-        key: exclusive.key,
-        name: BUILDING_BY_KEY_ANY[exclusive.key as AnyBuildingKey]?.name ?? exclusive.key,
-        level: exclusive.level + 1,
         remaining,
       });
     }
@@ -65,12 +45,8 @@ function getActiveBuildings(
 /** NPC indicator for a zone card. */
 function NpcIndicator({
   npcId,
-  zoneId,
-  buildings,
 }: {
   npcId: string | null;
-  zoneId: number;
-  buildings?: Record<BuildingKey, { level: number; upgradeFinishAt: number | null }>;
 }) {
   const { state } = useGame();
   if (!state) return null;
@@ -86,17 +62,13 @@ function NpcIndicator({
   }
 
   const typeInfo = NPC_TYPE_MODIFIERS[npc.type];
-  // Build a proper ZoneProgressState for the bonus calculation.
-  const zoneState = buildings
-    ? {
-        buildings: Object.fromEntries(
-          (Object.keys(buildings) as BuildingKey[]).map((k) => [k, { key: k, ...buildings[k] }]),
-        ) as Record<BuildingKey, { key: BuildingKey; level: number; upgradeFinishAt: number | null }>,
-        assignedNpcId: npcId,
-      }
-    : null;
-  const totalBonus = zoneState ? npcProductionMultiplier(npc, zoneState, BUILDING_SPECIALIZATION[npc.specialization]) : null;
-  const bonusPct = totalBonus != null ? Math.round((totalBonus - 1) * 100) : null;
+  // v2: the multiplier reads state.base (global) + zones[id].thematic (local).
+  const totalBonus = npcProductionMultiplier(
+    npc,
+    state,
+    BUILDING_SPECIALIZATION[npc.specialization as BuildingKey],
+  );
+  const bonusPct = Math.round((totalBonus - 1) * 100);
 
   return (
     <span
@@ -135,7 +107,7 @@ export function ZonasTab() {
     <div className="flex flex-col gap-3">
       <p className="px-1 text-[10px] uppercase tracking-[0.25em] text-subtle">
         Zonas desbloqueadas · {unlockedMax}/20 · toca para explorar ·
-        doble toque para abrir la base
+        doble toque para abrir las instalaciones
       </p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {ZONES.map((z) => {
@@ -150,11 +122,7 @@ export function ZonasTab() {
             nextZone?.id === z.id &&
             state.expTotal >= z.unlockExp;
 
-          const zoneBuildings = state.zones[z.id]?.buildings;
-          const activeBuildings = getActiveBuildings(
-            zoneBuildings,
-            state.zones[z.id]?.exclusiveBuilding,
-          );
+          const activeBuildings = getActiveBuildings(state.zones[z.id]?.thematic);
 
           return (
             <div key={z.id} className="flex h-[202px] flex-col gap-1 sm:h-[218px]">
@@ -162,7 +130,7 @@ export function ZonasTab() {
                 onDoubleClick={() => {
                   if (!unlocked) return;
                   setCurrentZone(z.id);
-                  setScreen("base");
+                  setScreen("instalaciones");
                 }}
                 onClick={() => {
                   if (!unlocked) return;
@@ -223,13 +191,7 @@ export function ZonasTab() {
                     </span>
                   )}
                   {/* NPC indicator */}
-                  {unlocked && (
-                    <NpcIndicator
-                      npcId={assignedNpc}
-                      zoneId={z.id}
-                      buildings={zoneBuildings}
-                    />
-                  )}
+                  {unlocked && <NpcIndicator npcId={assignedNpc} />}
                 </div>
                 <div className="flex min-h-0 flex-1 flex-col p-2">
                   <p className="truncate text-[11px] font-bold leading-[14px] text-zinc-200">
@@ -324,8 +286,9 @@ export function ZonasTab() {
         })}
       </div>
       <p className="px-1 text-[10px] leading-4 text-subtle">
-        Toca una zona para explorarla. Doble toque para abrir la base de
-        construcciones. La exploración puede realizarse en varias zonas a la vez.
+        Toca una zona para explorarla. Doble toque para abrir sus
+        instalaciones (edificios temáticos de la zona). La exploración puede
+        realizarse en varias zonas a la vez.
       </p>
     </div>
   );

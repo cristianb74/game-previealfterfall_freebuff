@@ -1,12 +1,10 @@
 import { BALANCE, BUILDING_SPECIALIZATION } from "./balance";
-import { buildingBonus, exclusiveBuildingBonus, BUILDING_BY_KEY_ANY } from "./buildings";
+import { buildingBonus, thematicBonus, THEMATIC_BY_KEY } from "./buildings";
 import type {
-  BuildingKey,
   NpcSurvivor,
   NpcTypeCode,
   ResourceKey,
   StatKey,
-  ZoneProgressState,
 } from "./types";
 import { getZone, zoneFocusBonus } from "./zones";
 
@@ -49,41 +47,43 @@ export function npcStatFor(npc: NpcSurvivor, resource: ResourceKey): number {
 }
 
 /** Total relative bonus multiplier for an NPC working a zone on a resource:
- * ×(1 + npcTypeBonus + buildingSpecializationBonus + zoneFocusBonus). */
+ * ×(1 + npcTypeBonus + globalBaseBonus + localThematicBonus + zoneFocusBonus).
+ * Accepts the FULL GameState (v2 shape) — buildings live in state.base
+ * (global) and zones[id].thematic (local). */
 export function npcProductionMultiplier(
   npc: NpcSurvivor,
-  zoneState: ZoneProgressState,
+  state: { base?: Record<string, { level: number }>; zones?: Record<string | number, { thematic?: Record<string, { level: number }> }> },
   resource: ResourceKey,
 ): number {
   const typeBonus = NPC_TYPE_MODIFIERS[npc.type].bonus;
-  let buildingBonusTotal = 0;
-  const keys = Object.keys(zoneState.buildings) as BuildingKey[];
-  for (const k of keys) {
-    const b = zoneState.buildings[k];
-    if (!b) continue;
+  // Global core building of this resource (bonus applies in every zone).
+  let coreBonus = 0;
+  for (const k of Object.keys(BUILDING_SPECIALIZATION) as (keyof typeof BUILDING_SPECIALIZATION)[]) {
     if (BUILDING_SPECIALIZATION[k] === resource) {
-      buildingBonusTotal = buildingBonus(b.level);
+      coreBonus = buildingBonus(state.base?.[k]?.level ?? 0);
       break;
     }
   }
-  // Exclusive building of the host zone stacks on its resource.
-  const excl = zoneState.exclusiveBuilding;
-  const exclBonus =
-    excl && BUILDING_BY_KEY_ANY[excl.key].specializes === resource
-      ? exclusiveBuildingBonus(excl.level)
-      : 0;
-  // Zone specialization amplifies the focus resource for NPCs too.
+  // Local thematic buildings of the NPC's zone specialized in the resource.
   const zoneId = npc.assignedZoneId ? Number(npc.assignedZoneId) : 1;
+  const thematic = state.zones?.[zoneId]?.thematic ?? {};
+  let thematicBonusTotal = 0;
+  for (const key of Object.keys(thematic)) {
+    if (THEMATIC_BY_KEY[key]?.specializes === resource) {
+      thematicBonusTotal += thematicBonus(thematic[key].level);
+    }
+  }
+  // Zone specialization amplifies the focus resource for NPCs too.
   const focus = getZone(zoneId).focus;
   const focusBonus = focus === resource ? zoneFocusBonus(zoneId) : 0;
-  return 1 + typeBonus + buildingBonusTotal + exclBonus + focusBonus;
+  return 1 + typeBonus + coreBonus + thematicBonusTotal + focusBonus;
 }
 
 /** Effective per-cycle find probability for an NPC in a zone.
  * Targets ~10 % effective resource opportunity, scaled by stats and bonuses. */
 export function npcCycleChance(
   npc: NpcSurvivor,
-  zoneState: ZoneProgressState,
+  state: Parameters<typeof npcProductionMultiplier>[1],
   resource: ResourceKey,
 ): number {
   const zone = getZone(npc.assignedZoneId ? Number(npc.assignedZoneId) : 1);
@@ -94,7 +94,7 @@ export function npcCycleChance(
     : BALANCE.npcProductionChance;
   const stat = npcStatFor(npc, resource);
   const statFactor = 1 + stat * BALANCE.statEffectFactor;
-  const bonus = npcProductionMultiplier(npc, zoneState, resource);
+  const bonus = npcProductionMultiplier(npc, state, resource);
   return Math.min(0.6, base * statFactor * bonus);
 }
 
@@ -117,7 +117,7 @@ export function npcZoneSpeedFactor(
 /** Roll one NPC production cycle. Returns null when nothing found. */
 export function rollNpcCycle(
   npc: NpcSurvivor,
-  zoneState: ZoneProgressState,
+  state: Parameters<typeof npcCycleChance>[1],
   rnd: () => number,
 ): { resource: ResourceKey; amount: number } | null {
   const zone = getZone(npc.assignedZoneId ? Number(npc.assignedZoneId) : 1);
@@ -128,7 +128,7 @@ export function rollNpcCycle(
   const candidates = zone.resources.filter((r) => r !== "dinero");
   if (candidates.length === 0) return null;
   const resource = candidates[Math.floor(rnd() * candidates.length)];
-  const chance = npcCycleChance(npc, zoneState, resource);
+  const chance = npcCycleChance(npc, state, resource);
   if (rnd() >= chance) return null;
   const isTime = resource === "comida" || resource === "agua";
   const amount = isTime

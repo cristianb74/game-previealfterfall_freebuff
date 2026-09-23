@@ -1,6 +1,13 @@
 import { GAME_INFO, SAVE_VERSION } from "./gameConfig";
-import { BALANCE } from "./balance";
-import { BUILDINGS, EXCLUSIVE_BUILDING_BY_ZONE } from "./buildings";
+import { BALANCE, migrationRefundFactor } from "./balance";
+import {
+  BUILDINGS,
+  BUILDING_BY_KEY,
+  CORE_BUILDING_GATE_ZONE,
+  THEMATIC_BY_ZONE,
+  cumulativeUpgradeCost,
+  type ThematicDef,
+} from "./buildings";
 import { getZone } from "./zones";
 import type {
   BuildingKey,
@@ -15,12 +22,17 @@ import type {
 // AFTERFALL — persistent save system.
 // IndexedDB preferred; falls back to localStorage.
 // Versioned; migrations keep old saves alive after updates.
+// SAVE_VERSION 2: buildings redesign — GameState.base (global core)
+// + zones[].thematic (local thematic). v1 shapes are migrated by
+// migrateV1ToV2 (also applied to cloud restores).
 // ============================================================
 
 const DB_NAME = "afterfall-db";
 const DB_STORE = "saves";
 const DB_VERSION = 1;
 const LS_KEY = GAME_INFO.saveKey;
+
+const CORE_KEYS: BuildingKey[] = BUILDINGS.map((b) => b.key);
 
 function emptyResources(): Record<ResourceKey, number> {
   return {
@@ -34,21 +46,29 @@ function emptyResources(): Record<ResourceKey, number> {
   };
 }
 
+/** GLOBAL base: the 6 core buildings, one shared instance, all N0. */
+export function createInitialBase(): Record<BuildingKey, BuildingState> {
+  const base = {} as Record<BuildingKey, BuildingState>;
+  for (const key of CORE_KEYS) {
+    base[key] = { key, level: 0, upgradeFinishAt: null };
+  }
+  return base;
+}
+
+/** A zone's THEMATIC buildings at N0 (host zones only — 1–2 per zone). */
+function createThematicForZone(zoneId: number): Record<string, BuildingState> {
+  const thematic: Record<string, BuildingState> = {};
+  for (const def of THEMATIC_BY_ZONE[zoneId] ?? []) {
+    thematic[def.key] = { key: def.key, level: 0, upgradeFinishAt: null };
+  }
+  return thematic;
+}
+
 export function createInitialZones(): Record<number, ZoneProgressState> {
   const zones: Record<number, ZoneProgressState> = {};
   for (let id = 1; id <= 20; id++) {
-    const buildings = {} as Record<BuildingKey, BuildingState>;
-    for (const b of BUILDINGS) {
-      const coreKey = b.key as BuildingKey;
-      buildings[coreKey] = { key: coreKey, level: 0, upgradeFinishAt: null };
-    }
-    // Host zones start with their exclusive building at N0.
-    const exclDef = EXCLUSIVE_BUILDING_BY_ZONE[id];
     zones[id] = {
-      buildings,
-      exclusiveBuilding: exclDef
-        ? { key: exclDef.key, level: 0, upgradeFinishAt: null }
-        : undefined,
+      thematic: createThematicForZone(id),
       assignedNpcId: null,
     };
   }
@@ -77,12 +97,139 @@ export function createInitialState(survivor: GameState["survivor"], now = Date.n
     manualExplorationsDone: 0,
     nextExplorationId: 1,
     explorationsSinceLastNPC: 0,
+    base: createInitialBase(),
     zones: createInitialZones(),
     npcs: [],
     npcCycles: {},
     log: [],
     pendingZoneUnlock: null,
   };
+}
+
+// ============================================================
+// MIGRATION v1 → v2 (Estrategia B: máximo + reembolso de duplicados)
+//
+// 1. CORE buildings: for each of the 6 keys, the GLOBAL base level is the
+//    MAX "effective level" across all zone copies (an in-flight upgrade
+//    counts as level+1 — the run is completed instantly on migration).
+//    The copy that reaches the max is PRESERVED (lowest zone id wins
+//    ties); every other copy with level > 0 is REFUNDED at its
+//    cumulative upgrade cost × migrationRefundFactor (BALANCE-adjacent
+//    tunable) — nothing the player paid is lost twice or lost at all.
+// 2. THEMATIC: each old exclusiveBuilding migrates to zones[id].thematic
+//    under its SAME key with its EXACT level and running timer — old
+//    investments are never reset.
+// 3. Old gates are respected: a core building whose gate zone
+//    (CORE_BUILDING_GATE_ZONE) was never reached cannot be above N0
+//    in a v1 save anyway (ZONE_BUILDINGS gate), so max() keeps it 0.
+// Idempotent: runs once (v1 keys disappear from the new shape).
+// ============================================================
+
+/** Effective level of a v1 copy: finished levels + an in-flight upgrade. */
+function v1EffectiveLevel(b: BuildingState | undefined): number {
+  if (!b) return 0;
+  const done = Math.max(0, Math.min(BALANCE.buildingMaxLevel, b.level));
+  return b.upgradeFinishAt != null ? Math.min(BALANCE.buildingMaxLevel, done + 1) : done;
+}
+
+/** Compute the refund owed for collapsing the duplicate copies of one
+ *  core key into the global base. `maxLevel` = preserved level. */
+function refundForCoreKey(
+  copies: { zid: number; effective: number; raw: BuildingState | undefined }[],
+  maxLevel: number,
+): { materiales: number; componentes: number } {
+  let materiales = 0;
+  let componentes = 0;
+  let preserved = false;
+  for (const copy of copies) {
+    if (copy.effective === maxLevel && !preserved) {
+      preserved = true; // lowest zone id reaches the max first → keep it
+      continue;
+    }
+    // Every non-preserved copy refunds the levels it PAID for (its raw
+    // finished levels), including an in-flight run (already paid).
+    const paid = Math.max(0, Math.min(BALANCE.buildingMaxLevel, copy.raw?.level ?? 0));
+    if (paid > 0 && paid <= maxLevel) {
+      const c = cumulativeUpgradeCost(paid);
+      materiales += c.materiales;
+      componentes += c.componentes;
+    }
+  }
+  return {
+    materiales: Math.round(materiales * migrationRefundFactor),
+    componentes: Math.round(componentes * migrationRefundFactor),
+  };
+}
+
+/** Migrate a v1 GameState (or any state missing the v2 shape) to v2.
+ *  Exported: cloud restores bypass loadGame() and need this too. */
+export function migrateV1ToV2(state: GameState): GameState {
+  const anyState = state as unknown as Record<string, unknown>;
+  if (anyState.base && typeof anyState.base === "object") {
+    // Already v2 — nothing to do (migrations must be idempotent).
+    return state;
+  }
+
+  const refundTotals = { materiales: 0, componentes: 0 };
+  const base = createInitialBase();
+
+  // ---- 1. Core buildings: max across zones + refund duplicates ----
+  for (const coreKey of CORE_KEYS) {
+    const copies: { zid: number; effective: number; raw: BuildingState | undefined }[] = [];
+    for (const zid of Object.keys(state.zones ?? {}).map(Number)) {
+      const zs = state.zones[zid] as unknown as {
+        buildings?: Record<string, BuildingState>;
+        exclusiveBuilding?: BuildingState;
+      };
+      copies.push({ zid, effective: v1EffectiveLevel(zs?.buildings?.[coreKey]), raw: zs?.buildings?.[coreKey] });
+    }
+    const maxLevel = Math.min(BALANCE.buildingMaxLevel, Math.max(0, ...copies.map((c) => c.effective)));
+    base[coreKey] = { key: coreKey, level: maxLevel, upgradeFinishAt: null };
+    const refund = refundForCoreKey(copies, maxLevel);
+    refundTotals.materiales += refund.materiales;
+    refundTotals.componentes += refund.componentes;
+  }
+
+  // ---- 2. Zones: thematic only (exclusive → thematic, exact level) ----
+  for (const zid of Object.keys(state.zones ?? {}).map(Number)) {
+    const oldZ = state.zones[zid] as unknown as {
+      exclusiveBuilding?: BuildingState;
+      assignedNpcId: string | null;
+    };
+    const thematic: Record<string, BuildingState> = {};
+    const excl = oldZ?.exclusiveBuilding;
+    if (excl && excl.level > 0) {
+      // Preserve the exact level and any running construction timer.
+      thematic[excl.key] = { key: excl.key, level: excl.level, upgradeFinishAt: excl.upgradeFinishAt ?? null };
+    } else {
+      // Host zone without progress: ensure defs exist at N0 (unless the
+      // zone's thematic building was already carried above).
+      for (const def of THEMATIC_BY_ZONE[zid] ?? []) {
+        thematic[def.key] = { key: def.key, level: 0, upgradeFinishAt: null };
+      }
+    }
+    state.zones[zid] = { thematic, assignedNpcId: oldZ?.assignedNpcId ?? null };
+  }
+
+  state.base = base;
+
+  // ---- 3. Refund (B) ----
+  if (refundTotals.materiales > 0 || refundTotals.componentes > 0) {
+    state.resources.materiales += refundTotals.materiales;
+    state.resources.componentes += refundTotals.componentes;
+    state.log.unshift({
+      t: Date.now(),
+      msg: `Reorganización de la base: los edificios comunes pasan a ser globales · +${refundTotals.materiales} Materiales, +${refundTotals.componentes} Componentes reembolsados`,
+      kind: "build",
+    });
+  } else {
+    state.log.unshift({
+      t: Date.now(),
+      msg: "Reorganización de la base: los edificios comunes pasan a ser globales (Instalaciones por zona aparte)",
+      kind: "build",
+    });
+  }
+  return state;
 }
 
 // ---------------- IndexedDB ----------------
@@ -189,16 +336,64 @@ export async function saveGame(state: GameState): Promise<void> {
   }
 }
 
+/** Ensure a loaded state is fully valid for the CURRENT SAVE_VERSION
+ *  (version bumps via migrate, then defensive repairs). */
+function normalizeState(state: GameState): GameState {
+  let s = state;
+  if (!s.base || typeof s.base !== "object") {
+    // v1 state (no base field) → full v2 migration.
+    s = migrateV1ToV2(s);
+  }
+  s.version = SAVE_VERSION;
+  // repair missing fields defensively
+  if (!s.resources) s.resources = emptyResources();
+  if (!s.npcs) s.npcs = [];
+  if (!s.base) s.base = createInitialBase();
+  for (const coreKey of CORE_KEYS) {
+    if (!s.base[coreKey]) s.base[coreKey] = { key: coreKey, level: 0, upgradeFinishAt: null };
+  }
+  if (!s.zones) s.zones = createInitialZones();
+  for (let id = 1; id <= 20; id++) {
+    const z = s.zones[id];
+    if (!z) {
+      s.zones[id] = { thematic: createThematicForZone(id), assignedNpcId: null };
+      continue;
+    }
+    if (!z.thematic || typeof z.thematic !== "object") {
+      const carried = z.assignedNpcId;
+      s.zones[id] = { thematic: createThematicForZone(id), assignedNpcId: carried ?? null };
+    }
+  }
+  if (!s.npcCycles) s.npcCycles = {};
+  if (!s.log) s.log = [];
+  if (typeof s.foodMin !== "number") s.foodMin = BALANCE.startingFoodMin;
+  if (typeof s.waterMin !== "number") s.waterMin = BALANCE.startingWaterMin;
+  if (!s.autoFarms || typeof s.autoFarms !== "object") s.autoFarms = {};
+  if (!s.autoExplored || typeof s.autoExplored !== "object") s.autoExplored = {};
+  if (!s.explorationStates || typeof s.explorationStates !== "object") s.explorationStates = {};
+  if (typeof s.explorationsSinceLastNPC !== "number") s.explorationsSinceLastNPC = 0;
+  if (typeof s.nextExplorationId !== "number") s.nextExplorationId = (s.explorationsDone ?? 0) + 1;
+  if (typeof s.manualExplorationsDone !== "number") s.manualExplorationsDone = s.explorationsDone ?? 0;
+  // NPC recruitment migration: NPCs owned before the recruitment system
+  // existed are grandfathered as "active" (already part of the shelter).
+  for (const npc of s.npcs ?? []) {
+    if (!npc.status) npc.status = "active";
+  }
+  return s;
+}
+
 export async function loadGame(): Promise<SaveEnvelope | null> {
+  let envelope: SaveEnvelope | null = null;
   try {
     const fromIdb = await idbGet<SaveEnvelope>("current");
-    if (fromIdb) return migrate(fromIdb);
+    if (fromIdb) envelope = fromIdb;
   } catch {
     // fall through to localStorage
   }
-  const fromLs = lsGet<SaveEnvelope>();
-  if (fromLs) return migrate(fromLs);
-  return null;
+  if (!envelope) envelope = lsGet<SaveEnvelope>();
+  if (!envelope) return null;
+  envelope.state = normalizeState(envelope.state);
+  return envelope;
 }
 
 export async function hasSave(): Promise<boolean> {
@@ -219,73 +414,6 @@ export async function deleteSave(): Promise<void> {
   lsClearSave();
 }
 
-/** Migrations between save versions. Never drop a save if avoidable. */
-function migrate(envelope: SaveEnvelope): SaveEnvelope {
-  let state = envelope.state;
-  let v = envelope.version ?? 1;
-
-  // Example migration pattern:
-  // if (v === 1 && state.npcs) { ... v = 2; }
-
-  if (state && typeof state === "object") {
-    state.version = v;
-    // repair missing fields defensively
-    if (!state.resources) state.resources = emptyResources();
-    if (!state.npcs) state.npcs = [];
-    if (!state.zones) state.zones = createInitialZones();
-    if (!state.npcCycles) state.npcCycles = {};
-    if (!state.log) state.log = [];
-    if (typeof state.foodMin !== "number") state.foodMin = BALANCE.startingFoodMin;
-    if (typeof state.waterMin !== "number") state.waterMin = BALANCE.startingWaterMin;
-    // Migrate old global autoExplore/autoRun to per-zone format
-    if (!state.autoExplored || typeof state.autoExplored !== "object") {
-      const oldAuto = (state as unknown as Record<string, unknown>).autoExplore;
-      const oldRun = (state as unknown as Record<string, unknown>).autoRun;
-      state.autoExplored = {};
-      state.autoFarms = {};
-      if (oldAuto === true && oldRun && typeof oldRun === "object") {
-        const r = oldRun as { zoneId?: number };
-        if (r.zoneId) {
-          state.autoExplored[r.zoneId] = true;
-          state.autoFarms[r.zoneId] = r as unknown as import("./types").ExplorationRun;
-        }
-      }
-    }
-    if (!state.autoFarms || typeof state.autoFarms !== "object") state.autoFarms = {};
-    // Migrate old single exploration to per-zone explorationStates
-    if (!state.explorationStates || typeof state.explorationStates !== "object") {
-      state.explorationStates = {};
-      const oldExpl = (state as unknown as Record<string, unknown>).exploration;
-      if (oldExpl && typeof oldExpl === "object") {
-        const e = oldExpl as { zoneId?: number; startedAt?: number; finishAt?: number };
-        if (e.zoneId && e.startedAt && e.finishAt) {
-          state.explorationStates[e.zoneId] = { zoneId: e.zoneId, startedAt: e.startedAt, finishAt: e.finishAt };
-        }
-      }
-    }
-    if (typeof state.explorationsSinceLastNPC !== "number") state.explorationsSinceLastNPC = 0;
-    if (typeof state.nextExplorationId !== "number") state.nextExplorationId = (state.explorationsDone ?? 0) + 1;
-    if (typeof state.manualExplorationsDone !== "number") state.manualExplorationsDone = state.explorationsDone ?? 0;
-    // Zone differentiation migration: host zones get their exclusive
-    // building at N0 (old saves have none). Non-host zones stay untouched.
-    for (const zid of Object.keys(state.zones ?? {}).map(Number)) {
-      const zs = state.zones[zid];
-      if (!zs) continue;
-      const exclDef = EXCLUSIVE_BUILDING_BY_ZONE[zid];
-      if (exclDef && !zs.exclusiveBuilding) {
-        zs.exclusiveBuilding = { key: exclDef.key, level: 0, upgradeFinishAt: null };
-      }
-    }
-    // NPC recruitment migration: NPCs owned before the recruitment system
-    // existed are grandfathered as "active" (already part of the shelter).
-    for (const npc of state.npcs ?? []) {
-      if (!npc.status) npc.status = "active";
-    }
-  }
-
-  return { version: v, savedAt: envelope.savedAt, state };
-}
-
 /** Convenience helpers used by UI to format NPC production totals. */
 export function npcTotalsLabel(npc: NpcSurvivor): string {
   const entries = Object.entries(npc.productionTotals).filter(([, v]) => v > 0);
@@ -298,3 +426,12 @@ export function npcTotalsLabel(npc: NpcSurvivor): string {
     })
     .join(", ");
 }
+
+// ---- kept for external gating checks (core building availability) ----
+export { CORE_BUILDING_GATE_ZONE as CORE_BUILDING_GATES };
+export function coreBuildingUnlocked(state: GameState, key: BuildingKey): boolean {
+  const gate = CORE_BUILDING_GATE_ZONE[key];
+  return gate != null && state.expTotal >= getZone(gate).unlockExp;
+}
+export { BUILDING_BY_KEY };
+export type { ThematicDef };
