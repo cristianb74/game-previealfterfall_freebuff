@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import { HUD } from "@/components/game/HUD";
 import { ZonasTab } from "@/components/game/ZonasTab";
@@ -34,6 +34,18 @@ export default function Game() {
       navigate("/", { replace: true });
     }
   }, [booted, state, hasSaveFile, navigate]);
+
+  // Scroll-to-top on section change (bottom nav, in-tab links like "ver
+  // Mochila", etc.). The page itself is the scroll container, so resetting
+  // window scroll is enough. Skipped on first mount so browser scroll
+  // restoration (system back button, initial load) stays untouched.
+  const prevScreenRef = useRef<Screen | null>(null);
+  useEffect(() => {
+    if (prevScreenRef.current !== null && prevScreenRef.current !== screen) {
+      window.scrollTo(0, 0);
+    }
+    prevScreenRef.current = screen;
+  }, [screen]);
 
   // ---- "something to do" badges per nav tab ----
   let zonesUnlockable = false;
