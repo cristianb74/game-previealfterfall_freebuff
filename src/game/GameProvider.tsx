@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from "react";
 import { useConvex, useConvexAuth } from "convex/react";
 import { toast } from "sonner";
-import { BALANCE, STAT_RESOURCE, MERCHANT_SELL_PRICES } from "@/game/balance";
+import { BALANCE, STAT_RESOURCE, MERCHANT_SELL_PRICES, MERCHANT_BATTERY_OFFER } from "@/game/balance";
 import { getZone, frontierZoneId, ZONES } from "@/game/zones";
 import { NPC_BY_ID, npcDisplayName } from "@/game/npcData";
 import { NPC_TYPE_MODIFIERS, npcProductionMultiplier, npcZoneSpeedFactor } from "@/game/npcTypes";
@@ -26,7 +26,7 @@ import {
 } from "@/game/virtualClock";
 import { OfflineSummaryModal } from "@/components/game/OfflineSummaryModal";
 import { tickNpcs } from "@/game/onlineTick";
-import { applyEnergyRegen, currentEnergy, spendEnergy, nextEnergyRegenAt } from "@/game/energySystem";
+import { applyEnergyRegen, currentEnergy, gainEnergy, spendEnergy, nextEnergyRegenAt } from "@/game/energySystem";
 import { explorationMinutesWithAgility } from "@/game/statEffects";
 import {
   narrExplorationStart,
@@ -106,7 +106,10 @@ export interface GameContextValue {
   /** Upgrade the zone-exclusive building of a host zone. */
   upgradeExclusiveBuilding: (zoneId: number) => void;
   useMedicine: () => void;
-  buyResource: (key: ResourceKey) => void;
+  buyResource: (key: ResourceKey, qty?: number) => void;
+  /** Buy a battery (MERCHANT_BATTERY_OFFER): +energy, blocked if it does
+   *  not fit fully under maxEnergy (no partial waste). */
+  buyBattery: (qty?: number) => void;
   sellResource: (key: ResourceKey, qty: number) => void;
   expelNpc: (npcId: string) => void;
   rollOptions: Survivor[];
@@ -926,19 +929,47 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [setAndSave]);
 
   const buyResource = useCallback(
-    (key: ResourceKey) => {
+    (key: ResourceKey, qty = 1) => {
       setAndSave((s) => {
         const offer = MERCHANT_OFFERS[key];
         if (!offer) return;
-        if (s.resources.dinero < offer.price) {
-          toast.error("Dinero insuficiente", { description: `Cuesta $${offer.price}` });
+        const q = Math.max(1, Math.floor(qty));
+        const total = offer.price * q;
+        if (s.resources.dinero < total) {
+          toast.error("Dinero insuficiente", { description: `Cuesta $${total}` });
           return;
         }
-        s.resources.dinero -= offer.price;
-        if (key === "comida") s.foodMin += offer.amount;
-        else if (key === "agua") s.waterMin += offer.amount;
-        else s.resources[key] += offer.amount;
-        pushLog(s, `Mercader: +${offer.amount}${key === "comida" || key === "agua" ? " min" : ""} ${key} · -$${offer.price}`, "resource");
+        s.resources.dinero -= total;
+        if (key === "comida") s.foodMin += offer.amount * q;
+        else if (key === "agua") s.waterMin += offer.amount * q;
+        else s.resources[key] += offer.amount * q;
+        pushLog(s, `Mercader: +${offer.amount * q}${key === "comida" || key === "agua" ? " min" : ""} ${key} · -$${total}`, "resource");
+      });
+    },
+    [setAndSave],
+  );
+
+  const buyBattery = useCallback(
+    (qty = 1) => {
+      setAndSave((s) => {
+        const now = vnow();
+        applyEnergyRegen(s, now); // settle pending regen before checking headroom
+        const q = Math.max(1, Math.floor(qty));
+        const total = MERCHANT_BATTERY_OFFER.price * q;
+        if (s.resources.dinero < total) {
+          toast.error("Dinero insuficiente", { description: `Cuesta $${total}` });
+          return;
+        }
+        if (s.resources.energia + MERCHANT_BATTERY_OFFER.energy * q > BALANCE.maxEnergy) {
+          toast.error("Sin margen de energía", {
+            description: `Tienes ${s.resources.energia}/${BALANCE.maxEnergy} · la batería da +${MERCHANT_BATTERY_OFFER.energy}`,
+          });
+          return;
+        }
+        s.resources.dinero -= total;
+        gainEnergy(s, MERCHANT_BATTERY_OFFER.energy * q, now);
+        pushLog(s, `Mercader: ${MERCHANT_BATTERY_OFFER.label} +${MERCHANT_BATTERY_OFFER.energy * q} Energía · -$${total}`, "resource");
+        toast.success("Batería comprada", { description: `+${MERCHANT_BATTERY_OFFER.energy * q} Energía` });
       });
     },
     [setAndSave],
@@ -1057,6 +1088,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       upgradeExclusiveBuilding,
       useMedicine,
       buyResource,
+      buyBattery,
       sellResource,
       expelNpc,
       rollOptions,
@@ -1066,7 +1098,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       speedMultiplier,
       setSpeed,
     }),
-    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, upgradeBuilding, upgradeExclusiveBuilding, useMedicine, buyResource, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, speedMultiplier, setSpeed],
+    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, upgradeBuilding, upgradeExclusiveBuilding, useMedicine, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, speedMultiplier, setSpeed],
   );
 
   return (

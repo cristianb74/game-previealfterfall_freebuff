@@ -86,3 +86,16 @@ export function spendEnergy(state: GameState, amount = 1, now = Date.now()): voi
   // If energy remains, the reference stays where it was (countdown continues naturally).
   // (Regen cycle length comes from BALANCE.energyRegenMinutesPerPoint.)
 }
+
+/**
+ * Add energy from an external source (e.g. merchant battery). Symmetric
+ * to spendEnergy: settles pending regen first so the earned points are
+ * not overwritten, then adds the amount clamped to BALANCE.maxEnergy.
+ * Returns the points actually gained.
+ */
+export function gainEnergy(state: GameState, amount: number, now = Date.now()): number {
+  applyEnergyRegen(state, now);
+  const before = state.resources.energia;
+  state.resources.energia = Math.min(BALANCE.maxEnergy, state.resources.energia + amount);
+  return state.resources.energia - before;
+}

@@ -186,3 +186,8 @@ export const MERCHANT_SELL_PRICES: Partial<Record<ResourceKey, { amount: number;
   comida: { amount: 30, price: 7, label: "Vender 30 min Comida" },
   agua: { amount: 30, price: 7, label: "Vender 30 min Agua" },
 };
+
+/** Merchant battery: +energy on purchase. Not a ResourceKey — goes through
+ *  gainEnergy() to respect the regen system invariants (see energySystem.ts).
+ *  Blocked when energy + amount would exceed maxEnergy (no partial waste). */
+export const MERCHANT_BATTERY_OFFER = { label: "Batería", price: 100, energy: 10 } as const;
