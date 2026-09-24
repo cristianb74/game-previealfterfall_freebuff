@@ -123,7 +123,13 @@ function GameProviders({ children }: { children: React.ReactNode }) {
     <ConvexAuthProvider client={convex}>
       <GameProvider>
         {children}
-        <Toaster />
+        {/* Keep toasts clear of the Game's fixed bottom nav (~50px tall) plus
+            the iOS home-indicator safe area (viewport-fit=cover). mobileOffset
+            is required: sonner ignores `offset` below 600px viewport width. */}
+        <Toaster
+          offset={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 64px)" }}
+          mobileOffset={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 64px)" }}
+        />
       </GameProvider>
     </ConvexAuthProvider>
   );
