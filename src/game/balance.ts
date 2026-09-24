@@ -87,6 +87,22 @@ export const BALANCE = {
   moneyFindMin: 5,
   moneyFindMax: 25,
 
+  /** SCAVENGE event (manual explorations only): base trigger chance and
+   *  pity threshold — after N explorations without the event it fires 100%.
+   *  The board lasts scavengeEventSeconds and unclaimed cells are lost. */
+  scavengeBaseChance: 0.2,
+  scavengePityThreshold: 5,
+  scavengeEventSeconds: 20,
+  scavengeCells: 12,
+  /** Loot per claimed cell: amount range by resource kind (time resources
+   *  are in MINUTES like exploration finds; money uses moneyFindMin/Max). */
+  scavengeLootUnitsMin: 1,
+  scavengeLootUnitsMax: 4,
+  scavengeLootTimeMin: 15,
+  scavengeLootTimeMax: 40,
+  /** Cells with a find: ~55 % loot, the rest escombros. Tune via balance. */
+  scavengeLootChance: 0.55,
+
   /** Stat effectiveness factor: p = base * (1 + stat * k). */
   statEffectFactor: 0.035,
 

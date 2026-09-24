@@ -38,6 +38,8 @@ import {
   narrBuildDone,
 } from "@/game/narrativeLog";
 import { rollExploration, npcChanceForCounter, discoverableNpcIds } from "@/game/explorationEngine";
+import { checkScavengeTrigger, completeScavenge } from "@/game/scavenge";
+import { ScavengeModal } from "@/components/game/ScavengeModal";
 import {
   buildingUpgradeCost,
   buildingUpgradeMinutes,
@@ -95,6 +97,8 @@ export interface GameContextValue {
   offlineSummary: OfflineSummary | null;
   dismissOfflineSummary: () => void;
   startExploration: (zoneId: number) => void;
+  /** Close the active scavenge event, granting claimed loot (expired → none). */
+  completeScavengeEvent: (expired: boolean) => void;
   /** Toggle the background auto-exploration farm for a specific zone. */
   toggleAutoExplore: (zoneId: number) => void;
   /** Highest zone id reachable with the player's total EXP. */
@@ -787,6 +791,42 @@ export function GameProvider({ children }: { children: ReactNode }) {
         s.explorationStates[zoneId] = { zoneId, startedAt: now, finishAt: now + minutes * 60000, expId };
         pushLog(s, `[EXP #${expId}] Z${String(zoneId).padStart(2, "0")} | INICIO | duración ${minutes * 60}s`, "info", now);
         narrExplorationStart(s, zoneId, getZone(zoneId).name);
+        // SCAVENGE event roll (manual explorations only, never auto-farm):
+        // 20 % base + pity guarantee after 5 without the event. The run's
+        // timer keeps ticking while the minigame overlays the screen.
+        if (checkScavengeTrigger(s, zoneId)) {
+          pushLog(s, `[EXP #${expId}] EVENTO | Zona de suministros detectada · minijuego SCAVENGE`, "info", now);
+        }
+      });
+    },
+    [setAndSave],
+  );
+
+  /** Close the scavenge minigame: grant claimed loot, log the haul and
+   *  clear the event from the state. `expired` only affects the log tone. */
+  const completeScavengeEvent = useCallback(
+    (expired: boolean) => {
+      setAndSave((s) => {
+        if (!s.scavengeEvent) return;
+        const granted = completeScavenge(s);
+        if (granted.length > 0) {
+          for (const g of granted) {
+            const isTime = g.resource === "comida" || g.resource === "agua";
+            pushLog(s, `EVENTO | SCAVENGE · +${g.amount}${isTime ? " min" : ""} ${g.resource === "dinero" ? "$" : g.resource}`, "resource");
+          }
+          toast.success("SAQUEO COMPLETADO", {
+            description: granted
+              .map((g) => `+${g.amount}${g.resource === "comida" || g.resource === "agua" ? " min" : ""} ${g.resource === "dinero" ? "$" : g.resource}`)
+              .join(" · "),
+          });
+        } else {
+          pushLog(s, expired ? "EVENTO | SCAVENGE expirado · botín no reclamado perdido" : "EVENTO | SCAVENGE cerrado sin hallazgos", "info");
+          toast.info(expired ? "Saqueo interrumpido" : "Saqueo terminado", {
+            description: expired
+              ? "El tiempo se agotó — el botín no reclamado se perdió."
+              : "No encontraste nada aprovechable esta vez.",
+          });
+        }
       });
     },
     [setAndSave],
@@ -1098,6 +1138,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       syncNow,
       restoreFromCloud,
       startExploration,
+      completeScavengeEvent,
       toggleAutoExplore,
       maxUnlockedZoneId: state ? computeZoneUnlocks(state) : 1,
       setCurrentZone,
@@ -1117,13 +1158,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
       speedMultiplier,
       setSpeed,
     }),
-    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, speedMultiplier, setSpeed],
+    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, completeScavengeEvent, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, speedMultiplier, setSpeed],
   );
 
   return (
     <GameContext.Provider value={value}>
       {children}
       <OfflineSummaryModal />
+      <ScavengeModal />
     </GameContext.Provider>
   );
 }

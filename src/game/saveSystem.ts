@@ -97,6 +97,8 @@ export function createInitialState(survivor: GameState["survivor"], now = Date.n
     manualExplorationsDone: 0,
     nextExplorationId: 1,
     explorationsSinceLastNPC: 0,
+    explorationsSinceLastScavenge: 0,
+    scavengeEvent: null,
     base: createInitialBase(),
     zones: createInitialZones(),
     npcs: [],
@@ -372,6 +374,17 @@ function normalizeState(state: GameState): GameState {
   if (!s.autoExplored || typeof s.autoExplored !== "object") s.autoExplored = {};
   if (!s.explorationStates || typeof s.explorationStates !== "object") s.explorationStates = {};
   if (typeof s.explorationsSinceLastNPC !== "number") s.explorationsSinceLastNPC = 0;
+  if (typeof s.explorationsSinceLastScavenge !== "number") s.explorationsSinceLastScavenge = 0;
+  // A persisted active event whose board already expired while away is
+  // simply closed on load (unclaimed loot is lost by design).
+  if (s.scavengeEvent) {
+    if (Date.now() >= s.scavengeEvent.expiresAt) s.scavengeEvent = null;
+    else if (!Array.isArray(s.scavengeEvent.board) || !Array.isArray(s.scavengeEvent.claimed)) {
+      s.scavengeEvent = null;
+    }
+  } else {
+    s.scavengeEvent = null;
+  }
   if (typeof s.nextExplorationId !== "number") s.nextExplorationId = (s.explorationsDone ?? 0) + 1;
   if (typeof s.manualExplorationsDone !== "number") s.manualExplorationsDone = s.explorationsDone ?? 0;
   // NPC recruitment migration: NPCs owned before the recruitment system

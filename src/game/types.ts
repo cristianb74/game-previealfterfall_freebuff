@@ -137,6 +137,11 @@ export interface GameState {
   nextExplorationId: number;
   /** Counter since last NPC discovery (for balanced spawn system). */
   explorationsSinceLastNPC: number;
+  /** Manual explorations since the last SCAVENGE event (pity counter:
+  *  at scavengePityThreshold the next manual exploration fires it 100%). */
+  explorationsSinceLastScavenge: number;
+  /** Active scavenge minigame event, if any (null = inactive). */
+  scavengeEvent: ActiveScavengeEvent | null;
   /** GLOBAL core buildings (cocina, tanque, …): one shared instance per
    *  character, bonus applies to every zone (SAVE_VERSION ≥ 2). */
   base: Record<BuildingKey, BuildingState>;
@@ -178,6 +183,33 @@ export interface ExplorationOutcome {
   zoneId: number;
   exp: number;
   findings: ExplorationFinding[];
+}
+
+// ============================================================
+// SCAVENGE EVENT — manual-exploration minigame (no combat).
+// Triggered by probability with a pity system; the board is stored in
+// the GameState so the event survives reloads and expires on its own.
+// ============================================================
+
+/** Loot inside one scavenge cell. `null` loot = escombros (empty find). */
+export interface ScavengeLoot {
+  resource: ResourceKey;
+  amount: number;
+}
+
+export interface ScavengeCell {
+  loot: ScavengeLoot | null;
+}
+
+/** The single active scavenge event (EVENT_SCAVENGE_ACTIVE equivalent:
+ *  `GameState.scavengeEvent != null` means the event is running). */
+export interface ActiveScavengeEvent {
+  zoneId: number;
+  startedAt: number; // absolute timestamp (announce window start)
+  expiresAt: number; // absolute timestamp (board closes, unclaimed loot lost)
+  board: ScavengeCell[];
+  /** Indices already claimed by the player. */
+  claimed: number[];
 }
 
 export type Screen =
