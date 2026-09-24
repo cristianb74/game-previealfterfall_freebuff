@@ -97,14 +97,16 @@ export function isScavengeExpired(
 }
 
 /** Apply the loot of CLAIMED cells to the game state and clear the event.
- *  Claimed loot is always granted — even if the timer expired afterwards;
- *  only the unclaimed cells are lost on expiry ("escombros" grant nothing).
+ *  `claimed` holds the board indexes tapped by the player in the modal (the
+ *  minigame keeps them locally, so they arrive here on close). Claimed loot
+ *  is always granted — even if the timer expired afterwards; only the
+ *  unclaimed cells are lost on expiry ("escombros" grant nothing).
  *  Returns the granted loot for the summary UI. */
-export function completeScavenge(state: GameState): ScavengeGrant[] {
+export function completeScavenge(state: GameState, claimed: number[]): ScavengeGrant[] {
   const event = state.scavengeEvent;
   if (!event) return [];
   const granted: ScavengeGrant[] = [];
-  for (const idx of event.claimed) {
+  for (const idx of new Set(claimed)) {
     const loot = event.board[idx]?.loot;
     if (!loot) continue;
     if (loot.resource === "comida") state.foodMin += loot.amount;

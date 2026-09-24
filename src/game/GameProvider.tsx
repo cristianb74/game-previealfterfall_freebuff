@@ -97,8 +97,9 @@ export interface GameContextValue {
   offlineSummary: OfflineSummary | null;
   dismissOfflineSummary: () => void;
   startExploration: (zoneId: number) => void;
-  /** Close the active scavenge event, granting claimed loot (expired → none). */
-  completeScavengeEvent: (expired: boolean) => void;
+  /** Close the active scavenge event, granting the tapped cells' loot
+   *  (`claimed` = board indexes collected in the modal; expired → only those). */
+  completeScavengeEvent: (expired: boolean, claimed: number[]) => void;
   /** Toggle the background auto-exploration farm for a specific zone. */
   toggleAutoExplore: (zoneId: number) => void;
   /** Highest zone id reachable with the player's total EXP. */
@@ -802,13 +803,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
     [setAndSave],
   );
 
-  /** Close the scavenge minigame: grant claimed loot, log the haul and
-   *  clear the event from the state. `expired` only affects the log tone. */
+  /** Close the scavenge minigame: grant the loot of the cells the player
+   *  tapped (indexes come from the modal before it unmounts), log the haul
+   *  and clear the event. `expired` only affects the log tone. */
   const completeScavengeEvent = useCallback(
-    (expired: boolean) => {
+    (expired: boolean, claimed: number[]) => {
       setAndSave((s) => {
         if (!s.scavengeEvent) return;
-        const granted = completeScavenge(s);
+        const granted = completeScavenge(s, claimed);
         if (granted.length > 0) {
           for (const g of granted) {
             const isTime = g.resource === "comida" || g.resource === "agua";

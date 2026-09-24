@@ -46,7 +46,8 @@ export function ScavengeModal() {
   const open = event != null;
 
   const [phase, setPhase] = useState<Phase>("announce");
-  /** Cells already tapped — claimed loot is banked even on expiry. */
+  /** Cells already tapped — handed to completeScavengeEvent on close so
+   *  their loot is banked into the global state (even on expiry). */
   const [tapped, setTapped] = useState<number[]>([]);
   const [now, setNow] = useState(() => vnow());
 
@@ -230,7 +231,7 @@ export function ScavengeModal() {
                 </p>
               )}
               <Button
-                onClick={() => completeScavengeEvent(expired)}
+                onClick={() => completeScavengeEvent(expired, tapped)}
                 className="h-10 w-full border border-green-500/40 bg-green-600/90 font-bold uppercase tracking-widest text-black hover:bg-green-500"
               >
                 Continuar
