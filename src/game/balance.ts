@@ -1,5 +1,6 @@
 import type {
   BuildingKey,
+  GameState,
   ResourceKey,
   StatKey,
 } from "./types";
@@ -67,6 +68,19 @@ export const BALANCE = {
    *  the cap keep running (never force-disabled); from then on the player
    *  must free a slot (turn one off) before activating another zone. */
   maxConcurrentAutoFarms: 6,
+  /** AUTO-farm diminishing returns per SIMULTANEOUS active zones.
+   *  Zones with auto ON are ranked by zone id ASCENDING (earliest/dominated
+   *  zones keep the full rate; the last-unlocked zones absorb the cut) and
+   *  each rank's farm EXP is multiplied by its tier factor. Applied
+   *  identically online (completeAutoRun) and offline (offlineProgress)
+   *  via autoFarmConcurrentFactorFor — never hardcode these factors.
+   *  fromIndex is the 0-based rank where the factor starts applying. */
+  autoFarmConcurrentTiers: [
+    { fromIndex: 0, factor: 1.0 },  // 1st–3rd active zone → 100 %
+    { fromIndex: 3, factor: 0.8 },  // 4th–6th → 80 %
+    { fromIndex: 6, factor: 0.6 },  // 7th–10th → 60 %
+    { fromIndex: 10, factor: 0.4 }, // 11th+ → 40 %
+  ] as const,
 
   /** Money find base chance per exploration, and amount range. */
   moneyFindChance: 0.03,
@@ -140,6 +154,36 @@ export const BALANCE = {
   /** Unlock thresholds are derived from zone definitions (see zones.ts). */
   zoneUnlockToastLabel: "NUEVA ZONA DESBLOQUEADA",
 } as const;
+
+/** AUTO-farm diminishing-returns helpers. Shared by the online tick
+ *  (completeAutoRun) and the offline simulation (offlineProgress) so the
+ *  two paths can never drift apart. */
+
+/** Factor for a 0-based active-zone rank (ascending zone id order). */
+export function autoFarmFactorForActiveIndex(rank: number): number {
+  let factor = 1;
+  for (const tier of BALANCE.autoFarmConcurrentTiers) {
+    if (rank >= tier.fromIndex) factor = tier.factor;
+  }
+  return factor;
+}
+
+/** Diminishing-returns factor for ONE zone's auto-farm, given how many
+ *  zones currently have auto ON. Inactive zones always return 1 (this
+ *  must never touch manual exploration rewards). */
+export function autoFarmConcurrentFactorFor(
+  state: Pick<GameState, "autoExplored">,
+  zoneId: number,
+): number {
+  if (!state.autoExplored[zoneId]) return 1;
+  const activeZoneIds = Object.keys(state.autoExplored)
+    .map(Number)
+    .filter((id) => state.autoExplored[id])
+    .sort((a, b) => a - b);
+  const rank = activeZoneIds.indexOf(zoneId);
+  if (rank < 0) return 1;
+  return autoFarmFactorForActiveIndex(rank);
+}
 
 /** Which building boosts which resource. */
 export const BUILDING_SPECIALIZATION: Record<BuildingKey, ResourceKey> = {

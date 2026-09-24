@@ -1,4 +1,4 @@
-import { BALANCE } from "./balance";
+import { BALANCE, autoFarmConcurrentFactorFor } from "./balance";
 import { getZone, frontierZoneId, ZONES } from "./zones";
 import { rollNpcCycle, npcZoneSpeedFactor } from "./npcTypes";
 import { applyEnergyRegen } from "./energySystem";
@@ -167,6 +167,8 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
   }
   // Offline auto-farm cycles per zone: credit reduced EXP for chained runs
   // while away (at settle time). Pending runs are completed by the tick.
+  // The concurrent-zone diminishing-returns factor is applied identically
+  // to the online tick (both paths share autoFarmConcurrentFactorFor).
   for (const zid of Object.keys(state.autoExplored ?? {}).map(Number)) {
     if (!state.autoExplored[zid]) continue;
     const run = state.autoFarms?.[zid];
@@ -177,7 +179,12 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
         npcZoneSpeedFactor(state, zid);
       const settleMin = Math.min(rawMinutes, capMin);
       const cycles = Math.max(0, Math.floor(settleMin / cycleMin) - 1);
-      const farmExp = Math.max(1, Math.round(getZone(zid).playerExpReward * BALANCE.autoExploreExpFactor));
+      const farmExp = Math.max(
+        1,
+        Math.round(
+          getZone(zid).playerExpReward * BALANCE.autoExploreExpFactor * autoFarmConcurrentFactorFor(state, zid),
+        ),
+      );
       state.exp += farmExp * cycles;
       state.expTotal += farmExp * cycles;
       summary.expEarned += farmExp * cycles;
