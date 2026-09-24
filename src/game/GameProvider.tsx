@@ -790,11 +790,23 @@ export function GameProvider({ children }: { children: ReactNode }) {
   );
 
   /** Turn the background farm on/off. ON starts a run in the last conquered
-   *  zone immediately; OFF cancels the running auto run (it costs nothing). */
+   *  zone immediately; OFF cancels the running auto run (it costs nothing).
+   *  ON is gated by BALANCE.maxConcurrentAutoFarms — the cap only blocks NEW
+   *  activations: saves already above the cap keep their farms running and
+   *  just cannot activate more zones until they drop below the cap. */
   const toggleAutoExplore = useCallback(
     (zoneId: number) => {
       setAndSave((s) => {
         const was = s.autoExplored[zoneId] ?? false;
+        if (!was) {
+          const activeCount = Object.keys(s.autoExplored).filter((id) => s.autoExplored[Number(id)]).length;
+          if (activeCount >= BALANCE.maxConcurrentAutoFarms) {
+            toast.error("Máximo de zonas en auto-farm", {
+              description: `Ya tenés ${activeCount} zonas activas (máximo ${BALANCE.maxConcurrentAutoFarms}). Desactivá alguna primero.`,
+            });
+            return;
+          }
+        }
         s.autoExplored[zoneId] = !was;
         const zoneName = getZone(zoneId).name;
         pushLog(s, !was ? `Auto-exploración activada en ${zoneName}` : `Auto-exploración desactivada en ${zoneName}`, "info");

@@ -62,6 +62,11 @@ export const BALANCE = {
   /** AUTO-farm NPC discovery: the manual chance (npcTiers) is multiplied by
    *  this factor. One roll per auto-run completion, same shared counter. */
   autoNpcChanceFactor: 0.3,
+  /** Max zones with the background auto-farm active at the same time.
+   *  Only gates NEW activations — farms already active in old saves above
+   *  the cap keep running (never force-disabled); from then on the player
+   *  must free a slot (turn one off) before activating another zone. */
+  maxConcurrentAutoFarms: 6,
 
   /** Money find base chance per exploration, and amount range. */
   moneyFindChance: 0.03,
