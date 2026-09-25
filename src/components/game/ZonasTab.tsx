@@ -5,7 +5,7 @@ import { THEMATIC_BY_KEY } from "@/game/buildings";
 import { vnow } from "@/game/virtualClock";
 import { currentEnergy } from "@/game/energySystem";
 import { NPC_TYPE_MODIFIERS, npcProductionMultiplier } from "@/game/npcTypes";
-import { BUILDING_SPECIALIZATION } from "@/game/balance";
+import { BALANCE, BUILDING_SPECIALIZATION } from "@/game/balance";
 import type { BuildingKey } from "@/game/types";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +40,30 @@ function getActiveBuildings(
     }
   }
   return list;
+}
+
+/** MAX badge: every THEMATIC building of the zone reached max level
+ *  (in-flight upgrades don't count — the badge appears when nothing is
+ *  left to start). In-game source of truth: state.zones[id].thematic. */
+function isZoneMaxedZone(
+  thematic: Record<string, { level: number; upgradeFinishAt: number | null }> | undefined,
+): boolean {
+  if (!thematic) return false;
+  const entries = Object.values(thematic);
+  if (entries.length === 0) return false;
+  return entries.every((b) => b.level >= BALANCE.buildingMaxLevel && !b.upgradeFinishAt);
+}
+
+/** Golden MAX badge for fully upgraded zones. */
+function ZoneMaxBadge() {
+  return (
+    <span className="absolute right-1.5 bottom-1.5 z-10 flex items-center gap-0.5 rounded-sm border border-amber-400/70 bg-black/80 px-1.5 py-0.5 shadow-[0_0_8px_1px_rgba(251,191,36,0.45)]">
+      <span aria-hidden className="text-[8px] leading-none">★</span>
+      <span className="text-[8px] font-black uppercase leading-none tracking-widest text-amber-400">
+        Max
+      </span>
+    </span>
+  );
 }
 
 /** NPC indicator for a zone card. */
@@ -90,6 +114,7 @@ export function ZonasTab() {
     setCurrentZone,
     setScreen,
     maxUnlockedZoneId,
+    savedZonasScrollRef,
     toggleAutoExplore,
     startExploration,
   } = useGame();
@@ -111,6 +136,7 @@ export function ZonasTab() {
       </p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {ZONES.map((z) => {
+          const zoneMaxed = isZoneMaxedZone(state.zones[z.id]?.thematic);
           const unlocked = z.id <= unlockedMax;
           const isCurrent = state.currentZoneId === z.id;
           const isExploring = state.explorationStates[z.id] != null;
@@ -129,6 +155,7 @@ export function ZonasTab() {
               <button
                 onDoubleClick={() => {
                   if (!unlocked) return;
+                  savedZonasScrollRef.current = window.scrollY;
                   setCurrentZone(z.id);
                   setScreen("instalaciones");
                 }}
@@ -152,7 +179,9 @@ export function ZonasTab() {
                   isCurrent
                     ? "border-green-500/70"
                     : unlocked
-                      ? "border-zinc-800 hover:border-green-500/60 active:border-green-500"
+                      ? zoneMaxed
+                        ? "border-amber-500/40 hover:border-amber-400/70 active:border-amber-400"
+                        : "border-zinc-800 hover:border-green-500/60 active:border-green-500"
                       : "border-zinc-800/60 opacity-45",
                 )}
               >
@@ -190,7 +219,8 @@ export function ZonasTab() {
                       🔒
                     </span>
                   )}
-                  {/* NPC indicator */}
+                  {/* MAX badge (fully upgraded zone) + NPC indicator */}
+                  {unlocked && zoneMaxed && <ZoneMaxBadge />}
                   {unlocked && <NpcIndicator npcId={assignedNpc} />}
                 </div>
                 <div className="flex min-h-0 flex-1 flex-col p-2">
@@ -213,9 +243,21 @@ export function ZonasTab() {
                       "mt-1.5 h-11 shrink-0 overflow-hidden rounded-sm px-1.5 py-1",
                       unlocked && activeBuildings.length > 0
                         ? "border border-amber-800/40 bg-amber-950/50"
-                        : "invisible border border-transparent",
+                        : unlocked && zoneMaxed
+                          ? "border border-amber-900/25 bg-amber-950/20"
+                          : "invisible border border-transparent",
                     )}
                   >
+                    {activeBuildings.length === 0 && zoneMaxed && (
+                      <>
+                        <p className="text-[8px] font-bold uppercase leading-[11px] tracking-wider text-amber-500/90">
+                          ★ Instalaciones al máximo
+                        </p>
+                        <p className="text-[9px] leading-[13px] text-amber-700">
+                          Nada más que mejorar en esta zona.
+                        </p>
+                      </>
+                    )}
                     {activeBuildings.length > 0 && (
                       <>
                         <p className="text-[8px] font-bold uppercase leading-[11px] tracking-wider text-amber-500">

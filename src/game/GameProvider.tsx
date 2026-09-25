@@ -102,6 +102,8 @@ export interface GameContextValue {
   restoreFromCloud: () => Promise<void>;
   /** Offline progress summary (shown once per boot in a modal). */
   offlineSummary: OfflineSummary | null;
+  /** Saved Zonas-list scroll position (list → Instalaciones → back). */
+  savedZonasScrollRef: { current: number | null };
   dismissOfflineSummary: () => void;
   startExploration: (zoneId: number) => void;
   /** Search one scavenge point of the ACTIVE event (rolls + applies loot/
@@ -180,6 +182,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [offlineSummary, setOfflineSummary] = useState<OfflineSummary | null>(null);
   /** Session-only game speed (dev tool). Resets to x1 on every reload. */
   const [speedMultiplier, setSpeedMultiplierState] = useState<SpeedMultiplier>(() => getSpeedMultiplier());
+  /** Offline summary prepared by boot, shown once the player actually
+   *  enters /juego ("Continuar") — never on the welcome/login screen. */
+  const pendingOfflineSummaryRef = useRef<OfflineSummary | null>(null);
+  /** Saved scroll position of the Zonas list, kept here (not in a screen
+   *  component) so it survives ZonasTab/InstalacionesTab unmounts. Saved by
+   *  the card's double-tap before entering Instalaciones; restored by
+   *  Game's screen-change effect on the explicit "← Volver a Zonas". */
+  const savedZonasScrollRef = useRef<number | null>(null);
   const stateRef = useRef<GameState | null>(null);
   const saveTimer = useRef<number | null>(null);
   const bootOnceRef = useRef(false);
@@ -255,7 +265,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
           stateRef.current = next;
           setState(next);
           setHasSaveFile(true);
-          if (offline.summary.minutesAway >= 1) setOfflineSummary(offline.summary);
+          // Show offline rewards only once the player is actually in the
+          // game screen; on the welcome screen defer to continueGame.
+          if (offline.summary.minutesAway >= 1) {
+            if (window.location.pathname === "/juego") {
+              setOfflineSummary(offline.summary);
+            } else {
+              pendingOfflineSummaryRef.current = offline.summary;
+            }
+          }
           toast.success("PROGRESO RESTAURADO", {
             description: "Tu partida se ha sincronizado desde la nube.",
           });
@@ -330,7 +348,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
         stateRef.current = next;
         setState(next);
         setHasSaveFile(true);
-        if (offline.summary.minutesAway >= 1) setOfflineSummary(offline.summary);
+        if (offline.summary.minutesAway >= 1) {
+          if (window.location.pathname === "/juego") {
+            setOfflineSummary(offline.summary);
+          } else {
+            pendingOfflineSummaryRef.current = offline.summary;
+          }
+        }
         toast.success("PROGRESO RESTAURADO", {
           description: "Se ha cargado la copia de la nube.",
         });
@@ -367,8 +391,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
         setState(s);
         stateRef.current = s;
         setHasSaveFile(true);
+        // Offline rewards show ONLY after the player actually enters the
+        // game ("Continuar" → /juego). Booting just prepares the session:
+        // stash the summary so continueGame/initial cloud pull can show it.
         if (result.summary.minutesAway >= 1) {
-          setOfflineSummary(result.summary);
+          pendingOfflineSummaryRef.current = result.summary;
         }
       } else {
         setHasSaveFile(false);
@@ -763,6 +790,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         else s.resources[p] += amount;
       }
       s.explorationsSinceLastNPC = 0;
+      pendingOfflineSummaryRef.current = null; // fresh start: drop boot stash
       pushLog(s, "Comienza tu supervivencia", "info", now);
       setState(s);
       stateRef.current = s;
@@ -787,7 +815,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
       stateRef.current = s;
       setHasSaveFile(true);
       setScreen("zonas");
-      if (result.summary.minutesAway >= 1) setOfflineSummary(result.summary);
+      if (result.summary.minutesAway >= 1) {
+        setOfflineSummary(result.summary);
+      } else if (pendingOfflineSummaryRef.current) {
+        // Boot already computed an offline summary (e.g. fresh cloud pull
+        // right before): show it now that we are entering the game.
+        setOfflineSummary(pendingOfflineSummaryRef.current);
+      }
+      pendingOfflineSummaryRef.current = null;
       navigateRef.current?.("/juego");
     }
   }, []);
@@ -1211,11 +1246,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
       rollOptions,
       rerollSurvivors,
       offlineSummary,
+      savedZonasScrollRef,
       dismissOfflineSummary: () => setOfflineSummary(null),
       speedMultiplier,
       setSpeed,
     }),
-    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave,      cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, searchScavenge, finishScavengeEvent, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, speedMultiplier, setSpeed],
+    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave,      cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, searchScavenge, finishScavengeEvent, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, savedZonasScrollRef, speedMultiplier, setSpeed],
   );
 
   return (

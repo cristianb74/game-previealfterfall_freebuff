@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { HUD } from "@/components/game/HUD";
+import { returnToZonasWithScroll } from "@/pages/Game";
 import { useGame } from "@/game/GameProvider";
 import {
   activeThematicConstructions,
@@ -15,7 +16,7 @@ import { BALANCE } from "@/game/balance";
 import { vnow } from "@/game/virtualClock";
 import { RESOURCE_META } from "@/game/resources";
 import { getZone, zoneFocusBonus, zoneImage } from "@/game/zones";
-import type { ResourceKey } from "@/game/types";
+import type { ResourceKey, Screen } from "@/game/types";
 import { cn } from "@/lib/utils";
 
 function fmtCountdown(ms: number): string {
@@ -60,8 +61,14 @@ function CostBreakdown({
  *  only boost finds in their own zone. Reached via double-tap on a zone
  *  card or from the global Base header. Amber tone to distinguish from
  *  the green global Base tab. */
-export function InstalacionesTab() {
-  const { state, upgradeThematicBuilding, setScreen } = useGame();
+export function InstalacionesTab({
+  /** Where the visible "← Volver" button returns; the Game passes
+   *  "zonas" when opened from a zone card so the list scroll position
+   *  saved before entering is restored. */
+  returnScreen = "base",
+}: {
+  returnScreen?: Screen;  } = {}) {
+  const { state, upgradeThematicBuilding, setScreen, savedZonasScrollRef } = useGame();
   const [, force] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => force((v) => v + 1), 1000);
@@ -115,12 +122,18 @@ export function InstalacionesTab() {
             </p>
           </div>
         </div>
+        {/* Explicit back button: restores the Zonas list scroll position
+            saved before entering this detail view (see returnToZonasWithScroll). */}
         <button
           type="button"
-          onClick={() => setScreen("zonas")}
-          className="mt-2 text-[9px] font-bold uppercase tracking-wider text-subtle transition-colors hover:text-amber-400"
+          onClick={() =>
+            returnScreen === "zonas"
+              ? returnToZonasWithScroll(setScreen, savedZonasScrollRef)
+              : setScreen(returnScreen)
+            }
+          className="mt-2 flex items-center gap-1 self-start rounded-sm border border-amber-900/50 bg-amber-950/30 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-amber-300 transition-colors hover:border-amber-500/60 hover:bg-amber-900/40 hover:text-amber-200"
         >
-          ‹ Elegir otra zona
+          ← Volver a Zonas
         </button>
       </div>
 

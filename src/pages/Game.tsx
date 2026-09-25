@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
+import { useEffect as useEffect0 } from "react";
 import { HUD } from "@/components/game/HUD";
 import { ZonasTab } from "@/components/game/ZonasTab";
 import { EquipoTab } from "@/components/game/EquipoTab";
@@ -26,8 +27,27 @@ const TABS: { key: Screen; label: string; glyph: string }[] = [
   { key: "registro", label: "Registro", glyph: "📋" },
 ];
 
+/** Escape hatch from the Instalaciones detail back to the Zonas list:
+ *  Game's screen-change effect restores the saved list scroll (the Zonas
+ *  list saves it in the card's onDoubleClick before switching screens). */
+export function returnToZonasWithScroll(
+  setScreen: (s: Screen) => void,
+  savedScrollRef: { current: number | null },
+) {
+  savedScrollRef.current = window.scrollY;
+  setScreen("zonas");
+}
+
 export default function Game() {
-  const { state, booted, hasSaveFile, screen, setScreen, maxUnlockedZoneId } = useGame();
+  const {
+    state,
+    booted,
+    hasSaveFile,
+    screen,
+    setScreen,
+    maxUnlockedZoneId,
+    savedZonasScrollRef,
+  } = useGame();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -40,10 +60,22 @@ export default function Game() {
   // Mochila", etc.). The page itself is the scroll container, so resetting
   // window scroll is enough. Skipped on first mount so browser scroll
   // restoration (system back button, initial load) stays untouched.
+  // EXCEPT: an explicit "← Volver a Zonas" from Instalaciones restores the
+  // exact scroll position saved on the Zonas list before entering it.
   const prevScreenRef = useRef<Screen | null>(null);
-  useEffect(() => {
+  useEffect0(() => {
     if (prevScreenRef.current !== null && prevScreenRef.current !== screen) {
-      window.scrollTo(0, 0);
+      const saved = savedZonasScrollRef.current;
+      if (prevScreenRef.current === "instalaciones" && screen === "zonas" && saved != null) {
+        // Explicit return: restore the memorized list position (instant,
+        // before paint so the user never sees the top of the list).
+        window.scrollTo(0, saved);
+        savedZonasScrollRef.current = null;
+      } else {
+        window.scrollTo(0, 0);
+        // Arriving by another path invalidates any stashed position.
+        savedZonasScrollRef.current = null;
+     }
     }
     prevScreenRef.current = screen;
   }, [screen]);
@@ -105,7 +137,7 @@ export default function Game() {
             {screen === "zonas" && <ZonasTab />}
             {screen === "equipo" && <EquipoTab />}
             {screen === "base" && <BaseTab />}
-            {screen === "instalaciones" && <InstalacionesTab />}
+            {screen === "instalaciones" && <InstalacionesTab returnScreen="zonas" />}
             {screen === "mercader" && <MercaderTab />}
             {screen === "mochila" && <MochilaTab />}
             {screen === "perfil" && <PerfilTab />}
