@@ -217,23 +217,6 @@ export function pendingScavengePoints(event: NonNullable<GameState["scavengeEven
   return pending;
 }
 
-/** Boot-time restore: a persisted scavenge session would re-open the
- *  modal as a blocker before the player reaches /juego. Resolve it here
- *  instead — searched points keep their already-applied loot/damage,
- *  unsearched ones settle as "nada" — and narrate the closure in the log. */
-export function settleScavengeOnBoot(state: GameState): void {
-  const event = state.scavengeEvent;
-  if (!event) return;
-  const loc = scavengeLocationForZone(event.zoneId);
-  const results = finishScavenge(state);
-  const lootLines = results.filter((r) => r.kind === "loot" && r.loot);
-  const damage = results.reduce((acc, r) => acc + (r.kind === "dano" ? r.damage ?? 0 : 0), 0);
-  pushLog(
-    state,
-    `EVENTO | SCAVENGE cerrado al reabrir · ${loc.name} · hallazgos: ${lootLines.length}, daño: ${damage}`, "resource", vnow(),
-  );
-}
-
 /** Close the event: settle any unsearched points as "nada" and clear it.
  *  Loot/damage already applied at search time — quitting keeps everything
  *  found so far (per design). Returns the results of the session for the
@@ -254,6 +237,25 @@ export function finishScavenge(state: GameState): ScavengePointResult[] {
   }
   state.scavengeEvent = null;
   return results;
+}
+
+/** Boot-time restore: a persisted scavenge session would re-open the
+ *  modal as a blocker before the player reaches /juego. Resolve it here
+ *  instead — searched points keep their already-applied loot/damage,
+ *  unsearched ones settle as "nada" — and narrate the closure in the log. */
+export function settleScavengeOnBoot(state: GameState): void {
+  const event = state.scavengeEvent;
+  if (!event) return;
+  const loc = scavengeLocationForZone(event.zoneId);
+  const results = finishScavenge(state);
+  const lootLines = results.filter((r) => r.kind === "loot" && r.loot);
+  const damage = results.reduce((acc, r) => acc + (r.kind === "dano" ? r.damage ?? 0 : 0), 0);
+  pushLog(
+    state,
+    `EVENTO | SCAVENGE cerrado al reabrir · ${loc.name} · hallazgos: ${lootLines.length}, daño: ${damage}`,
+    "resource",
+    vnow(),
+  );
 }
 
 /** Re-exported so the modal can build the board UI without importing
