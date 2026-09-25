@@ -128,7 +128,7 @@ export function ScavengeModal() {
                 <img
                   src={loc.image}
                   alt={loc.name}
-                  className="aspect-[4/3] w-full select-none object-cover opacity-90"
+                  className="aspect-[1253/847] w-full select-none object-cover opacity-90"
                   draggable={false}
                   onError={(e) => {
                     // JPG not present yet → vector fallback scene.

@@ -16,13 +16,15 @@ export type { ScavengePointId };
 // ============================================================
 
 /** The 8 shared search points, in board order. Same coordinates
- *  for ALL locations (the 5 images share the same composition). */
+ *  for ALL locations (the 5 images share the same composition).
+ *  Calibrated against the real 1253×847 artwork: p2/p4/p5 shifted
+ *  so every location's pin lands on a searchable object. */
 export const SCAVENGE_PINS: { id: ScavengePointId; x: number; y: number }[] = [
   { id: "p1", x: 43, y: 10 },
-  { id: "p2", x: 10, y: 47 },
+  { id: "p2", x: 10, y: 52 },
   { id: "p3", x: 35, y: 25 },
-  { id: "p4", x: 35, y: 43 },
-  { id: "p5", x: 31, y: 74 },
+  { id: "p4", x: 41, y: 43 },
+  { id: "p5", x: 40, y: 74 },
   { id: "p6", x: 87, y: 25 },
   { id: "p7", x: 87, y: 62 },
   { id: "p8", x: 68, y: 75 },
@@ -92,13 +94,13 @@ export const SCAVENGE_LOCATIONS: Record<ScavengeFocus, ScavengeLocationDef> = {
         },
       },
       p2: {
-        label: "Pila de carritos y chatarra",
+        label: "Carritos y sistema de tracción",
         weights: { ...W.rich },
         loot: [M(6), D(2)],
         texts: {
-          loot: ["Entre carritos enredados encontraste {amount} de {res}."],
-          nada: ["Solo carritos fundidos entre sí. Nada aprovechable."],
-          dano: ["Un borde de chapa oxidada te abre el antebrazo: -{damage} Salud."],
+          loot: ["Entre los carritos y el arrancador naranja: {amount} de {res}."],
+          nada: ["Los carritos están enredados y vacíos. Nada."],
+          dano: ["Una chapa del arrancador oxidado te corta: -{damage} Salud."],
         },
       },
       p3: {
@@ -112,23 +114,23 @@ export const SCAVENGE_LOCATIONS: Record<ScavengeFocus, ScavengeLocationDef> = {
         },
       },
       p4: {
-        label: "Sedán con un árbol encima",
+        label: "Auto enterrado en la maleza",
         weights: { ...W.normal },
         loot: [CP(3), M(4)],
         texts: {
-          loot: ["Batería y cables del sedán aplastado: {amount} de {res}."],
-          nada: ["El motor está fundido. No queda nada útil."],
-          dano: ["Una rama carga con todo el peso del auto y cede: -{damage} Salud."],
+          loot: ["Entre la maleza que traga el auto: {amount} de {res}."],
+          nada: ["El auto está vacío por dentro. Solo hojas."],
+          dano: ["Una rama escondida te araña al meterte: -{damage} Salud."],
         },
       },
       p5: {
-        label: "Auto volcado",
+        label: "Berlina con árbol encima",
         weights: { ...W.normal },
         loot: [M(5), D(1)],
         texts: {
-          loot: ["Bajo el chasis volcado, {amount} de {res}."],
-          nada: ["Revisaste el interior: vacío y apestoso."],
-          dano: ["El auto se corre un palmo más al moverlo: -{damage} Salud."],
+          loot: ["Bajo la berlina ocupada por el árbol: {amount} de {res}."],
+          nada: ["Habitáculo vaciado hace años. Nada."],
+          dano: ["La rama cede y descarga el peso del auto: -{damage} Salud."],
         },
       },
       p6: {
@@ -175,13 +177,13 @@ export const SCAVENGE_LOCATIONS: Record<ScavengeFocus, ScavengeLocationDef> = {
     fallbackImage: "/assets/scavenge/comida.svg",
     points: {
       p1: {
-        label: "Góndola superior",
+        label: "Derrumbe del techo",
         weights: { ...W.normal },
         loot: [C(6), A(2)],
         texts: {
-          loot: ["Arriba de la góndola, latas olvidadas: {amount} de {res}."],
-          nada: ["Estantes pelados. Solo polvo y latas vacías."],
-          dano: ["Un estante flojo cae desde arriba: -{damage} Salud."],
+          loot: ["Entre los escombros del derrumbe: {amount} de {res}."],
+          nada: ["El derrumbe fue registrado hace tiempo. Nada."],
+          dano: ["Una losa del derrumbe se corre al moverla: -{damage} Salud."],
         },
       },
       p2: {
@@ -308,13 +310,13 @@ export const SCAVENGE_LOCATIONS: Record<ScavengeFocus, ScavengeLocationDef> = {
         },
       },
       p5: {
-        label: "Bobinas de cobre",
+        label: "Bobinas del reactor",
         weights: { ...W.normal },
         loot: [CP(4), M(4)],
         texts: {
-          loot: ["Cobre casi puro en las bobinas: {amount} de {res}."],
-          nada: ["Alguien arrancó todo el cobre hace tiempo."],
-          dano: ["El soporte de las bobinas cede: -{damage} Salud."],
+          loot: ["Entre las bobinas de cobre del reactor: {amount} de {res}."],
+          nada: ["El cobre fue arrancado hace años. Nada."],
+          dano: ["El soporte de las bobinas cede bajo tu peso: -{damage} Salud."],
         },
       },
       p6: {
@@ -454,13 +456,13 @@ export const SCAVENGE_LOCATIONS: Record<ScavengeFocus, ScavengeLocationDef> = {
     fallbackImage: "/assets/scavenge/agua.svg",
     points: {
       p1: {
-        label: "Estantería superior",
+        label: "Vigas caídas del techo",
         weights: { ...W.normal },
         loot: [A(6), M(2)],
         texts: {
-          loot: ["En la estantería superior quedó {amount} de {res}."],
-          nada: ["Estantería vaciada hasta el fondo. Nada."],
-          dano: ["Un bidón cae desde el estante y te golpea: -{damage} Salud."],
+          loot: ["Entre las vigas y tablones caídos: {amount} de {res}."],
+          nada: ["Madera podrida sin nada escondido. Nada."],
+          dano: ["Una viga se desliza del montón: -{damage} Salud."],
         },
       },
       p2: {
@@ -494,13 +496,13 @@ export const SCAVENGE_LOCATIONS: Record<ScavengeFocus, ScavengeLocationDef> = {
         },
       },
       p5: {
-        label: "Bomba inferior",
+        label: "Unión de cañerías inferior",
         weights: { ...W.normal },
         loot: [CP(4), A(3)],
         texts: {
-          loot: ["Desarmar la bomba dio {amount} de {res}."],
-          nada: ["Bomba bloqueada y saqueada. Nada."],
-          dano: ["La polea de la bomba gira de golpe: -{damage} Salud."],
+          loot: ["Desmontar la unión de cañerías dio {amount} de {res}."],
+          nada: ["Cañerías cortadas y vaciadas. Nada."],
+          dano: ["Un tramo de cañería oxidada cede al pisarlo: -{damage} Salud."],
         },
       },
       p6: {
