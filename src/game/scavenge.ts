@@ -1,9 +1,11 @@
 import { BALANCE } from "./balance";
+import { vnow } from "./virtualClock";
 import { SCAVENGE_PINS, SCAVENGE_LOCATIONS, scavengeLocationForZone } from "./scavengeLocations";
 import type { ScavengePointDef } from "./scavengeLocations";
 import type {
   ActiveScavengeEvent,
   GameState,
+  LogEvent,
   ResourceKey,
   ScavengePointId,
   ScavengePointResult,
@@ -38,21 +40,41 @@ export function scavengeChanceFor(counter: number): number {
 export function checkScavengeTrigger(state: GameState, zoneId: number, fromAuto: boolean): boolean {
   // One active event at a time; a running one is never interrupted.
   if (state.scavengeEvent) return false;
+  // Boot/restore guard: manual runs left over from a previous session are
+  // completed by the tick right after boot (offlineProgress never clears
+  // them). Firing here would open the modal as a full-screen blocker before
+  // the player even reaches /juego — defer instead: the counter already
+  // advanced and the next live completion rolls with the higher chance.
+  if (typeof window !== "undefined" && window.location.pathname !== "/juego") return false;
   const counter = state.explorationsSinceLastScavenge ?? 0;
   const base = scavengeChanceFor(counter);
   const chance = fromAuto ? base * BALANCE.autoScavengeChanceFactor : base;
-  if (Math.random() >= chance) {
+  const fired = Math.random() < chance;
+  if (!fired) {
     state.explorationsSinceLastScavenge = counter + 1;
+    pushLog(
+      state,
+      `[EXP] SCAVENGE CHECK | contador ${counter} | ${fromAuto ? "AUTO" : "MANUAL"} | probabilidad ${(chance * 100).toFixed(1)}% | resultado NO`,
+      "info",
+      vnow(),
+    );
     return false;
   }
   // Fired: reset the counter and open/resolve the event.
   state.explorationsSinceLastScavenge = 0;
   state.scavengeEvent = {
     zoneId,
-    startedAt: Date.now(),
+    startedAt: vnow(),
     board: SCAVENGE_PINS.map((pin) => ({ id: pin.id, result: null })),
   };
   return true;
+}
+
+/** Provider-style log push (kept local to avoid a circular import with
+ *  GameProvider; mirrors the 60-entry cap used there). */
+function pushLog(state: GameState, msg: string, kind: LogEvent["kind"], t: number): void {
+  state.log.unshift({ t, msg, kind });
+  if (state.log.length > 60) state.log.length = 60;
 }
 
 /** Pick a resource from a weighted loot table. */
@@ -193,6 +215,23 @@ export function pendingScavengePoints(event: NonNullable<GameState["scavengeEven
     if (!event.board[i].result) pending.push(i);
   }
   return pending;
+}
+
+/** Boot-time restore: a persisted scavenge session would re-open the
+ *  modal as a blocker before the player reaches /juego. Resolve it here
+ *  instead — searched points keep their already-applied loot/damage,
+ *  unsearched ones settle as "nada" — and narrate the closure in the log. */
+export function settleScavengeOnBoot(state: GameState): void {
+  const event = state.scavengeEvent;
+  if (!event) return;
+  const loc = scavengeLocationForZone(event.zoneId);
+  const results = finishScavenge(state);
+  const lootLines = results.filter((r) => r.kind === "loot" && r.loot);
+  const damage = results.reduce((acc, r) => acc + (r.kind === "dano" ? r.damage ?? 0 : 0), 0);
+  pushLog(
+    state,
+    `EVENTO | SCAVENGE cerrado al reabrir · ${loc.name} · hallazgos: ${lootLines.length}, daño: ${damage}`, "resource", vnow(),
+  );
 }
 
 /** Close the event: settle any unsearched points as "nada" and clear it.

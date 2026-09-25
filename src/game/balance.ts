@@ -93,13 +93,13 @@ export const BALANCE = {
    *  One roll per MANUAL exploration completion; AUTO runs roll the same
    *  counter at autoScavengeChanceFactor and resolve all points in chain. */
   scavengeTiers: [
-    { afterExplorations: 0, chance: 0 },      // 0–9:   0 %
-    { afterExplorations: 10, chance: 0.05 },  // 10–14: 5 %
-    { afterExplorations: 15, chance: 0.08 },  // 15–19: 8 %
-    { afterExplorations: 20, chance: 0.12 },  // 20–24: 12 %
-    { afterExplorations: 25, chance: 0.2 },   // 25–34: 20 %
-    { afterExplorations: 35, chance: 0.3 },   // 35–49: 30 %
-    { afterExplorations: 50, chance: 1 },     // 50+:   garantizado
+    { afterExplorations: 0, chance: 0 },      // 0–4:    0 %
+    { afterExplorations: 5, chance: 0.08 },   // 5–9:    8 %
+    { afterExplorations: 10, chance: 0.12 },  // 10–14: 12 %
+    { afterExplorations: 15, chance: 0.2 },   // 15–19: 20 %
+    { afterExplorations: 20, chance: 0.3 },   // 20–24: 30 %
+    { afterExplorations: 30, chance: 0.5 },   // 30–39: 50 %
+    { afterExplorations: 40, chance: 1 },     // 40+:    garantizado
   ] as const,
   /** AUTO-farm SCAVENGE: the manual chance (scavengeTiers) is multiplied by
    *  this factor. One roll per auto-run completion, same shared counter. */

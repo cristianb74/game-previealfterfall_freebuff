@@ -43,6 +43,7 @@ import {
   searchScavengePoint,
   resolveScavengeAuto,
   finishScavenge,
+  settleScavengeOnBoot,
 } from "@/game/scavenge";
 import { scavengeLocationForZone } from "@/game/scavengeLocations";
 import { ScavengeModal } from "@/components/game/ScavengeModal";
@@ -358,6 +359,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const result = applyOfflineProgress(envelope.state, Date.now());
         const s = result.state;
         s.lastTickAt = Date.now();
+        // A persisted SCAVENGE session restored from the save would mount
+        // its modal as a boot blocker: resolve it right here (searched
+        // points keep their loot/damage, unsearched settle as "nada") and
+        // narrate the closure in the log instead.
+        settleScavengeOnBoot(s);
         setState(s);
         stateRef.current = s;
         setHasSaveFile(true);
@@ -675,11 +681,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
       description: outcomeSummary(outcome),
       duration: 5000,
     });
-    // SCAVENGE event roll (manual completions only). Fires AFTER the
-    // exploration toast so the modal opening doesn't swallow it.
+    // SCAVENGE event roll (manual completions only). Runs AFTER the
+    // exploration toast; the check logs its own tech line (contador /
+    // probabilidad / resultado) so the trigger curve stays auditable.
     if (checkScavengeTrigger(s, zoneId, false)) {
       const loc = scavengeLocationForZone(zoneId);
-      pushLog(s, `[EXP #${expId}] EVENTO | ${loc.name} detectada · minijuego SCAVENGE`, "info", startedAt);
+      pushLog(s, `[EXP #${expId}] EVENTO | ${loc.name} detectada · minijuego SCAVENGE`, "info", vnow());
     }
   }
 

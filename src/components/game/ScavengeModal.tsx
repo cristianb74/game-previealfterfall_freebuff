@@ -122,8 +122,11 @@ export function ScavengeModal() {
                 </span>
               </div>
 
-              {/* Location image + the 8 shared search pins (same layout
-                  for every location — the images share composition). */}
+              {/* Background = the REAL location photo (/assets/scavenge/<focus>.jpg);
+                  the 8 pins render ON TOP of it as an overlay. The per-point
+                  status icons (✔/✖/−) are generated UI, the scene behind
+                  them must always be the real artwork. If the JPG is ever
+                  missing, onError swaps to the SVG fallback scene. */}
               <div className="relative w-full overflow-hidden rounded-md border border-zinc-800 bg-black">
                 <img
                   src={loc.image}

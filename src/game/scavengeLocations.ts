@@ -17,14 +17,13 @@ export type { ScavengePointId };
 
 /** The 8 shared search points, in board order. Same coordinates
  *  for ALL locations (the 5 images share the same composition).
- *  Calibrated against the real 1253×847 artwork: p2/p4/p5 shifted
- *  so every location's pin lands on a searchable object. */
+ *  User-calibrated (x/y in % of the real 1253×847 artwork). */
 export const SCAVENGE_PINS: { id: ScavengePointId; x: number; y: number }[] = [
   { id: "p1", x: 43, y: 10 },
-  { id: "p2", x: 10, y: 52 },
+  { id: "p2", x: 10, y: 47 },
   { id: "p3", x: 35, y: 25 },
-  { id: "p4", x: 41, y: 43 },
-  { id: "p5", x: 40, y: 74 },
+  { id: "p4", x: 35, y: 43 },
+  { id: "p5", x: 31, y: 74 },
   { id: "p6", x: 87, y: 25 },
   { id: "p7", x: 87, y: 62 },
   { id: "p8", x: 68, y: 75 },
