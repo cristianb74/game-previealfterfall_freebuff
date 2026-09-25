@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <defs>
+    <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9a958a"/><stop offset="1" stop-color="#7a756a"/>
+    </linearGradient>
+    <radialGradient id="pit" cx="0.55" cy="0.3" r="0.42">
+      <stop offset="0" stop-color="#1f2120" stop-opacity="0.9"/><stop offset="1" stop-color="#1f2120" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#floor)"/>
+  <ellipse cx="440" cy="185" rx="210" ry="115" fill="url(#pit)"/>
+  <path d="M330 50 L365 115 L335 180 L385 245 L350 310" stroke="#3f3d36" stroke-width="7" fill="none" opacity="0.6"/>
+  <rect x="0" y="0" width="800" height="44" fill="#4d4a42" opacity="0.85"/>
+  <!-- beds helper (drawn per instance below) -->
+  <!-- top row beds -->
+  <g>
+    <g transform="translate(320,70)">
+      <rect width="150" height="52" rx="6" fill="#8a8578"/>
+      <rect x="8" y="8" width="40" height="20" rx="8" fill="#6e6a5e"/>
+      <rect x="56" y="6" width="80" height="24" rx="6" fill="#9c9788"/>
+      <rect x="4" y="46" width="10" height="26" fill="#54504a"/><rect x="136" y="46" width="10" height="26" fill="#54504a"/>
+    </g>
+    <g transform="translate(500,84)">
+      <rect width="150" height="52" rx="6" fill="#847f72"/>
+      <rect x="8" y="8" width="40" height="20" rx="8" fill="#6a665b"/>
+      <rect x="56" y="6" width="80" height="24" rx="6" fill="#948f80"/>
+      <rect x="4" y="46" width="10" height="26" fill="#54504a"/><rect x="136" y="46" width="10" height="26" fill="#54504a"/>
+    </g>
+    <g transform="translate(650,100)">
+      <rect width="120" height="48" rx="6" fill="#7e796d"/>
+      <rect x="8" y="8" width="34" height="18" rx="8" fill="#656158"/>
+    </g>
+  </g>
+  <!-- middle beds -->
+  <g>
+    <g transform="translate(300,240)">
+      <rect width="150" height="52" rx="6" fill="#8a8578"/>
+      <rect x="8" y="8" width="40" height="20" rx="8" fill="#6e6a5e"/>
+      <rect x="56" y="6" width="80" height="24" rx="6" fill="#9c9788"/>
+      <rect x="4" y="46" width="10" height="26" fill="#54504a"/><rect x="136" y="46" width="10" height="26" fill="#54504a"/>
+    </g>
+    <g transform="translate(490,250)">
+      <rect width="150" height="52" rx="6" fill="#847f72"/>
+      <rect x="8" y="8" width="40" height="20" rx="8" fill="#6a665b"/>
+      <rect x="56" y="6" width="80" height="24" rx="6" fill="#948f80"/>
+      <rect x="4" y="46" width="10" height="26" fill="#54504a"/><rect x="136" y="46" width="10" height="26" fill="#54504a"/>
+    </g>
+  </g>
+  <!-- bottom beds -->
+  <g>
+    <g transform="translate(280,420)">
+      <rect width="150" height="54" rx="6" fill="#7e796d"/>
+      <rect x="8" y="9" width="40" height="20" rx="8" fill="#656158"/>
+      <rect x="56" y="7" width="80" height="24" rx="6" fill="#8e897c"/>
+      <rect x="4" y="48" width="10" height="26" fill="#54504a"/><rect x="136" y="48" width="10" height="26" fill="#54504a"/>
+    </g>
+    <g transform="translate(470,440)">
+      <rect width="150" height="54" rx="6" fill="#847f72"/>
+      <rect x="8" y="9" width="40" height="20" rx="8" fill="#6a665b"/>
+      <rect x="56" y="7" width="80" height="24" rx="6" fill="#948f80"/>
+      <rect x="4" y="48" width="10" height="26" fill="#54504a"/><rect x="136" y="48" width="10" height="26" fill="#54504a"/>
+    </g>
+    <g transform="translate(640,430)">
+      <rect width="130" height="52" rx="6" fill="#7a756a"/>
+      <rect x="8" y="8" width="36" height="20" rx="8" fill="#63605a"/>
+    </g>
+    <g transform="translate(300,540)">
+      <rect width="150" height="46" rx="6" fill="#76716a"/>
+      <rect x="8" y="8" width="40" height="18" rx="8" fill="#5f5c55"/>
+    </g>
+  </g>
+  <!-- right beds -->
+  <g>
+    <g transform="translate(640,270)">
+      <rect width="130" height="50" rx="6" fill="#7e796d"/>
+      <rect x="8" y="8" width="36" height="18" rx="8" fill="#656158"/>
+      <rect x="52" y="6" width="66" height="22" rx="6" fill="#8e897c"/>
+    </g>
+  </g>
+  <!-- left: fallen stretcher + wheelchair -->
+  <g>
+    <ellipse cx="90" cy="330" rx="75" ry="40" fill="#5d584e"/>
+    <g transform="translate(30,270) rotate(-18)">
+      <rect width="110" height="22" rx="5" fill="#9aa0a6" opacity="0.8"/>
+      <rect x="8" y="-8" width="34" height="12" rx="5" fill="#b9bec2" opacity="0.7"/>
+      <circle cx="12" cy="34" r="10" fill="#3a3833"/><circle cx="96" cy="34" r="10" fill="#3a3833"/>
+    </g>
+    <g transform="translate(60,352)">
+      <circle cx="18" cy="30" r="22" fill="none" stroke="#6a7076" stroke-width="6"/>
+      <circle cx="66" cy="34" r="10" fill="none" stroke="#6a7076" stroke-width="5"/>
+      <rect x="6" y="-14" width="60" height="12" rx="4" fill="#6a7076"/>
+      <rect x="58" y="-24" width="10" height="34" rx="4" fill="#57606a"/>
+    </g>
+  </g>
+  <!-- moss -->
+  <g fill="#5d6b3f" opacity="0.55">
+    <ellipse cx="250" cy="160" rx="44" ry="18"/><ellipse cx="505" cy="330" rx="46" ry="16"/><ellipse cx="235" cy="500" rx="54" ry="20"/>
+  </g>
+  <text x="130" y="515" font-family="monospace" font-size="26" fill="#4f4a40" opacity="0.8" transform="rotate(-4 130 515)">NO</text>
+  <text x="655" y="560" font-family="monospace" font-size="20" fill="#4f4a40" opacity="0.85">NO</text>
+  <text x="648" y="582" font-family="monospace" font-size="20" fill="#4f4a40" opacity="0.85">SALIDA</text>
+  <text x="600" y="599" font-family="monospace" font-size="15" fill="#4f4a40" opacity="0.7">ZONA DE PELIGRO</text>
+  <g transform="translate(560,595)" opacity="0.8">
+    <circle cx="0" cy="0" r="17" fill="none" stroke="#4f4a40" stroke-width="4"/>
+    <path d="M-10 -10 L10 10 M10 -10 L-10 10" stroke="#4f4a40" stroke-width="4"/>
+    <path d="M14 6 L30 20 L26 24 L10 10 Z" fill="#4f4a40"/>
+  </g>
+</svg>

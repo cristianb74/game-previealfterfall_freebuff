@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <defs>
+    <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9b968a"/><stop offset="1" stop-color="#7b766a"/>
+    </linearGradient>
+    <radialGradient id="pit" cx="0.55" cy="0.3" r="0.42">
+      <stop offset="0" stop-color="#20221f" stop-opacity="0.9"/><stop offset="1" stop-color="#20221f" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#floor)"/>
+  <ellipse cx="440" cy="185" rx="210" ry="115" fill="url(#pit)"/>
+  <path d="M330 50 L365 115 L335 180 L385 245 L350 310" stroke="#3f3d36" stroke-width="7" fill="none" opacity="0.65"/>
+  <path d="M480 30 L455 100 L495 165 L465 240" stroke="#3f3d36" stroke-width="6" fill="none" opacity="0.55"/>
+  <!-- ceiling shadow band -->
+  <rect x="0" y="0" width="800" height="46" fill="#4d4a42" opacity="0.85"/>
+  <!-- top shelving row -->
+  <g fill="#7d6a4c">
+    <rect x="315" y="66" width="200" height="34" rx="4"/>
+    <rect x="318" y="106" width="194" height="20" rx="3" fill="#6b5a3f"/>
+    <rect x="322" y="132" width="186" height="18" rx="3" fill="#5f5038"/>
+  </g>
+  <g fill="#8a815f" opacity="0.8">
+    <rect x="330" y="74" width="14" height="12"/><rect x="356" y="70" width="12" height="16"/><rect x="382" y="76" width="16" height="10"/><rect x="412" y="72" width="12" height="14"/><rect x="438" y="78" width="14" height="8"/><rect x="466" y="72" width="12" height="14"/>
+  </g>
+  <!-- aisle shelf rows (horizontal) -->
+  <g>
+    <g transform="translate(300,250)">
+      <rect x="0" y="0" width="230" height="26" rx="4" fill="#7d6a4c"/>
+      <rect x="4" y="30" width="222" height="20" rx="3" fill="#6b5a3f"/>
+      <rect x="8" y="54" width="214" height="18" rx="3" fill="#5f5038"/>
+      <rect x="10" y="76" width="10" height="70" fill="#4f422d"/><rect x="210" y="76" width="10" height="70" fill="#4f422d"/>
+    </g>
+    <g transform="translate(280,400)">
+      <rect x="0" y="0" width="250" height="28" rx="4" fill="#7d6a4c"/>
+      <rect x="4" y="32" width="242" height="22" rx="3" fill="#6b5a3f"/>
+      <rect x="8" y="58" width="234" height="20" rx="3" fill="#5f5038"/>
+      <rect x="12" y="82" width="12" height="86" fill="#4f422d"/><rect x="226" y="82" width="12" height="86" fill="#4f422d"/>
+    </g>
+    <g transform="translate(300,540)">
+      <rect x="0" y="0" width="230" height="26" rx="4" fill="#7d6a4c"/>
+      <rect x="4" y="30" width="222" height="20" rx="3" fill="#6b5a3f"/>
+    </g>
+  </g>
+  <!-- right shelves -->
+  <g fill="#75634a">
+    <rect x="620" y="90" width="130" height="24" rx="4"/>
+    <rect x="624" y="120" width="122" height="18" rx="3" fill="#63533c"/>
+    <rect x="628" y="144" width="114" height="16" rx="3" fill="#574934"/>
+    <rect x="640" y="250" width="120" height="24" rx="4"/>
+    <rect x="644" y="280" width="112" height="18" rx="3" fill="#63533c"/>
+    <rect x="648" y="304" width="104" height="16" rx="3" fill="#574934"/>
+    <rect x="640" y="410" width="120" height="24" rx="4"/>
+    <rect x="644" y="440" width="112" height="18" rx="3" fill="#63533c"/>
+  </g>
+  <!-- fallen shelf center-right -->
+  <g transform="translate(690,350) rotate(24)">
+    <rect width="110" height="20" rx="4" fill="#6b5a3f"/>
+    <rect x="6" y="24" width="98" height="16" rx="3" fill="#574934"/>
+  </g>
+  <!-- left junk: carts -->
+  <g>
+    <ellipse cx="90" cy="330" rx="72" ry="38" fill="#5d584e"/>
+    <rect x="42" y="282" width="58" height="32" rx="6" fill="#9aa0a6" opacity="0.75"/>
+    <rect x="72" y="264" width="58" height="32" rx="6" fill="#8b9196" opacity="0.7" transform="rotate(-12 101 280)"/>
+    <rect x="34" y="332" width="16" height="11" rx="3" fill="#33312c"/><rect x="98" y="334" width="16" height="11" rx="3" fill="#33312c"/>
+    <rect x="36" y="230" width="44" height="20" rx="4" fill="#b0713a" opacity="0.85"/>
+  </g>
+  <!-- moss -->
+  <g fill="#5d6b3f" opacity="0.55">
+    <ellipse cx="255" cy="180" rx="40" ry="18"/><ellipse cx="500" cy="300" rx="46" ry="16"/><ellipse cx="240" cy="470" rx="52" ry="20"/>
+  </g>
+  <text x="130" y="520" font-family="monospace" font-size="26" fill="#4f4a40" opacity="0.8" transform="rotate(-4 130 520)">NO</text>
+  <text x="655" y="550" font-family="monospace" font-size="20" fill="#4f4a40" opacity="0.85">NO</text>
+  <text x="648" y="572" font-family="monospace" font-size="20" fill="#4f4a40" opacity="0.85">SALIDA</text>
+  <text x="600" y="592" font-family="monospace" font-size="16" fill="#4f4a40" opacity="0.7">ZONA DE PELIGRO</text>
+  <g transform="translate(560,595)" opacity="0.8">
+    <circle cx="0" cy="0" r="17" fill="none" stroke="#4f4a40" stroke-width="4"/>
+    <path d="M-10 -10 L10 10 M10 -10 L-10 10" stroke="#4f4a40" stroke-width="4"/>
+    <path d="M14 6 L30 20 L26 24 L10 10 Z" fill="#4f4a40"/>
+  </g>
+</svg>
