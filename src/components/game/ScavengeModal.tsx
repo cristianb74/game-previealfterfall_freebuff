@@ -1,55 +1,42 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { useGame } from "@/game/GameProvider";
-import { getZone } from "@/game/zones";
-import { RESOURCE_META } from "@/game/resources";
-import { isScavengeExpired } from "@/game/scavenge";
-import { vnow } from "@/game/virtualClock";
+import { SCAVENGE_PINS, scavengeLocationForZone } from "@/game/scavengeLocations";
+import { BALANCE } from "@/game/balance";
 import type { ResourceKey } from "@/game/types";
 import { cn } from "@/lib/utils";
 
 // ============================================================
-// AFTERFALL — Scavenge minigame modal.
+// AFTERFALL — Scavenge minigame modal (8 fixed search points).
 // Renders while state.scavengeEvent is active: an animated
-// "¡Ubicación de Suministros Encontrada!" announcement, then a
-// timed tap-to-loot board. Claimed loot is banked on close;
-// unclaimed cells are lost when the timer runs out.
+// "¡Ubicación de Suministros Encontrada!" announcement, then the
+// location image with the 8 search pins overlaid (same shared
+// layout for all 5 locations). Each tap searches that spot: the
+// result (loot/nada/daño) applies to the REAL state immediately
+// and shows as an inline feedback line. Real-health damage is
+// floored by the engine (never lethal inside the event). The
+// player can quit anytime keeping everything already found.
 // ============================================================
 
-type Phase = "announce" | "playing" | "summary";
-
-function lootMeta(r: ResourceKey): { icon: string; cls: string } {
-  const meta = RESOURCE_META[r];
-  if (r === "dinero") return { icon: "$", cls: "border-amber-500/60 bg-amber-500/10 text-amber-300" };
-  if (r === "comida" || r === "agua") {
-    return { icon: meta.icon, cls: "border-sky-600/50 bg-sky-500/10 text-sky-300" };
-  }
-  return { icon: meta.icon, cls: "border-green-600/50 bg-green-500/10 text-green-300" };
-}
+type Phase = "announce" | "playing";
 
 function lootLabel(r: ResourceKey, amount: number): string {
-  if (r === "dinero") return `+$${amount}`;
-  return `+${amount}${r === "comida" || r === "agua" ? " min" : ""} ${RESOURCE_META[r].label}`;
-}
-
-function fmtTimer(ms: number): string {
-  const s = Math.max(0, Math.ceil(ms / 1000));
-  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  const isTime = r === "comida" || r === "agua";
+  return `+${amount}${isTime ? " min" : ""} ${r === "dinero" ? "$" : r}`;
 }
 
 export function ScavengeModal() {
-  const { state, completeScavengeEvent } = useGame();
+  const { state, searchScavenge, finishScavengeEvent } = useGame();
   const event = state?.scavengeEvent ?? null;
   const open = event != null;
 
   const [phase, setPhase] = useState<Phase>("announce");
-  /** Cells already tapped — handed to completeScavengeEvent on close so
-   *  their loot is banked into the global state (even on expiry). */
-  const [tapped, setTapped] = useState<number[]>([]);
-  const [now, setNow] = useState(() => vnow());
+  /** Board index of the last searched point — the result itself is read
+   *  from the (provider-updated) event board on the next render, so the
+   *  feedback line always shows the fresh roll without stale closures. */
+  const [lastIndex, setLastIndex] = useState<number | null>(null);
 
   // Reset the local phase machine whenever a NEW event opens.
   const eventKey = event ? event.startedAt : 0;
@@ -57,31 +44,22 @@ export function ScavengeModal() {
   if (open && eventKey !== lastKey) {
     setLastKey(eventKey);
     setPhase("announce");
-    setTapped([]);
-    setNow(vnow());
+    setLastIndex(null);
   }
 
-  // UI ticker for the countdown while the event is open.
-  useEffect(() => {
-    if (!open) return;
-    const id = window.setInterval(() => setNow(vnow()), 500);
-    return () => window.clearInterval(id);
-  }, [open]);
+  if (!event) return null;
 
-  const expired = event != null && isScavengeExpired(event, now);
+  const loc = scavengeLocationForZone(event.zoneId);
+  const health = state?.health ?? 0;
+  const searched = event.board.filter((c) => c.result).length;
+  const cleared = searched >= event.board.length;
+  const lastResult =
+    lastIndex != null ? event.board[lastIndex]?.result ?? null : null;
 
-  // Expiry or fully-cleared board → summary. Expiry wins even from the
-  // announce screen (waiting too long forfeits the location).
-  useEffect(() => {
-    if (!event || phase === "summary") return;
-    if (expired) {
-      setPhase("summary");
-      return;
-    }
-    if (phase === "playing" && event.board.length > 0 && tapped.length >= event.board.length) {
-      setPhase("summary");
-    }
-  }, [event, phase, expired, tapped.length]);
+  const onSearch = (index: number) => {
+    setLastIndex(index);
+    searchScavenge(index);
+  };
 
   return (
     <Dialog open={open}>
@@ -91,12 +69,12 @@ export function ScavengeModal() {
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         className={cn(
-          "max-w-sm rounded-lg border-zinc-800 bg-[#101213] p-4 text-zinc-200 outline-none",
+          "max-w-md gap-3 overflow-hidden rounded-lg border-zinc-800 bg-[#101213] p-3 text-zinc-200 outline-none",
           phase === "announce" && "border-green-500/40 shadow-[0_0_50px_rgba(34,197,94,0.25)]",
         )}
       >
         <AnimatePresence mode="wait" initial={false}>
-          {phase === "announce" && event && (
+          {phase === "announce" && (
             <motion.div
               key="announce"
               initial={{ opacity: 0, scale: 0.85 }}
@@ -111,130 +89,112 @@ export function ScavengeModal() {
               <DialogTitle className="text-base font-black uppercase tracking-[0.2em] text-green-500">
                 ¡Ubicación de Suministros Encontrada!
               </DialogTitle>
-              <p className="text-xs text-subtle">
-                Z{String(getZone(event.zoneId).id).padStart(2, "0")} · {getZone(event.zoneId).name}
-              </p>
-              <p className="max-w-[260px] text-[11px] leading-4 text-zinc-400">
-                Casillas sin saquear a la vista. Toca rápido — cuando el tiempo
-                acabe, lo no reclamado se pierde.
-              </p>
+              <p className="text-xs font-bold uppercase tracking-widest text-zinc-200">{loc.name}</p>
+              <p className="text-[11px] text-subtle">{loc.subtitle}</p>
               <Button
                 onClick={() => setPhase("playing")}
                 className="mt-1 h-10 w-full border border-green-500/40 bg-green-600/90 font-bold uppercase tracking-widest text-black hover:bg-green-500"
               >
-                Reclamar ubicación
+                Registrar ubicación
               </Button>
             </motion.div>
           )}
 
-          {phase === "playing" && event && (
+          {phase === "playing" && (
             <motion.div
               key="playing"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
-              className="flex flex-col gap-3"
+              className="flex flex-col gap-2"
             >
-              <div className="flex items-baseline justify-between">
+              <div className="flex items-baseline justify-between gap-2">
                 <DialogTitle className="text-sm font-black uppercase tracking-widest text-green-500">
-                  Saqueo en curso
+                  {loc.name}
                 </DialogTitle>
-                <span className="font-mono text-sm font-bold tabular-nums text-zinc-100">
-                  {fmtTimer(event.expiresAt - now)}
+                <span
+                  className={cn(
+                    "shrink-0 font-mono text-xs font-bold tabular-nums",
+                    health <= 30 ? "text-red-400" : "text-zinc-100",
+                  )}
+                >
+                  SALUD {Math.round(health)}/{BALANCE.maxHealth}
                 </span>
               </div>
-              <Progress
-                value={Math.max(0, Math.min(100, ((event.expiresAt - now) / (event.expiresAt - event.startedAt)) * 100))}
-                className="h-1.5 bg-zinc-800"
-              />
-              <div className="grid grid-cols-4 gap-2">
-                {event.board.map((cell, i) => {
-                  const isTapped = tapped.includes(i);
-                  const loot = cell.loot;
-                  const m = loot ? lootMeta(loot.resource) : null;
+
+              {/* Location image + the 8 shared search pins (same layout
+                  for every location — the images share composition). */}
+              <div className="relative w-full overflow-hidden rounded-md border border-zinc-800 bg-black">
+                <img
+                  src={loc.image}
+                  alt={loc.name}
+                  className="aspect-[4/3] w-full select-none object-cover opacity-90"
+                  draggable={false}
+                  onError={(e) => {
+                    // JPG not present yet → vector fallback scene.
+                    const img = e.currentTarget;
+                    if (!img.dataset.fallback) {
+                      img.dataset.fallback = "1";
+                      img.src = loc.fallbackImage;
+                    }
+                  }}
+                />
+                {SCAVENGE_PINS.map((pin, index) => {
+                  const cell = event.board[index];
+                  const result = cell?.result ?? null;
+                  const isLast = lastIndex === index;
                   return (
                     <button
-                      key={i}
+                      key={pin.id}
                       type="button"
-                      disabled={isTapped}
-                      onClick={() => setTapped((prev) => [...prev, i])}
+                      disabled={result != null}
+                      onClick={() => onSearch(index)}
+                      style={{ left: `${pin.x}%`, top: `${pin.y}%` }}
                       className={cn(
-                        "flex h-16 flex-col items-center justify-center gap-0.5 rounded-md border transition-all",
-                        isTapped
-                          ? loot
-                            ? "border-green-500/70 bg-green-500/15 text-green-300"
-                            : "border-zinc-800 bg-black/40 text-subtle"
-                          : "border-zinc-700 bg-black/60 hover:border-green-500/50 hover:bg-green-950/20 active:scale-95",
+                        "absolute z-10 flex size-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border text-[10px] font-black transition-all",
+                        result == null &&
+                          "border-green-400/80 bg-black/70 text-green-300 shadow-[0_0_12px_rgba(34,197,94,0.5)] hover:scale-110 hover:bg-green-950/70 active:scale-95",
+                        result?.kind === "loot" &&
+                          "border-green-500 bg-green-600/90 text-black",
+                        result?.kind === "nada" &&
+                          "border-zinc-600 bg-zinc-900/90 text-zinc-500",
+                        result?.kind === "dano" &&
+                          "border-red-500 bg-red-600/90 text-white",
+                        isLast && result != null && "scale-110",
                       )}
                     >
-                      {isTapped ? (
-                        loot ? (
-                          <>
-                            <span className="text-lg leading-none">{m!.icon}</span>
-                            <span className="text-[10px] font-black leading-none">
-                              {lootLabel(loot.resource, loot.amount)}
-                            </span>
-                          </>
-                        ) : (
-                          <span className="text-[9px] uppercase tracking-wider">Escombros</span>
-                        )
-                      ) : (
-                        <span className="text-xl leading-none opacity-70">?</span>
-                      )}
+                      {result == null ? String(index + 1) : result.kind === "loot" ? "✔" : result.kind === "dano" ? "✖" : "–"}
                     </button>
                   );
                 })}
               </div>
-              <p className="text-center text-[10px] text-subtle">
-                {tapped.length}/{event.board.length} casillas revisadas · lo reclamado está a salvo
-              </p>
-            </motion.div>
-          )}
 
-          {phase === "summary" && event && (
-            <motion.div
-              key="summary"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col gap-3 py-1"
-            >
-              <DialogTitle className="text-center text-base font-black uppercase tracking-[0.2em] text-zinc-100">
-                {tapped.some((i) => event.board[i]?.loot) ? "Botín asegurado" : "Sin botín"}
-              </DialogTitle>
-              {tapped.some((i) => event.board[i]?.loot) ? (
-                <div className="flex flex-col gap-1 rounded-md border border-white/5 bg-black/40 p-3">
-                  {tapped
-                    .filter((i) => event.board[i]?.loot)
-                    .map((i) => {
-                      const loot = event.board[i]!.loot!;
-                      const m = lootMeta(loot.resource);
-                      return (
-                        <div key={i} className="flex items-center justify-between gap-2 text-xs">
-                          <span className="flex items-center gap-1.5 text-zinc-300">
-                            <span>{m.icon}</span> {lootLabel(loot.resource, loot.amount)}
-                          </span>
-                          <span className="text-[9px] uppercase tracking-wider text-subtle">✔</span>
-                        </div>
-                      );
-                    })}
-                  <p className="mt-1 text-[10px] text-subtle">
-                    {expired
-                      ? "El tiempo se agotó — solo se conserva lo reclamado."
-                      : "Todo lo reclamado pasa a tu refugio."}
-                  </p>
-                </div>
-              ) : (
-                <p className="rounded-md border border-zinc-800 bg-black/40 p-3 text-center text-xs text-subtle">
-                  {expired
-                    ? "El tiempo se agotó antes de reclamar nada. Otra vez será."
-                    : "No revisaste ninguna casilla. Otra vez será."}
-                </p>
-              )}
+              {/* Inline feedback of the last search. */}
+              <div className="min-h-[34px] rounded-md border border-white/5 bg-black/40 px-3 py-2 text-center text-[11px] leading-4">
+                {!lastResult ? (
+                  <span className="text-subtle">
+                    Toca un punto marcado para revisarlo · {searched}/{event.board.length} revisados
+                  </span>
+                ) : lastResult.kind === "dano" ? (
+                  <span className="text-red-400">{lastResult.text}</span>
+                ) : lastResult.kind === "loot" ? (
+                  <span className="text-green-300">{lastResult.text}</span>
+                ) : (
+                  <span className="text-zinc-400">{lastResult.text}</span>
+                )}
+              </div>
+
+              <p className="text-center text-[10px] text-subtle">
+                El daño es real: baja tu SALUD (nunca letal dentro del evento). Lo
+                encontrado queda asegurado al instante — podés retirarte cuando quieras.
+              </p>
+
               <Button
-                onClick={() => completeScavengeEvent(expired, tapped)}
-                className="h-10 w-full border border-green-500/40 bg-green-600/90 font-bold uppercase tracking-widest text-black hover:bg-green-500"
+                onClick={finishScavengeEvent}
+                variant="outline"
+                className="h-9 w-full border-zinc-700 font-bold uppercase tracking-widest text-zinc-300 hover:border-zinc-500 hover:bg-zinc-900"
               >
-                Continuar
+                {cleared ? "Terminar saqueo" : "Retirarse con lo encontrado"}
               </Button>
             </motion.div>
           )}

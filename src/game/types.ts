@@ -195,16 +195,10 @@ export interface ExplorationOutcome {
 // never knock the player to 0 inside the event.
 // ============================================================
 
-/** The 8 fixed search points of the SCAVENGE location, in board order. */
-export type ScavengePointId =
-  | "heladera"
-  | "despensa"
-  | "botiquin"
-  | "escritorio"
-  | "placard"
-  | "herramientas"
-  | "cama"
-  | "living";
+/** The 8 fixed search points of the SCAVENGE location, in board order.
+ *  Generic ids — each location (mapa por focus) labels them with the
+ *  object that actually sits at that spot (scavengeLocations.ts). */
+export type ScavengePointId = "p1" | "p2" | "p3" | "p4" | "p5" | "p6" | "p7" | "p8";
 
 /** Loot of one search point, already mapped to Afterfall keys: unit
  *  resources go to `resources[resource]`, `comida`/`agua` carry MINUTES

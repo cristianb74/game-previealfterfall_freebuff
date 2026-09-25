@@ -375,11 +375,16 @@ function normalizeState(state: GameState): GameState {
   if (!s.explorationStates || typeof s.explorationStates !== "object") s.explorationStates = {};
   if (typeof s.explorationsSinceLastNPC !== "number") s.explorationsSinceLastNPC = 0;
   if (typeof s.explorationsSinceLastScavenge !== "number") s.explorationsSinceLastScavenge = 0;
-  // A persisted active event whose board already expired while away is
-  // simply closed on load (unclaimed loot is lost by design).
+  // A persisted scavenge session whose shape predates the 8-fixed-point
+  // redesign (old: {expiresAt, claimed, loot board}) is simply dropped on
+  // load — the counter survives, only the in-flight session is lost.
   if (s.scavengeEvent) {
-    if (Date.now() >= s.scavengeEvent.expiresAt) s.scavengeEvent = null;
-    else if (!Array.isArray(s.scavengeEvent.board) || !Array.isArray(s.scavengeEvent.claimed)) {
+    const ev = s.scavengeEvent as unknown as { board?: unknown; claimed?: unknown; expiresAt?: unknown };
+    const boardOk =
+      Array.isArray(ev.board) &&
+      ev.board.length === 8 &&
+      ev.board.every((c) => c && typeof c === "object" && "id" in c && "result" in c);
+    if (!boardOk || ev.claimed !== undefined || ev.expiresAt !== undefined) {
       s.scavengeEvent = null;
     }
   } else {

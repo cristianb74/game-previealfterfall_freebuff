@@ -38,7 +38,13 @@ import {
   narrBuildDone,
 } from "@/game/narrativeLog";
 import { rollExploration, npcChanceForCounter, discoverableNpcIds } from "@/game/explorationEngine";
-import { checkScavengeTrigger, completeScavenge } from "@/game/scavenge";
+import {
+  checkScavengeTrigger,
+  searchScavengePoint,
+  resolveScavengeAuto,
+  finishScavenge,
+} from "@/game/scavenge";
+import { scavengeLocationForZone } from "@/game/scavengeLocations";
 import { ScavengeModal } from "@/components/game/ScavengeModal";
 import {
   buildingUpgradeCost,
@@ -97,9 +103,13 @@ export interface GameContextValue {
   offlineSummary: OfflineSummary | null;
   dismissOfflineSummary: () => void;
   startExploration: (zoneId: number) => void;
-  /** Close the active scavenge event, granting the tapped cells' loot
-   *  (`claimed` = board indexes collected in the modal; expired → only those). */
-  completeScavengeEvent: (expired: boolean, claimed: number[]) => void;
+  /** Search one scavenge point of the ACTIVE event (rolls + applies loot/
+   *  damage at once). `index` = board position (0–7). */
+  searchScavenge: (index: number) => void;
+  /** Close the active scavenge event: settle unsearched points as "nada",
+   *  clear the session and log the haul. Loot was already granted at
+   *  search time — quitting keeps everything found (per design). */
+  finishScavengeEvent: () => void;
   /** Toggle the background auto-exploration farm for a specific zone. */
   toggleAutoExplore: (zoneId: number) => void;
   /** Highest zone id reachable with the player's total EXP. */
@@ -645,7 +655,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }
 
   /** Complete the MANUAL exploration: roll, apply (full rewards), log, toast.
-   *  NPC discovery uses the counter-based system (one roll per completion). */
+   *  NPC discovery uses the counter-based system (one roll per completion).
+   *  After the NPC check, the SCAVENGE event may fire (stepped tiers): it
+   *  opens the interactive session — loot/damage are applied per searched
+   *  point by the modal while it stays open. */
   function completeExploration(s: GameState, zoneId: number, startedAt: number) {
     const run = s.explorationStates[zoneId];
     if (!run) return;
@@ -662,10 +675,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
       description: outcomeSummary(outcome),
       duration: 5000,
     });
+    // SCAVENGE event roll (manual completions only). Fires AFTER the
+    // exploration toast so the modal opening doesn't swallow it.
+    if (checkScavengeTrigger(s, zoneId, false)) {
+      const loc = scavengeLocationForZone(zoneId);
+      pushLog(s, `[EXP #${expId}] EVENTO | ${loc.name} detectada · minijuego SCAVENGE`, "info", startedAt);
+    }
   }
 
   /** Complete one BACKGROUND auto-farm run for a specific zone: reduced EXP,
-   *  reduced NPC discovery chance, no frontier changes. Chain continues via tick. */
+   *  reduced NPC discovery chance, no frontier changes. Chain continues via tick.
+   *  SCAVENGE: rolls the same counter at autoScavengeChanceFactor; on fire,
+   *  the 8 points resolve in chain (no UI) and every result is logged as
+   *  "EVENTO | SCAVENGE · ..." lines. */
   function completeAutoRun(s: GameState, zoneId: number, startedAt: number) {
     if (!s.autoFarms[zoneId]) return;
     const expId = s.nextExplorationId++;
@@ -680,6 +702,22 @@ export function GameProvider({ children }: { children: ReactNode }) {
     npcCheck(s, expId, startedAt, true);
     s.explorationsDone += 1;
     s.autoFarms[zoneId] = null;
+    // SCAVENGE in auto: resolve all 8 points in chain, no interface.
+    if (checkScavengeTrigger(s, zoneId, true)) {
+      const loc = scavengeLocationForZone(zoneId);
+      pushLog(s, `[EXP #${expId}] EVENTO | ${loc.name} detectada · minijuego SCAVENGE (auto)`, "info", startedAt);
+      const results = resolveScavengeAuto(s, zoneId);
+      for (const r of results) {
+        const line =
+          r.kind === "loot" && r.loot
+            ? `+${r.loot.amount}${r.loot.resource === "comida" || r.loot.resource === "agua" ? " min" : ""} ${r.loot.resource === "dinero" ? "$" : r.loot.resource}`
+            : r.kind === "dano"
+              ? `-${r.damage} Salud`
+              : "sin hallazgos";
+        pushLog(s, `EVENTO | SCAVENGE · ${line} — ${r.text}`, r.kind === "dano" ? "damage" : "resource", startedAt);
+      }
+      finishScavenge(s); // auto sessions close immediately (no UI)
+    }
   }
 
   /** Start the next auto-farm run for a specific zone (must be unlocked). */
@@ -792,47 +830,56 @@ export function GameProvider({ children }: { children: ReactNode }) {
         s.explorationStates[zoneId] = { zoneId, startedAt: now, finishAt: now + minutes * 60000, expId };
         pushLog(s, `[EXP #${expId}] Z${String(zoneId).padStart(2, "0")} | INICIO | duración ${minutes * 60}s`, "info", now);
         narrExplorationStart(s, zoneId, getZone(zoneId).name);
-        // SCAVENGE event roll (manual explorations only, never auto-farm):
-        // 20 % base + pity guarantee after 5 without the event. The run's
-        // timer keeps ticking while the minigame overlays the screen.
-        if (checkScavengeTrigger(s, zoneId)) {
-          pushLog(s, `[EXP #${expId}] EVENTO | Zona de suministros detectada · minijuego SCAVENGE`, "info", now);
-        }
       });
     },
     [setAndSave],
   );
 
-  /** Close the scavenge minigame: grant the loot of the cells the player
-   *  tapped (indexes come from the modal before it unmounts), log the haul
-   *  and clear the event. `expired` only affects the log tone. */
-  const completeScavengeEvent = useCallback(
-    (expired: boolean, claimed: number[]) => {
+  /** Search one point of the ACTIVE scavenge session: rolls loot/nada/daño
+   *  for that spot, applies the grant/damage to the REAL state right away
+   *  (loot is banked at search time — quitting keeps everything found) and
+   *  logs the flavor line. The modal stays open; the session ends via
+   *  finishScavengeEvent (manual) — board cleared or player choice. */
+  const searchScavenge = useCallback(
+    (index: number) => {
       setAndSave((s) => {
         if (!s.scavengeEvent) return;
-        const granted = completeScavenge(s, claimed);
-        if (granted.length > 0) {
-          for (const g of granted) {
-            const isTime = g.resource === "comida" || g.resource === "agua";
-            pushLog(s, `EVENTO | SCAVENGE · +${g.amount}${isTime ? " min" : ""} ${g.resource === "dinero" ? "$" : g.resource}`, "resource");
-          }
-          toast.success("SAQUEO COMPLETADO", {
-            description: granted
-              .map((g) => `+${g.amount}${g.resource === "comida" || g.resource === "agua" ? " min" : ""} ${g.resource === "dinero" ? "$" : g.resource}`)
-              .join(" · "),
-          });
-        } else {
-          pushLog(s, expired ? "EVENTO | SCAVENGE expirado · botín no reclamado perdido" : "EVENTO | SCAVENGE cerrado sin hallazgos", "info");
-          toast.info(expired ? "Saqueo interrumpido" : "Saqueo terminado", {
-            description: expired
-              ? "El tiempo se agotó — el botín no reclamado se perdió."
-              : "No encontraste nada aprovechable esta vez.",
-          });
-        }
+        const result = searchScavengePoint(s, index);
+        if (!result) return; // already searched or no event
+        const line =
+          result.kind === "loot" && result.loot
+            ? `+${result.loot.amount}${result.loot.resource === "comida" || result.loot.resource === "agua" ? " min" : ""} ${result.loot.resource === "dinero" ? "$" : result.loot.resource}`
+            : result.kind === "dano"
+              ? `-${result.damage} Salud`
+              : "sin hallazgos";
+        pushLog(s, `EVENTO | SCAVENGE · ${line} — ${result.text}`, result.kind === "dano" ? "damage" : "resource");
       });
     },
     [setAndSave],
   );
+
+  /** Close the scavenge minigame: settle unsearched points as "nada",
+   *  log the session total and clear the event. Loot/damage were applied
+   *  at search time; this only finalizes the session. */
+  const finishScavengeEvent = useCallback(() => {
+    setAndSave((s) => {
+      if (!s.scavengeEvent) return;
+      const results = finishScavenge(s);
+      const lootLines = results.filter((r) => r.kind === "loot" && r.loot);
+      if (lootLines.length > 0) {
+        const summary = lootLines
+          .map((r) => `+${r.loot!.amount}${r.loot!.resource === "comida" || r.loot!.resource === "agua" ? " min" : ""} ${r.loot!.resource === "dinero" ? "$" : r.loot!.resource}`)
+          .join(" · ");
+        toast.success("SAQUEO COMPLETADO", { description: summary });
+        pushLog(s, `EVENTO | SCAVENGE cerrado · ${summary}`, "resource");
+      } else {
+        pushLog(s, "EVENTO | SCAVENGE cerrado sin hallazgos", "info");
+        toast.info("Saqueo terminado", {
+          description: "No encontraste nada aprovechable esta vez.",
+        });
+      }
+    });
+  }, [setAndSave]);
 
   /** Turn the background farm on/off. ON starts a run in the last conquered
    *  zone immediately; OFF cancels the running auto run (it costs nothing).
@@ -1140,7 +1187,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       syncNow,
       restoreFromCloud,
       startExploration,
-      completeScavengeEvent,
+      searchScavenge,
+      finishScavengeEvent,
       toggleAutoExplore,
       maxUnlockedZoneId: state ? computeZoneUnlocks(state) : 1,
       setCurrentZone,
@@ -1160,7 +1208,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       speedMultiplier,
       setSpeed,
     }),
-    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, completeScavengeEvent, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, speedMultiplier, setSpeed],
+    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave,      cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, searchScavenge, finishScavengeEvent, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, speedMultiplier, setSpeed],
   );
 
   return (

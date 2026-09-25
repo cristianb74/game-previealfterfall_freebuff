@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <defs>
+    <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8a8274"/><stop offset="1" stop-color="#6f685c"/>
+    </linearGradient>
+    <radialGradient id="pit" cx="0.55" cy="0.32" r="0.4">
+      <stop offset="0" stop-color="#2a2c2d" stop-opacity="0.85"/><stop offset="1" stop-color="#2a2c2d" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#floor)"/>
+  <ellipse cx="440" cy="195" rx="200" ry="110" fill="url(#pit)"/>
+  <path d="M330 60 L360 120 L340 180 L380 240 L350 300 L390 360" stroke="#4a463d" stroke-width="6" fill="none" opacity="0.6"/>
+  <path d="M470 40 L450 110 L490 170 L460 250" stroke="#4a463d" stroke-width="5" fill="none" opacity="0.5"/>
+  <!-- parking lines -->
+  <g stroke="#b5ad9c" stroke-width="5" opacity="0.55" stroke-linecap="round">
+    <path d="M300 60 L300 140"/><path d="M300 170 L300 250"/><path d="M300 280 L300 360"/><path d="M300 390 L300 470"/><path d="M300 500 L300 570"/>
+    <path d="M560 60 L560 140"/><path d="M560 170 L560 250"/><path d="M560 280 L560 360"/><path d="M560 390 L560 470"/><path d="M560 500 L560 570"/>
+    <path d="M650 60 L650 140"/><path d="M650 280 L650 360"/><path d="M650 500 L650 570"/>
+  </g>
+  <!-- rusty cars -->
+  <g>
+    <g transform="translate(340,70)"><rect width="150" height="70" rx="16" fill="#7a4f33"/><rect x="30" y="12" width="60" height="30" rx="6" fill="#4e3625"/><rect x="8" y="52" width="24" height="16" rx="4" fill="#3d2c1e"/><rect x="118" y="52" width="24" height="16" rx="4" fill="#3d2c1e"/></g>
+    <g transform="translate(330,200)"><rect width="160" height="74" rx="16" fill="#6d5837"/><rect x="34" y="14" width="64" height="30" rx="6" fill="#463a24"/><rect x="8" y="56" width="26" height="16" rx="4" fill="#332a19"/><rect x="126" y="56" width="26" height="16" rx="4" fill="#332a19"/></g>
+    <g transform="translate(350,330)"><rect width="150" height="72" rx="16" fill="#8a6a3f"/><rect x="30" y="13" width="62" height="30" rx="6" fill="#57431f"/><rect x="8" y="54" width="24" height="16" rx="4" fill="#402f15"/><rect x="118" y="54" width="24" height="16" rx="4" fill="#402f15"/></g>
+    <g transform="translate(340,470)"><rect width="160" height="76" rx="16" fill="#75593c"/><rect x="34" y="14" width="64" height="32" rx="6" fill="#4b381f"/><rect x="8" y="58" width="26" height="16" rx="4" fill="#382816"/><rect x="126" y="58" width="26" height="16" rx="4" fill="#382816"/></g>
+    <g transform="translate(640,80) rotate(90)"><rect width="130" height="66" rx="14" fill="#87572f"/><rect x="28" y="12" width="54" height="28" rx="6" fill="#54351c"/></g>
+    <g transform="translate(660,300) rotate(90)"><rect width="140" height="68" rx="14" fill="#6b4f30"/><rect x="30" y="12" width="58" height="28" rx="6" fill="#43301a"/></g>
+    <g transform="translate(655,440) rotate(90)"><rect width="130" height="66" rx="14" fill="#7d5b36"/><rect x="28" y="12" width="54" height="28" rx="6" fill="#503a20"/></g>
+  </g>
+  <!-- left junk pile: carts and scrap -->
+  <g>
+    <ellipse cx="90" cy="330" rx="75" ry="40" fill="#5d564a"/>
+    <rect x="40" y="280" width="60" height="34" rx="6" fill="#9aa0a6" opacity="0.75"/>
+    <rect x="70" y="262" width="60" height="34" rx="6" fill="#8b9196" opacity="0.7" transform="rotate(-12 100 279)"/>
+    <rect x="52" y="306" width="66" height="30" rx="6" fill="#a7aa94" opacity="0.65" transform="rotate(9 85 321)"/>
+    <rect x="30" y="330" width="18" height="12" rx="3" fill="#33312c"/><rect x="96" y="332" width="18" height="12" rx="3" fill="#33312c"/>
+    <path d="M20 380 l30 -8 l26 10 l-8 14 l-34 4 z" fill="#7d6a4a"/>
+    <circle cx="60" cy="404" r="9" fill="#3a3833"/><circle cx="100" cy="402" r="9" fill="#3a3833"/>
+  </g>
+  <!-- graffiti + danger -->
+  <text x="130" y="530" font-family="monospace" font-size="26" fill="#4f4a40" opacity="0.8" transform="rotate(-4 130 530)">NO</text>
+  <text x="655" y="555" font-family="monospace" font-size="20" fill="#4f4a40" opacity="0.85">ZONA DE</text>
+  <text x="668" y="578" font-family="monospace" font-size="20" fill="#4f4a40" opacity="0.85">PELIGRO</text>
+  <g transform="translate(555,595)" opacity="0.8">
+    <circle cx="0" cy="0" r="17" fill="none" stroke="#4f4a40" stroke-width="4"/>
+    <path d="M-10 -10 L10 10 M10 -10 L-10 10" stroke="#4f4a40" stroke-width="4"/>
+    <path d="M14 6 L30 20 L26 24 L10 10 Z" fill="#4f4a40"/>
+  </g>
+  <!-- grass tufts -->
+  <g stroke="#5d6b3f" stroke-width="3" opacity="0.8" stroke-linecap="round">
+    <path d="M310 62 q4 -14 2 -22"/><path d="M318 64 q8 -10 14 -14"/><path d="M452 236 q3 -16 0 -26"/><path d="M460 238 q9 -12 16 -15"/><path d="M660 176 q4 -14 1 -24"/>
+  </g>
+</svg>
