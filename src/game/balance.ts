@@ -87,21 +87,39 @@ export const BALANCE = {
   moneyFindMin: 5,
   moneyFindMax: 25,
 
-  /** SCAVENGE event (manual explorations only): base trigger chance and
-   *  pity threshold — after N explorations without the event it fires 100%.
-   *  The board lasts scavengeEventSeconds and unclaimed cells are lost. */
-  scavengeBaseChance: 0.2,
-  scavengePityThreshold: 5,
-  scavengeEventSeconds: 20,
-  scavengeCells: 12,
-  /** Loot per claimed cell: amount range by resource kind (time resources
-   *  are in MINUTES like exploration finds; money uses moneyFindMin/Max). */
+  /** SCAVENGE minigame (8 fixed search points): stepped trigger chance by
+   *  explorations since the last event (same pattern as npcTiers but its own
+   *  independent curve — rarer than an NPC, bigger one-shot payoff).
+   *  One roll per MANUAL exploration completion; AUTO runs roll the same
+   *  counter at autoScavengeChanceFactor and resolve all points in chain. */
+  scavengeTiers: [
+    { afterExplorations: 0, chance: 0 },      // 0–9:   0 %
+    { afterExplorations: 10, chance: 0.05 },  // 10–14: 5 %
+    { afterExplorations: 15, chance: 0.08 },  // 15–19: 8 %
+    { afterExplorations: 20, chance: 0.12 },  // 20–24: 12 %
+    { afterExplorations: 25, chance: 0.2 },   // 25–34: 20 %
+    { afterExplorations: 35, chance: 0.3 },   // 35–49: 30 %
+    { afterExplorations: 50, chance: 1 },     // 50+:   garantizado
+  ] as const,
+  /** AUTO-farm SCAVENGE: the manual chance (scavengeTiers) is multiplied by
+   *  this factor. One roll per auto-run completion, same shared counter. */
+  autoScavengeChanceFactor: 0.25,
+  /** Minigame: the player's health for the session (REAL health, floored
+   *  at scavengeSessionRealHealthFloor during the event so a bad streak can
+   *  never knock the player to 0 inside it). Each damage hit rolls
+   *  scavengeDamageMin–Max. Reaching 0 ends the session (unbanked pending
+   *  loot is lost — quit anytime instead to keep what's banked). */
+  scavengeSessionRealHealthFloor: 1,
+  scavengeDamageMin: 1,
+  scavengeDamageMax: 4,
+  /** Loot per search point: unit resources roll 1–3 units, money is flat
+   *  5–20, and Comida/Agua roll simple units converted to survival MINUTES
+   *  with scavengeFoodWaterMinutes (1 unit = 20 min) on grant. */
   scavengeLootUnitsMin: 1,
-  scavengeLootUnitsMax: 4,
-  scavengeLootTimeMin: 15,
-  scavengeLootTimeMax: 40,
-  /** Cells with a find: ~55 % loot, the rest escombros. Tune via balance. */
-  scavengeLootChance: 0.55,
+  scavengeLootUnitsMax: 3,
+  scavengeMoneyMin: 5,
+  scavengeMoneyMax: 20,
+  scavengeFoodWaterMinutes: 20,
 
   /** Stat effectiveness factor: p = base * (1 + stat * k). */
   statEffectFactor: 0.035,

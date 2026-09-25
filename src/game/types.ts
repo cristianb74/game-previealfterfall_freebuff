@@ -137,10 +137,11 @@ export interface GameState {
   nextExplorationId: number;
   /** Counter since last NPC discovery (for balanced spawn system). */
   explorationsSinceLastNPC: number;
-  /** Manual explorations since the last SCAVENGE event (pity counter:
-  *  at scavengePityThreshold the next manual exploration fires it 100%). */
+  /** Manual explorations since the last SCAVENGE event (stepped chance
+   *  via BALANCE.scavengeTiers — same pattern as the NPC counter). */
   explorationsSinceLastScavenge: number;
-  /** Active scavenge minigame event, if any (null = inactive). */
+  /** The single active scavenge session (MANUAL runs only: a live search
+   *  of the 8 fixed points). Null = inactive. */
   scavengeEvent: ActiveScavengeEvent | null;
   /** GLOBAL core buildings (cocina, tanque, …): one shared instance per
    *  character, bonus applies to every zone (SAVE_VERSION ≥ 2). */
@@ -186,30 +187,61 @@ export interface ExplorationOutcome {
 }
 
 // ============================================================
-// SCAVENGE EVENT — manual-exploration minigame (no combat).
-// Triggered by probability with a pity system; the board is stored in
-// the GameState so the event survives reloads and expires on its own.
+// SCAVENGE EVENT — exploration minigame (8 fixed search points, no combat).
+// Landed on MANUAL (real interactive session; quit anytime keeping
+// everything already found) or AUTO (all points resolved in chain, no
+// UI). Stored in the GameState so the session survives reloads. Damage
+// hits the REAL survivor health, floored mid-session so a bad streak can
+// never knock the player to 0 inside the event.
 // ============================================================
 
-/** Loot inside one scavenge cell. `null` loot = escombros (empty find). */
+/** The 8 fixed search points of the SCAVENGE location, in board order. */
+export type ScavengePointId =
+  | "heladera"
+  | "despensa"
+  | "botiquin"
+  | "escritorio"
+  | "placard"
+  | "herramientas"
+  | "cama"
+  | "living";
+
+/** Loot of one search point, already mapped to Afterfall keys: unit
+ *  resources go to `resources[resource]`, `comida`/`agua` carry MINUTES
+ *  (converted with scavengeFoodWaterMinutes) and go to foodMin/waterMin. */
 export interface ScavengeLoot {
   resource: ResourceKey;
   amount: number;
 }
 
-export interface ScavengeCell {
-  loot: ScavengeLoot | null;
+/** Result of searching one point (already rolled at tap time). */
+export interface ScavengePointResult {
+  /** "loot" = gained something; "nada" = nothing; "dano" = damage. */
+  kind: "loot" | "nada" | "dano";
+  loot?: ScavengeLoot;
+  /** Session damage rolled for this point ("dano" results). */
+  damage?: number;
+  /** Flavor line for the log / summary. */
+  text: string;
 }
 
-/** The single active scavenge event (EVENT_SCAVENGE_ACTIVE equivalent:
- *  `GameState.scavengeEvent != null` means the event is running). */
+/** The single active scavenge session. Only MANUAL starts open a session:
+ *  auto runs resolve their points in chain inside the same tick and never
+ *  create this state. Damage goes straight to the REAL survivor health;
+ *  loot is granted at search time (quitting keeps everything found). */
 export interface ActiveScavengeEvent {
   zoneId: number;
-  startedAt: number; // absolute timestamp (announce window start)
-  expiresAt: number; // absolute timestamp (board closes, unclaimed loot lost)
+  startedAt: number; // absolute timestamp (session opened)
+  /** Fixed search-point order and rolled outcomes for already searched
+   *  points (index-aligned with the 8-point list). */
   board: ScavengeCell[];
-  /** Indices already claimed by the player. */
-  claimed: number[];
+}
+
+/** One search point of the board: fixed position, outcome rolled at
+ *  search time (null = not searched yet). */
+export interface ScavengeCell {
+  id: ScavengePointId;
+  result: ScavengePointResult | null;
 }
 
 export type Screen =
