@@ -125,7 +125,10 @@ export interface GameContextValue {
   upgradeBaseBuilding: (key: BuildingKey) => void;
   /** Upgrade a zone THEMATIC building (zones[].thematic). Per-zone quota. */
   upgradeThematicBuilding: (zoneId: number, key: string) => void;
-  useMedicine: () => void;
+  /** Consume medicine to restore health. Without qty: heals to max in one
+   *  click (clamped by stock and BALANCE.maxHealth). With qty: uses exactly
+   *  that many units (still clamped by stock and missing health). */
+  useMedicine: (qty?: number) => void;
   buyResource: (key: ResourceKey, qty?: number) => void;
   /** Buy a battery (MERCHANT_BATTERY_OFFER): +energy, blocked if it does
    *  not fit fully under maxEnergy (no partial waste). */
@@ -1062,21 +1065,44 @@ export function GameProvider({ children }: { children: ReactNode }) {
     [setAndSave],
   );
 
-  const useMedicine = useCallback(() => {
-    setAndSave((s) => {
-      if (s.resources.medicamentos <= 0) {
-        toast.error("Sin medicamentos");
-        return;
-      }
-      if (s.health >= BALANCE.maxHealth) {
-        toast.info("Salud completa");
-        return;
-      }
-      s.resources.medicamentos -= 1;
-      s.health = Math.min(BALANCE.maxHealth, s.health + BALANCE.medicineHealthPerUnit);
-      pushLog(s, "Medicina usada · +1 Salud", "info");
-    });
-  }, [setAndSave]);
+  const useMedicine = useCallback(
+    (qty?: number) => {
+      setAndSave((s) => {
+        if (s.resources.medicamentos <= 0) {
+          toast.error("Sin medicamentos");
+          return;
+        }
+        if (s.health >= BALANCE.maxHealth) {
+          toast.info("Salud completa");
+          return;
+        }
+        const unitsForMissing = Math.ceil(
+          (BALANCE.maxHealth - s.health) / BALANCE.medicineHealthPerUnit,
+        );
+        // No qty = "curar al máximo"; explicit qty = use that many (min 1).
+        const wanted = qty == null ? unitsForMissing : Math.max(1, Math.floor(qty));
+        const units = Math.min(
+          wanted,
+          unitsForMissing,
+          Math.floor(s.resources.medicamentos),
+        );
+        if (units <= 0) return;
+        s.resources.medicamentos -= units;
+        s.health = Math.min(
+          BALANCE.maxHealth,
+          s.health + units * BALANCE.medicineHealthPerUnit,
+        );
+        pushLog(
+          s,
+          units > 1
+            ? `Medicina usada · +${units * BALANCE.medicineHealthPerUnit} Salud (${units} medicamentos)`
+            : "Medicina usada · +1 Salud",
+          "info",
+        );
+      });
+    },
+    [setAndSave],
+  );
 
   const buyResource = useCallback(
     (key: ResourceKey, qty = 1) => {

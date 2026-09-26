@@ -201,7 +201,7 @@ export function ExplorarTab() {
           size="sm"
           variant="outline"
           disabled={state.resources.medicamentos < 1 || state.health >= 100}
-          onClick={useMedicine}
+          onClick={() => useMedicine()}
           className="border-zinc-700 text-zinc-200 hover:border-green-500/50 hover:text-green-400"
         >
           Usar medicina

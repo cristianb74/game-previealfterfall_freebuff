@@ -10,14 +10,44 @@ import { BALANCE } from "@/game/balance";
 import { BUILDING_BY_KEY } from "@/game/buildings";
 import { ZONES } from "@/game/zones";
 import { RESOURCE_META } from "@/game/resources";
-import type { NpcSurvivor } from "@/game/types";
+import type { BuildingKey, NpcSurvivor, NpcTypeCode } from "@/game/types";
 import { cn } from "@/lib/utils";
+
+// ============================================================
+// Roster filter/sort controls (the roster keeps growing towards 20+).
+// Real rarity order (NPC_TYPE_MODIFIERS): B Blanco < G Gris < A Azul
+// < R Rojo < D Dorado — cycleSeconds/bonus both confirm D is best.
+// ============================================================
+const RARITY_ORDER: Record<NpcTypeCode, number> = { B: 0, G: 1, A: 2, R: 3, D: 4 };
+
+const SPECIALTY_CHIPS: { key: BuildingKey; label: string; icon: string }[] = [
+  { key: "cocina", label: "Comida", icon: "🍲" },
+  { key: "tanque", label: "Agua", icon: "🚰" },
+  { key: "almacen", label: "Materiales", icon: "📦" },
+  { key: "enfermeria", label: "Medicamentos", icon: "🩹" },
+  { key: "taller", label: "Componentes", icon: "🔧" },
+  { key: "generador", label: "Energía", icon: "⚡" },
+];
+
+const SORT_OPTIONS = [
+  { key: "default", label: "Orden: reclutamiento" },
+  { key: "rarity_desc", label: "Rareza ↓ (Dorado→Blanco)" },
+  { key: "rarity_asc", label: "Rareza ↑ (Blanco→Dorado)" },
+  { key: "zone_asc", label: "Zona ↑ (Z01→Z20)" },
+  { key: "zone_desc", label: "Zona ↓ (Z20→Z01)" },
+] as const;
+type SortMode = (typeof SORT_OPTIONS)[number]["key"];
 
 export function EquipoTab() {
   const { state, assignNpc, recruitNpc, expelNpc } = useGame();
   const [detail, setDetail] = useState<string | null>(null);
   const [confirmExpel, setConfirmExpel] = useState<string | null>(null);
   const [showMarketplace, setShowMarketplace] = useState<string | null>(null);
+  /** Specialty filter (OR between checked chips; empty = all). */
+  const [filterSpecs, setFilterSpecs] = useState<Set<BuildingKey>>(() => new Set());
+  /** Assignment filter (OR; both unchecked = show everyone). */
+  const [filterAssignment, setFilterAssignment] = useState({ assigned: false, unassigned: false });
+  const [sortMode, setSortMode] = useState<SortMode>("default");
   if (!state) return null;
 
   // Recruitment flow: candidates are NOT assignable until recruited.
@@ -29,6 +59,42 @@ export function EquipoTab() {
   const matCost = BALANCE.npcRecruitCostMateriales;
   const foodCost = BALANCE.npcRecruitCostComidaMin;
   const npc = detail != null ? state.npcs.find((n) => n.id === detail) : null;
+
+  /** Apply filters then sort (ordered is a fresh array — safe to mutate). */
+  const rosterList = ordered.filter((n) => {
+    const matchesSpec = filterSpecs.size === 0 || filterSpecs.has(n.specialization);
+    const noAssignmentFilter = !filterAssignment.assigned && !filterAssignment.unassigned;
+    const matchesAssignment =
+      noAssignmentFilter ||
+      (filterAssignment.assigned && n.assignedZoneId != null) ||
+      (filterAssignment.unassigned && n.assignedZoneId == null);
+    return matchesSpec && matchesAssignment;
+  });
+  const zoneNum = (n: NpcSurvivor) => (n.assignedZoneId ? Number(n.assignedZoneId) : null);
+  const byDiscovery = (a: NpcSurvivor, b: NpcSurvivor) => a.discoveredAt - b.discoveredAt;
+  switch (sortMode) {
+    case "rarity_desc":
+      rosterList.sort((a, b) => RARITY_ORDER[b.type] - RARITY_ORDER[a.type] || byDiscovery(a, b));
+      break;
+    case "rarity_asc":
+      rosterList.sort((a, b) => RARITY_ORDER[a.type] - RARITY_ORDER[b.type] || byDiscovery(a, b));
+      break;
+    case "zone_asc":
+      rosterList.sort((a, b) => (zoneNum(a) ?? 99) - (zoneNum(b) ?? 99) || byDiscovery(a, b));
+      break;
+    case "zone_desc":
+      rosterList.sort((a, b) => (zoneNum(b) ?? -1) - (zoneNum(a) ?? -1) || byDiscovery(a, b));
+      break;
+  }
+  const hasActiveFilters =
+    filterSpecs.size > 0 || filterAssignment.assigned || filterAssignment.unassigned;
+  const toggleSpecFilter = (k: BuildingKey) =>
+    setFilterSpecs((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
   const unlockedMax = ZONES.reduce(
     (acc, z) => (state.expTotal >= z.unlockExp ? Math.max(acc, z.id) : acc),
     1,
@@ -52,6 +118,88 @@ export function EquipoTab() {
       <p className="px-1 text-[10px] uppercase tracking-[0.25em] text-subtle">
         EQUIPO · {active.length} · {assigned.length} asignados
       </p>
+
+      {/* Filter/sort controls (sticky-feel header row above the roster) */}
+      <section className="rounded-lg border border-zinc-800 bg-[#101213] p-2.5">
+        <div className="flex flex-col gap-2">
+          {/* Specialty chips — multi-select OR filter */}
+          <div className="flex flex-wrap gap-1">
+            {SPECIALTY_CHIPS.map((s) => {
+              const on = filterSpecs.has(s.key);
+              return (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => toggleSpecFilter(s.key)}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider transition-colors",
+                    on
+                      ? "border-green-500/70 bg-green-950/40 text-green-300"
+                      : "border-zinc-800 bg-black/30 text-subtle hover:border-zinc-600 hover:text-zinc-300",
+                  )}
+                >
+                  <span aria-hidden>{s.icon}</span>
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+          {/* Assignment chips + sort dropdown on one row */}
+          <div className="flex items-center gap-1.5">
+            {(
+              [
+                { key: "assigned" as const, label: `Asignados ${assigned.length}` },
+                { key: "unassigned" as const, label: `Sin asignar ${unassigned.length}` },
+              ]
+            ).map((f) => {
+              const on = filterAssignment[f.key];
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => setFilterAssignment((p) => ({ ...p, [f.key]: !p[f.key] }))}
+                  className={cn(
+                    "rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider transition-colors",
+                    on
+                      ? "border-green-500/70 bg-green-950/40 text-green-300"
+                      : "border-zinc-800 bg-black/30 text-subtle hover:border-zinc-600 hover:text-zinc-300",
+                  )}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
+            <select
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as SortMode)}
+              className="ml-auto max-w-[46%] shrink-0 rounded-sm border border-zinc-800 bg-black/40 px-1.5 py-1 text-[9px] font-bold uppercase tracking-wider text-zinc-300 outline-none focus:border-green-500/50"
+            >
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.key} value={o.key} className="bg-[#101213] text-zinc-200">
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {hasActiveFilters && (
+            <div className="flex items-center justify-between px-0.5">
+              <span className="text-[9px] uppercase tracking-wider text-subtle">
+                Mostrando {rosterList.length} de {ordered.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterSpecs(new Set());
+                  setFilterAssignment({ assigned: false, unassigned: false });
+                }}
+                className="text-[9px] font-bold uppercase tracking-wider text-green-500/80 hover:text-green-400"
+              >
+                Limpiar filtros
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* Candidates awaiting recruitment */}
       {candidates.length > 0 && (
@@ -123,7 +271,7 @@ export function EquipoTab() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {ordered.map((n) => {
+          {rosterList.map((n) => {
             const info = NPC_TYPE_MODIFIERS[n.type];
             const zoneName = n.assignedZoneId ? ZONES[Number(n.assignedZoneId) - 1]?.name : null;
             const working = n.assignedZoneId != null && state.foodMin > 20 && state.waterMin > 20;

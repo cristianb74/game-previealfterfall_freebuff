@@ -94,27 +94,53 @@ export function MochilaTab() {
             const value = Math.floor(state.resources[key]);
             const hint = buildingHint(key);
             const isMedicine = key === "medicamentos";
+            const missingHealth = Math.ceil(BALANCE.maxHealth - state.health);
+            const unitsForMissing = Math.min(value, missingHealth);
             const canHeal = isMedicine && value >= 1 && state.health < BALANCE.maxHealth;
+            const quickAmounts = [5, 10, 25].filter((q) => q <= value);
             return (
               <div key={key} className="flex flex-col gap-0.5 rounded-sm border border-white/5 bg-black/40 px-3 py-2">
                 <span className="text-base">{meta.icon}</span>
                 <p className="text-2xl font-black tabular-nums text-zinc-100">{value.toLocaleString("es")}</p>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">{meta.label}</p>
                 {isMedicine ? (
-                  <button
-                    type="button"
-                    onClick={useMedicine}
-                    disabled={!canHeal}
-                    title={canHeal ? "Usa 1 Medicamento · +1 Salud" : value < 1 ? "Sin medicamentos" : "Salud completa"}
-                    className={cn(
-                      "mt-0.5 flex h-6 cursor-pointer items-center justify-center rounded-sm border text-[9px] font-bold uppercase tracking-wider transition-colors",
-                      canHeal
-                        ? "border-red-500/50 bg-red-950/40 text-red-300 hover:bg-red-900/50 hover:text-red-200 active:bg-red-900/60"
-                        : "cursor-not-allowed border-zinc-800 bg-black/20 text-zinc-600",
+                  <div className="mt-0.5 flex flex-col gap-1">
+                    <button
+                      type="button"
+                      onClick={() => useMedicine()}
+                      disabled={!canHeal}
+                      title={
+                        canHeal
+                          ? `Consume hasta ${unitsForMissing} de tus ${value} medicamentos para llenar los ${missingHealth} puntos de salud que faltan`
+                          : value < 1
+                            ? "Sin medicamentos"
+                            : "Salud completa"
+                      }
+                      className={cn(
+                        "flex h-6 cursor-pointer items-center justify-center rounded-sm border text-[9px] font-bold uppercase tracking-wider transition-colors",
+                        canHeal
+                          ? "border-red-500/50 bg-red-950/40 text-red-300 hover:bg-red-900/50 hover:text-red-200 active:bg-red-900/60"
+                          : "cursor-not-allowed border-zinc-800 bg-black/20 text-zinc-600",
+                      )}
+                    >
+                      ✚ Curar al máximo
+                    </button>
+                    {canHeal && quickAmounts.length > 0 && (
+                      <div className="flex items-center justify-between gap-1">
+                        {quickAmounts.map((q) => (
+                          <button
+                            key={q}
+                            type="button"
+                            onClick={() => useMedicine(q)}
+                            title={`Usa ${q} medicamentos · +${q * BALANCE.medicineHealthPerUnit} salud (se ajusta a lo que falte)`}
+                            className="flex h-5 flex-1 cursor-pointer items-center justify-center rounded-sm border border-zinc-800 bg-black/30 font-mono text-[9px] font-bold tabular-nums text-zinc-400 transition-colors hover:border-red-500/50 hover:text-red-300 active:bg-red-950/40"
+                          >
+                            ×{q}
+                          </button>
+                        ))}
+                      </div>
                     )}
-                  >
-                    ✚ Usar medicina
-                  </button>
+                  </div>
                 ) : (
                   hint && <p className="text-[9px] text-subtle">{hint}</p>
                 )}

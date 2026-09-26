@@ -141,7 +141,7 @@ export function HUD() {
             action={
               <button
                 type="button"
-                onClick={useMedicine}
+                onClick={() => useMedicine()}
                 disabled={!canHeal}
                 title={medicineHint}
                 className={cn(
