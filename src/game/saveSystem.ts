@@ -364,6 +364,15 @@ function normalizeState(state: GameState): GameState {
     if (!z.thematic || typeof z.thematic !== "object") {
       const carried = z.assignedNpcId;
       s.zones[id] = { thematic: createThematicForZone(id), assignedNpcId: carried ?? null };
+      continue;
+    }
+    // Backfill: saves predating the 4-buildings-per-zone expansion get the
+    // missing keys at N0. Existing buildings keep their levels untouched;
+    // THEMATIC_BY_ZONE is the authoritative definition per zone.
+    for (const def of THEMATIC_BY_ZONE[id] ?? []) {
+      if (!z.thematic[def.key]) {
+        z.thematic[def.key] = { key: def.key, level: 0, upgradeFinishAt: null };
+      }
     }
   }
   if (!s.npcCycles) s.npcCycles = {};

@@ -176,6 +176,15 @@ export const BALANCE = {
   buildingCostMaterialPerLevel: 3,
   buildingCostComponentBase: 1,
   buildingCostComponentPerLevel: 1.5,
+  /** Opción B — escalado de costos por tramos de nivel (multiplicador sobre
+   *  la curva lineal base+porNivel). Niveles 1–3 quedan EXACTOS a la curva
+   *  original (arranque intacto); 4+ encarece por bandas. Ajustable aquí. */
+  buildingCostBands: [
+    { minLevel: 0, multiplier: 1 },
+    { minLevel: 4, multiplier: 1.3 },
+    { minLevel: 7, multiplier: 1.6 },
+    { minLevel: 9, multiplier: 2 },
+  ] as { minLevel: number; multiplier: number }[],
   /** Zone-thematic buildings: bonus per level (LOCAL to their zone).
    *  Same curve as core buildings — their extra power comes from stacking
    *  with the global base bonus on the zone's focus resource. */

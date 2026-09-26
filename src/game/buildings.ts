@@ -405,6 +405,393 @@ export const ZONE_THEMATIC_BUILDINGS: ThematicDef[] = [
     specializes: "comida",
     zone: 20,
   },
+
+  // ---------------------------------------------------------------
+  // Expansión a 4 instalaciones por zona (aprobadа por el jugador).
+  // Cada specializes pertenece al pool de recursos de su zona en
+  // zones.ts (no solo el focus). Los saves viejos obtienen las claves
+  // nuevas a N0 por el backfill de normalizeState.
+  // ---------------------------------------------------------------
+  // Z01 — Apartamentos Ruinosos (pool: materiales, comida, agua, medicamentos)
+  {
+    key: "desvan_compartido",
+    name: "Desván Compartido",
+    description: "Décadas de trastos entre áticos sellados: madera, chapas y útiles.",
+    icon: "📦",
+    specializes: "materiales",
+    zone: 1,
+  },
+  {
+    key: "depositos_escalera",
+    name: "Depósitos de Escalera",
+    description: "Garrafas y tanques domésticos en rellanos que nadie revisó.",
+    icon: "💧",
+    specializes: "agua",
+    zone: 1,
+  },
+  {
+    key: "botiquines_vecinales",
+    name: "Botiquines Vecinales",
+    description: "Botiquines de baño olvidados: vendas, analgésicos, antisépticos.",
+    icon: "🩹",
+    specializes: "medicamentos",
+    zone: 1,
+  },
+  // Z02 — Supermercado Saqueado (pool: comida, agua, materiales, componentes)
+  {
+    key: "chatarra_gondolas",
+    name: "Chatarra de Góndolas",
+    description: "Carritos y repisas metálicas: acero liviano a granel.",
+    icon: "🛒",
+    specializes: "materiales",
+    zone: 2,
+  },
+  {
+    key: "circuitos_seguridad",
+    name: "Circuitos de Seguridad",
+    description: "Cámaras, sensores y la central antirrobo intacta en la trastienda.",
+    icon: "📹",
+    specializes: "componentes",
+    zone: 2,
+  },
+  // Z03 — Gasolinera Abandonada (pool: materiales, componentes, dinero)
+  {
+    key: "caja_administrador",
+    name: "Caja del Administrador",
+    description: "La recaudación quedó tras el mostrador el día que todo paró.",
+    icon: "🪙",
+    specializes: "dinero",
+    zone: 3,
+  },
+  {
+    key: "patio_bidones",
+    name: "Patio de Bidones",
+    description: "Bidones, mangueras y chapa galvanizada acumulada en el patio.",
+    icon: "🛢",
+    specializes: "materiales",
+    zone: 3,
+  },
+  // Z04 — Hospital Derruido (pool: medicamentos, materiales)
+  {
+    key: "farmacia_central",
+    name: "Farmacia Central",
+    description: "Anaqueles sellados de la farmacia del hospital: lotes enteros.",
+    icon: "💊",
+    specializes: "medicamentos",
+    zone: 4,
+  },
+  {
+    key: "camillas_rieles",
+    name: "Camillas y Rieles",
+    description: "Acero inoxidable de camillas y rieles de transferencia.",
+    icon: "🛏",
+    specializes: "materiales",
+    zone: 4,
+  },
+  // Z05 — Bloque de Oficinas (pool: componentes, dinero, materiales)
+  {
+    key: "boveda_nominas",
+    name: "Bóveda de Nóminas",
+    description: "La cámara acorazada del piso 12 guarda el efectivo de las nóminas.",
+    icon: "🪙",
+    specializes: "dinero",
+    zone: 5,
+  },
+  {
+    key: "planta_archivo",
+    name: "Planta de Archivo",
+    description: "Archivadores metálicos de oficinas enteras, piso por piso.",
+    icon: "🗄",
+    specializes: "materiales",
+    zone: 5,
+  },
+  {
+    key: "sala_hvac",
+    name: "Sala de Máquinas HVAC",
+    description: "Compresoras y ventilación central: electrónica pesada rescatable.",
+    icon: "🌀",
+    specializes: "componentes",
+    zone: 5,
+  },
+  // Z06 — Colegio en Ruinas (pool: comida, materiales, medicamentos)
+  {
+    key: "almacen_aseo",
+    name: "Almacén de Aseo",
+    description: "Alcoholes, lavandina y antisépticos del depósito de limpieza.",
+    icon: "🧴",
+    specializes: "medicamentos",
+    zone: 6,
+  },
+  {
+    key: "taller_tecnologia",
+    name: "Taller de Tecnología",
+    description: "El aula-taller: herramientas, bancos y estanterías de cargas.",
+    icon: "🔧",
+    specializes: "materiales",
+    zone: 6,
+  },
+  // Z07 — Fábrica Textil (pool: materiales, componentes)
+  {
+    key: "bobinas_lona",
+    name: "Bobinas y Lona",
+    description: "Rollos impermeables y lona industrial, intactos en el galpón.",
+    icon: "🧵",
+    specializes: "materiales",
+    zone: 7,
+  },
+  {
+    key: "cuadros_mando",
+    name: "Cuadros de Mando",
+    description: "La sala eléctrica de la fábrica: PLCs, relés y cableado etiquetado.",
+    icon: "🎛",
+    specializes: "componentes",
+    zone: 7,
+  },
+  // Z08 — Estación de Tren (pool: comida, componentes, dinero)
+  {
+    key: "enclavamientos",
+    name: "Enclavamientos",
+    description: "Semáforos, desvíos y relés del enclavamiento ferroviario.",
+    icon: "🚦",
+    specializes: "componentes",
+    zone: 8,
+  },
+  {
+    key: "taquilla_consignas",
+    name: "Taquilla y Consignas",
+    description: "Monedas de taquilla y bultos nunca reclamados en las consignas.",
+    icon: "🪙",
+    specializes: "dinero",
+    zone: 8,
+  },
+  // Z09 — Depósito de Agua (pool: agua, materiales)
+  {
+    key: "sala_bombas",
+    name: "Sala de Bombas",
+    description: "Bombeo presurizado: la red de distribución aún responde aquí.",
+    icon: "🚰",
+    specializes: "agua",
+    zone: 9,
+  },
+  {
+    key: "planchas_deposito",
+    name: "Planchas del Depósito",
+    description: "Chapas y remaches de los tanques viejos: acero fácil de llevar.",
+    icon: "📦",
+    specializes: "materiales",
+    zone: 9,
+  },
+  // Z10 — Colonia Cercada (pool: comida, agua, materiales, medicamentos)
+  {
+    key: "enfermeria_trinchera",
+    name: "Enfermería de Trinchera",
+    description: "El botiquín de campaña de la colonia: lo básico, bien organizado.",
+    icon: "🩹",
+    specializes: "medicamentos",
+    zone: 10,
+  },
+  {
+    key: "muro_chatarra",
+    name: "Muro de Chatarra",
+    description: "Placas reforzadas del perímetro: material probado en combate.",
+    icon: "🛡",
+    specializes: "materiales",
+    zone: 10,
+  },
+  // Z11 — Policlínica Militar (pool: medicamentos, componentes)
+  {
+    key: "banco_sangre",
+    name: "Banco de Sangre",
+    description: "Refrigeradores de hemoderivados con generador de respaldo.",
+    icon: "🩸",
+    specializes: "medicamentos",
+    zone: 11,
+  },
+  {
+    key: "sala_radiologia",
+    name: "Sala de Radiología",
+    description: "Tubos de rayos X, capacitores y paneles de plomo aprovechables.",
+    icon: "☢",
+    specializes: "componentes",
+    zone: 11,
+  },
+  {
+    key: "kits_campana",
+    name: "Kits de Campaña",
+    description: "Lotes médicos militares sellados, apilados por fecha de vencimiento.",
+    icon: "💉",
+    specializes: "medicamentos",
+    zone: 11,
+  },
+  // Z12 — Zona Industrial Norte (pool: materiales, componentes, dinero)
+  {
+    key: "horno_fundicion",
+    name: "Horno de Fundición",
+    description: "El horno aún funde chatarra: lingotes y vigas a medida.",
+    icon: "🔥",
+    specializes: "materiales",
+    zone: 12,
+  },
+  {
+    key: "gerencia_caja",
+    name: "Gerencia y Caja",
+    description: "Contratos, cheques y la caja fuerte de la administración de la nave.",
+    icon: "🪙",
+    specializes: "dinero",
+    zone: 12,
+  },
+  // Z13 — Barrios Colapsados (pool: materiales, comida)
+  {
+    key: "escombros_selectos",
+    name: "Escombros Selectos",
+    description: "Ladrillo entero y fierro de fachadas caídas, apilado por manos amigas.",
+    icon: "🧱",
+    specializes: "materiales",
+    zone: 13,
+  },
+  {
+    key: "ollas_comunitarias",
+    name: "Ollas Comunitarias",
+    description: "Alguien las sigue alimentando: conservas compartidas a la brasa.",
+    icon: "🍲",
+    specializes: "comida",
+    zone: 13,
+  },
+  // Z14 — Central Eléctrica (pool: componentes, dinero, materiales)
+  {
+    key: "sala_control",
+    name: "Sala de Control",
+    description: "Consolas e instrumentación de la central: precisión industrial.",
+    icon: "🎚",
+    specializes: "componentes",
+    zone: 14,
+  },
+  {
+    key: "caja_sueldos",
+    name: "Caja de Sueldos",
+    description: "La paga de la empresa quedó adentro el mes del colapso.",
+    icon: "🪙",
+    specializes: "dinero",
+    zone: 14,
+  },
+  // Z15 — Laboratorio Químico (pool: componentes, medicamentos)
+  {
+    key: "destileria_solventes",
+    name: "Destilería de Solventes",
+    description: "Columnas de destilación para purificar compuestos medicinales.",
+    icon: "⚗",
+    specializes: "medicamentos",
+    zone: 15,
+  },
+  {
+    key: "ups_laboratorio",
+    name: "UPS del Laboratorio",
+    description: "Baterías de respaldo con una última carga dentro.",
+    icon: "🔋",
+    specializes: "componentes",
+    zone: 15,
+  },
+  // Z16 — Depósito Militar (pool: materiales, comida, medicamentos)
+  {
+    key: "cocinas_campana",
+    name: "Cocinas de Campaña",
+    description: "Cocinas móviles del contingente: raciones calientes garantizadas.",
+    icon: "🥫",
+    specializes: "comida",
+    zone: 16,
+  },
+  {
+    key: "sacos_terreos",
+    name: "Sacos Terreros",
+    description: "Alambradas, postes y sacos: el arsenal logístico del depósito.",
+    icon: "📦",
+    specializes: "materiales",
+    zone: 16,
+  },
+  // Z17 — Torres Residenciales (pool: materiales, componentes, agua)
+  {
+    key: "cuarto_bombas_torres",
+    name: "Cuarto de Bombas",
+    description: "Bombeo presurizado de las torres: presión constante para arriba.",
+    icon: "💧",
+    specializes: "agua",
+    zone: 17,
+  },
+  {
+    key: "repetidores_azotea",
+    name: "Repetidores de Azotea",
+    description: "Antenas con cableado intacto y gabinetes sellados.",
+    icon: "📡",
+    specializes: "componentes",
+    zone: 17,
+  },
+  {
+    key: "puertas_parque",
+    name: "Puertas y Parqué",
+    description: "Marcos de acero y maderas de los portales, piso por piso.",
+    icon: "🚪",
+    specializes: "materiales",
+    zone: 17,
+  },
+  // Z18 — Puerto Mercante (pool: materiales, componentes, dinero)
+  {
+    key: "aduana_puerto",
+    name: "Aduana",
+    description: "Aranceles pagados y olvidados, junto a manifiestos sin abrir.",
+    icon: "🪙",
+    specializes: "dinero",
+    zone: 18,
+  },
+  {
+    key: "radio_capitania",
+    name: "Radio de Capitanía",
+    description: "El equipo de radio del puerto: bandas marinas y repuestos.",
+    icon: "📻",
+    specializes: "componentes",
+    zone: 18,
+  },
+  // Z19 — Zona de Cuarentena (pool: medicamentos, componentes, dinero)
+  {
+    key: "archivo_muestras",
+    name: "Archivo de Muestras",
+    description: "Muestras clínicas nunca incineradas, refrigeradas por error.",
+    icon: "🧫",
+    specializes: "medicamentos",
+    zone: 19,
+  },
+  {
+    key: "circuito_perimetro",
+    name: "Circuito Cerrado del Perímetro",
+    description: "Cámaras y monitores del control fronterizo, aún cableados.",
+    icon: "📹",
+    specializes: "componentes",
+    zone: 19,
+  },
+  {
+    key: "deposito_incautados",
+    name: "Depósito de Incautados",
+    description: "Bienes retenidos en la frontera: nadie fue a reclamarlos.",
+    icon: "🪙",
+    specializes: "dinero",
+    zone: 19,
+  },
+  // Z20 — Base Militar (pool: todos)
+  {
+    key: "desalinizadora_puerto",
+    name: "Desalinizadora de Puerto",
+    description: "La planta del muelle militar: agua potable por toneladas.",
+    icon: "🌊",
+    specializes: "agua",
+    zone: 20,
+  },
+  {
+    key: "comisariado",
+    name: "Comisariado",
+    description: "El fondo de pagos en efectivo del comisario de la base.",
+    icon: "🪙",
+    specializes: "dinero",
+    zone: 20,
+  },
 ];
 
 export const THEMATIC_BY_KEY: Record<string, ThematicDef> = ZONE_THEMATIC_BUILDINGS.reduce(
@@ -454,13 +841,19 @@ export function buildingUpgradeCost(level: number): {
   materiales: number;
   componentes: number;
 } {
+  const raw = {
+    materiales: BALANCE.buildingCostMaterialBase + BALANCE.buildingCostMaterialPerLevel * level,
+    componentes: BALANCE.buildingCostComponentBase + BALANCE.buildingCostComponentPerLevel * level,
+  };
+  // Opción B: multiplicador por tramos de nivel sobre la curva lineal
+  // (bandas ajustables en BALANCE.buildingCostBands). L1–3 quedan exactos.
+  let multiplier = 1;
+  for (const band of BALANCE.buildingCostBands) {
+    if (level >= band.minLevel) multiplier = band.multiplier;
+  }
   return {
-    materiales: Math.round(
-      BALANCE.buildingCostMaterialBase + BALANCE.buildingCostMaterialPerLevel * level,
-    ),
-    componentes: Math.round(
-      BALANCE.buildingCostComponentBase + BALANCE.buildingCostComponentPerLevel * level,
-    ),
+    materiales: Math.round(raw.materiales * multiplier),
+    componentes: Math.round(raw.componentes * multiplier),
   };
 }
 
