@@ -25,6 +25,14 @@ import {
   type SpeedMultiplier,
 } from "@/game/virtualClock";
 import { OfflineSummaryModal } from "@/components/game/OfflineSummaryModal";
+import { RECIPE_BY_ID } from "./crafting/recipes";
+import {
+  canAfford,
+  cancelCraft,
+  catchUpCrafting,
+  resolveFinishedCrafts,
+  startCraft,
+} from "./crafting/crafting";
 import { tickNpcs } from "@/game/onlineTick";
 import { applyEnergyRegen, currentEnergy, gainEnergy, spendEnergy, nextEnergyRegenAt } from "@/game/energySystem";
 import { explorationMinutesWithAgility } from "@/game/statEffects";
@@ -102,6 +110,13 @@ export interface GameContextValue {
   restoreFromCloud: () => Promise<void>;
   /** Offline progress summary (shown once per boot in a modal). */
   offlineSummary: OfflineSummary | null;
+  /** CRAFTING UI version — bumps when the queue/inventory change through
+   *  deferred paths (catch-up timers) so consumers re-render. */
+  craftingVersion: number;
+  /** FABRICAR: deduct from the REAL resources and enqueue (atomic). */
+  craftRecipe: (recipeId: string) => void;
+  /** CANCEL a queued item: refund + remove; never disturbs other items' progress. */
+  cancelCrafting: (uid: string) => void;
   /** Saved Zonas-list scroll position (list → Instalaciones → back). */
   savedZonasScrollRef: { current: number | null };
   dismissOfflineSummary: () => void;
@@ -185,6 +200,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [offlineSummary, setOfflineSummary] = useState<OfflineSummary | null>(null);
   /** Session-only game speed (dev tool). Resets to x1 on every reload. */
   const [speedMultiplier, setSpeedMultiplierState] = useState<SpeedMultiplier>(() => getSpeedMultiplier());
+  /** CRAFTING: queue/inventory live in the real GameState (single source of
+   *  truth). This counter only forces the UI to re-render when crafting's
+   *  deferred save timer fires — queue items are MUTATED in place by the
+   *  catch-up helpers (startedAt/endsAt get stamped), so the identity of
+   *  state.craftingQueue does not change. */
+  const [craftingUiTick, setCraftingUiTick] = useState(0);
+  /** CRAFTING: next resolution check timestamp (active item's endsAt). */
+  const craftingNextCheckRef = useRef<number | null>(null);
   /** Offline summary prepared by boot, shown once the player actually
    *  enters /juego ("Continuar") — never on the welcome/login screen. */
   const pendingOfflineSummaryRef = useRef<OfflineSummary | null>(null);
@@ -391,6 +414,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
         // points keep their loot/damage, unsearched settle as "nada") and
         // narrate the closure in the log instead.
         settleScavengeOnBoot(s);
+        // CRAFTING catch-up: resolve everything that finished while the app
+        // was closed (in order, idempotent) before the first render.
+        catchUpCrafting(s);
         setState(s);
         stateRef.current = s;
         setHasSaveFile(true);
@@ -529,6 +555,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      // CRAFTING: sequential queue — resolve finished items (also caught up
+      // on load; idempotent so the timer + load can never double-grant).
+      const craftedNow = resolveFinishedCrafts(s);
+      if (craftedNow.length > 0) {
+        for (const name of craftedNow) {
+          pushLog(s, `Crafteo completado: ${name}`, "info");
+        }
+        toast.success("CRAFTEO COMPLETADO", { description: craftedNow.join(" · ") });
+        dirty = true;
+      }
+
       if (dirty) void saveGame(s);
       setState({ ...s });
       // periodic save (every 15 s) to keep timestamps fresh
@@ -536,6 +573,37 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }, 1000);
     return () => window.clearInterval(id);
   }, [booted]);
+
+  // ---- CRAFTING catch-up timer: fires when the active item's endsAt is
+  // reached, even with the tab hidden or the UI on another screen (the app
+  // never depends on the 1 s tick for crafting resolution; on load the
+  // boot catch-up handles everything, idempotently).
+  useEffect(() => {
+    if (!booted) return;
+    const schedule = () => {
+      const front = stateRef.current?.craftingQueue?.[0];
+      craftingNextCheckRef.current =
+        front && front.startedAt > 0 ? front.endsAt : null;
+      return craftingNextCheckRef.current;
+    };
+    const run = () => {
+      const s = stateRef.current;
+      if (!s) return;
+      const done = resolveFinishedCrafts(s);
+      if (done.length > 0) {
+        for (const name of done) pushLog(s, `Crafteo completado: ${name}`, "info");
+        toast.success("CRAFTEO COMPLETADO", { description: done.join(" · ") });
+        void saveGame(s);
+      }
+      const next = schedule();
+      timerId = next != null ? window.setTimeout(run, Math.max(0, next - Date.now())) : null;
+    };
+    const first = schedule();
+    let timerId = first != null ? window.setTimeout(run, Math.max(0, first - Date.now())) : null;
+    return () => {
+      if (timerId != null) window.clearTimeout(timerId);
+    };
+  }, [booted, craftingUiTick]);
 
   // save on tab hide (mobile backgrounding)
   useEffect(() => {
@@ -849,6 +917,40 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const rerollSurvivors = useCallback(() => {
     setRollOptions((prev) => (prev.length < SURVIVOR_MAX_ROLLS ? [...prev, rollSurvivor()] : prev));
   }, []);
+
+  // ---- CRAFTING actions ----
+  /** FABRICAR: validate against the REAL resources, deduct atomically and
+   *  enqueue. Returns false when unaffordable (UI keeps the button disabled;
+   *  the guard also protects against races). */
+  const craftRecipe = useCallback(
+    (recipeId: string) => {
+      const recipe = RECIPE_BY_ID[recipeId];
+      if (!recipe) return;
+      setAndSave((s) => {
+        if (!canAfford(s, recipe.costs)) {
+          toast.error("Recursos insuficientes");
+          return;
+        }
+        startCraft(s, recipe);
+        pushLog(s, `Crafteo iniciado: ${recipe.name}`, "info");
+        setCraftingUiTick((t) => t + 1);
+      });
+    },
+    [setAndSave],
+  );
+
+  /** CANCEL: full refund from the frozen cost snapshot + removal. Cancelling
+   *  the active item starts the next one from now; waiting items shift.
+   *  The refund lands in the real resource pools in the same update. */
+  const cancelCrafting = useCallback(
+    (uid: string) => {
+      setAndSave((s) => {
+        cancelCraft(s, uid);
+        setCraftingUiTick((t) => t + 1);
+      });
+    },
+    [setAndSave],
+  );
 
   const startExploration = useCallback(
     (zoneId: number) => {
@@ -1273,6 +1375,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
       rerollSurvivors,
       offlineSummary,
       savedZonasScrollRef,
+      craftingVersion: craftingUiTick,
+      craftRecipe,
+      cancelCrafting,
       dismissOfflineSummary: () => setOfflineSummary(null),
       speedMultiplier,
       setSpeed,

@@ -120,6 +120,22 @@ export function BaseTab() {
             </p>
           </div>
         </button>
+        {/* CRAFTING entry point — same pattern as the zone-instances link. */}
+        <button
+          type="button"
+          onClick={() => setScreen("crafteo")}
+          className="mt-1.5 flex w-full items-center gap-2 rounded-sm border border-[#37402e] bg-[#0b0f0b] px-2 py-1.5 text-left transition-colors hover:border-[#aeca43]/70"
+        >
+          <span className="text-sm">🛠</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[9px] font-bold uppercase tracking-wider text-[#d5ef55]">
+              Taller de crafteo
+            </p>
+            <p className="text-[9px] text-subtle">
+              Fabrica herramientas y equipo con tus recursos ›
+            </p>
+          </div>
+        </button>
       </div>
 
       <div className="flex flex-col gap-2">

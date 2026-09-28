@@ -6,6 +6,7 @@ import { ZonasTab } from "@/components/game/ZonasTab";
 import { EquipoTab } from "@/components/game/EquipoTab";
 import { BaseTab } from "@/components/game/BaseTab";
 import { InstalacionesTab } from "@/components/game/InstalacionesTab";
+import { CraftingTab } from "@/components/game/CraftingTab";
 import { MercaderTab } from "@/components/game/MercaderTab";
 import { MochilaTab } from "@/components/game/MochilaTab";
 import { PerfilTab } from "@/components/game/PerfilTab";
@@ -138,6 +139,7 @@ export default function Game() {
             {screen === "equipo" && <EquipoTab />}
             {screen === "base" && <BaseTab />}
             {screen === "instalaciones" && <InstalacionesTab returnScreen="zonas" />}
+            {screen === "crafteo" && <CraftingTab />}
             {screen === "mercader" && <MercaderTab />}
             {screen === "mochila" && <MochilaTab />}
             {screen === "perfil" && <PerfilTab />}

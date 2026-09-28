@@ -9,6 +9,7 @@ import {
   type ThematicDef,
 } from "./buildings";
 import { getZone } from "./zones";
+import { RECIPE_BY_ID } from "./crafting/recipes";
 import type {
   BuildingKey,
   BuildingState,
@@ -105,6 +106,8 @@ export function createInitialState(survivor: GameState["survivor"], now = Date.n
     npcCycles: {},
     log: [],
     pendingZoneUnlock: null,
+    craftingQueue: [],
+    craftedInventory: {},
   };
 }
 
@@ -400,6 +403,23 @@ function normalizeState(state: GameState): GameState {
     s.scavengeEvent = null;
   }
   if (typeof s.nextExplorationId !== "number") s.nextExplorationId = (s.explorationsDone ?? 0) + 1;
+  // CRAFTING backfill (queue + inventory live in the same save envelope):
+  // corrupt/missing fields are reset safely and unknown recipe ids dropped.
+  if (!Array.isArray(s.craftingQueue)) s.craftingQueue = [];
+  s.craftingQueue = s.craftingQueue.filter(
+    (q) =>
+      q &&
+      typeof q.uid === "string" &&
+      typeof q.recipeId === "string" &&
+      RECIPE_BY_ID[q.recipeId] != null &&
+      typeof q.timeSeconds === "number",
+  );
+  if (s.craftedInventory == null || typeof s.craftedInventory !== "object") {
+    s.craftedInventory = {};
+  }
+  for (const id of Object.keys(s.craftedInventory)) {
+    if (RECIPE_BY_ID[id] == null) delete s.craftedInventory[id];
+  }
   if (typeof s.manualExplorationsDone !== "number") s.manualExplorationsDone = s.explorationsDone ?? 0;
   // NPC recruitment migration: NPCs owned before the recruitment system
   // existed are grandfathered as "active" (already part of the shelter).

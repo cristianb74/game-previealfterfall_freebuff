@@ -152,6 +152,51 @@ export interface GameState {
   npcCycles: Record<string, number>;
   log: LogEvent[];
   pendingZoneUnlock: number | null;
+  /** CRAFTING: sequential queue (item 0 is the active craft; timestamps in
+   *  Date.now()). Only this queue and craftedInventory are crafting's
+   *  persistence footprint — resources always live in the real GameState. */
+  craftingQueue: CraftingQueueItem[];
+  /** Finished items: recipe id → count (crafted items sit here until an
+   *  effect system consumes them; see getCraftedCount selector). */
+  craftedInventory: Record<string, number>;
+}
+
+/** One queued craft. endsAt is only meaningful while the item is being
+ *  worked on (index 0); waiting items start when the active one finishes. */
+export interface CraftingQueueItem {
+  /** Unique instance id (`${recipeId}-${startedAtMs}-${rand}`). */
+  uid: string;
+  recipeId: string;
+  /** Frozen recipe data at queue time (recipes may be rebalanced later). */
+  name: string;
+  icon: string;
+  /** Craft duration in seconds (from the recipe at queue time). */
+  timeSeconds: number;
+  /** Frozen cost snapshot (for exact refunds on cancel). */
+  costs: Partial<Record<ResourceKey, number>>;
+  /** When the active item started crafting (Date.now()); waiting items keep
+   *  the value at 0 until they become active. */
+  startedAt: number;
+  /** When the active item will finish (Date.now()); waiting items 0. */
+  endsAt: number;
+}
+
+/** A craftable recipe. Centralized in crafting/recipes.ts — UI and logic
+ *  read only from there so rebalancing means editing one file. */
+export interface Recipe {
+  id: string;
+  name: string;
+  category: "exploracion" | "recoleccion" | "supervivencia" | "tecnico" | "proteccion";
+  icon: string;
+  description: string;
+  effect: string;
+  timeSeconds: number;
+  /** Costs over the REAL resource keys; comida/agua are survival MINUTES
+   *  in this game (foodMin/waterMin), energia is 0–24 points. */
+  costs: Partial<Record<ResourceKey, number>>;
+  /** Structured effect payload for future wiring (not consumed by any
+   *  system yet). */
+  effectData?: Record<string, number | string>;
 }
 
 export interface ExplorationFinding {
@@ -243,6 +288,7 @@ export type Screen =
   | "equipo"
   | "base"
   | "instalaciones"
+  | "crafteo"
   | "mercader"
   | "mochila"
   | "perfil"
