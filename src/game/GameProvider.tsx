@@ -34,6 +34,11 @@ import {
   resolveFinishedCrafts,
   startCraft,
 } from "./crafting/crafting";
+import {
+  agilityFactor,
+  explorationDurationFactor,
+  useCraftedItem as applyCraftedUse,
+} from "./crafting/craftedEffects";
 import { tickNpcs } from "@/game/onlineTick";
 import { applyEnergyRegen, currentEnergy, gainEnergy, spendEnergy, nextEnergyRegenAt } from "@/game/energySystem";
 import { explorationMinutesWithAgility } from "@/game/statEffects";
@@ -123,7 +128,7 @@ export interface GameContextValue {
   savedZonasScrollRef: { current: number | null };
   dismissOfflineSummary: () => void;
   startExploration: (zoneId: number) => void;
-  /** Search one scavenge point of the ACTIVE event (rolls + applies loot/
+    /** Search one scavenge point of the ACTIVE event (rolls + applies loot/
    *  damage at once). `index` = board position (0–7). */
   searchScavenge: (index: number) => void;
   /** Close the active scavenge event: settle unsearched points as "nada",
@@ -146,6 +151,9 @@ export interface GameContextValue {
    *  click (clamped by stock and BALANCE.maxHealth). With qty: uses exactly
    *  that many units (still clamped by stock and missing health). */
   useMedicine: (qty?: number) => void;
+  /** Use one crafted CONSUMABLE (botiquín / kit de provisiones): applies
+   *  the effect immediately and decrements the crafted inventory by 1. */
+  useCraftedItem: (recipeId: string) => void;
   buyResource: (key: ResourceKey, qty?: number) => void;
   /** Buy a battery (MERCHANT_BATTERY_OFFER): +energy, blocked if it does
    *  not fit fully under maxEnergy (no partial waste). */
@@ -842,8 +850,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (s.health <= 0) return;
     // Agilidad reduces exploration duration (statEffects module).
     // Passive NPC benefit: an assigned NPC speeds up their zone further.
+    // Crafted gear applies here too (linterna + botas), exactly as in
+    // manual exploration — both paths can never drift apart.
     const minutes =
       explorationMinutesWithAgility(getZone(zoneId).explorationMinutes, s.survivor.stats.agilidad) *
+      explorationDurationFactor(s) *
+      agilityFactor(s) *
       npcZoneSpeedFactor(s, zoneId);
     s.autoFarms[zoneId] = { zoneId, startedAt: now, finishAt: now + minutes * 60000 };
   }
@@ -975,8 +987,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
         spendEnergy(s, 1, now);
         // Agilidad reduces exploration duration (statEffects module).
         // Passive NPC benefit: an assigned NPC speeds up their zone further.
+        // Crafted gear: linterna +10% effective night time and botas +8%
+        // agility fold into the same duration formula (never below bounds).
         const minutes =
           explorationMinutesWithAgility(getZone(zoneId).explorationMinutes, s.survivor.stats.agilidad) *
+          explorationDurationFactor(s) *
+          agilityFactor(s) *
           npcZoneSpeedFactor(s, zoneId);
         s.currentZoneId = zoneId;
         const expId = s.nextExplorationId++;
@@ -1212,6 +1228,26 @@ export function GameProvider({ children }: { children: ReactNode }) {
     [setAndSave],
   );
 
+  /** Use one crafted CONSUMABLE: applies the effect and decrements the
+   *  inventory by 1 (single atomic update). Passive/unlock items are NOT
+   *  usable — they are automatic while owned (UI shows ACTIVO instead). */
+  const useCraftedItemAction = useCallback(
+    (recipeId: string) => {
+      const recipe = RECIPE_BY_ID[recipeId];
+      if (!recipe) return;
+      setAndSave((s) => {
+        const result = applyCraftedUse(s, recipeId);
+        if (!result) {
+          toast.error("No se puede usar", { description: recipe.name });
+          return;
+        }
+        pushLog(s, `Objeto usado · ${result}`, "info");
+        toast.success(recipe.name.toUpperCase(), { description: result });
+      });
+    },
+    [setAndSave],
+  );
+
   const buyResource = useCallback(
     (key: ResourceKey, qty = 1) => {
       setAndSave((s) => {
@@ -1373,6 +1409,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       upgradeBaseBuilding,
       upgradeThematicBuilding,
       useMedicine,
+      useCraftedItem: useCraftedItemAction,
       buyResource,
       buyBattery,
       sellResource,
@@ -1388,7 +1425,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       speedMultiplier,
       setSpeed,
     }),
-    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave,      cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, searchScavenge, finishScavengeEvent, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, savedZonasScrollRef, speedMultiplier, setSpeed],
+    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave,      cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, searchScavenge, finishScavengeEvent, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, useCraftedItemAction, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, savedZonasScrollRef, speedMultiplier, setSpeed],
   );
 
   return (

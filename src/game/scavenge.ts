@@ -1,4 +1,9 @@
 import { BALANCE } from "./balance";
+import {
+  damageTakenFactor,
+  findAmountFactor,
+  injuryRiskFactor,
+} from "./crafting/craftedEffects";
 import { vnow } from "./virtualClock";
 import { SCAVENGE_PINS, SCAVENGE_LOCATIONS, scavengeLocationForZone } from "./scavengeLocations";
 import type { ScavengePointDef } from "./scavengeLocations";
@@ -122,18 +127,27 @@ function rollPoint(
     return { kind: "nada", text: "No hay nada aquí." };
   }
   const { loot, nada, dano } = def.weights;
-  const total = loot + nada + dano;
+  // Crafted protection: guantes/botas lower the injury RISK (scaled damage
+  // weight) and protección cuts the damage itself — same modifiers as the
+  // exploration incident roll, applied at this system's own base roll.
+  const danoWeight = Math.max(0, dano * injuryRiskFactor(state));
+  const total = loot + nada + danoWeight;
   let roll = Math.random() * total;
 
   const pick = <T,>(variants: string[], vars: Record<string, string | number>): string =>
     fillText(variants[Math.floor(Math.random() * variants.length)] ?? variants[0], vars);
 
   // Daño
-  roll -= dano;
+  roll -= danoWeight;
   if (roll <= 0) {
-    const damage =
-      BALANCE.scavengeDamageMin +
-      Math.floor(Math.random() * (BALANCE.scavengeDamageMax - BALANCE.scavengeDamageMin + 1));
+    const damage = Math.max(
+      1,
+      Math.round(
+        (BALANCE.scavengeDamageMin +
+          Math.floor(Math.random() * (BALANCE.scavengeDamageMax - BALANCE.scavengeDamageMin + 1))) *
+          damageTakenFactor(state),
+      ),
+    );
     // Damage hits the REAL health, floored so a bad streak can never
     // knock the player to 0 inside the event (they leave it alive to
     // decide to keep searching or quit — real risk, never death here).
@@ -150,7 +164,12 @@ function rollPoint(
   }
   // Loot
   const resource = pickLootResource(def.loot);
-  const amount = rollLootAmount(resource);
+  // Crafted gathering capacity (materiales/componentes/dinero + mochila
+  // de superviviente overall) applies to minigame hauls too.
+  const amount = Math.max(
+    1,
+    Math.round(rollLootAmount(resource) * findAmountFactor(state, resource)),
+  );
   applyGrant(state, resource, amount);
   const isTime = resource === "comida" || resource === "agua";
   return {

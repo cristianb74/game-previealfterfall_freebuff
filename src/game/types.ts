@@ -161,9 +161,21 @@ export interface GameState {
    *  Date.now()). Only this queue and craftedInventory are crafting's
    *  persistence footprint — resources always live in the real GameState. */
   craftingQueue: CraftingQueueItem[];
-  /** Finished items: recipe id → count (crafted items sit here until an
-   *  effect system consumes them; see getCraftedCount selector). */
+  /** Finished items: recipe id → count. Passive items apply while count ≥ 1
+   *  (no equip slots in this game); consumables decrement via useCraftedItem. */
   craftedInventory: Record<string, number>;
+  /** Timed buffs from crafted consumables ({effectId, expiresAt}), absolute
+   *  Date.now() ms. Empty in pre-buff saves (backfilled on load). */
+  activeBuffs: ActiveBuff[];
+}
+
+/** One timed effect of a crafted consumable. Expired entries are pruned
+ *  lazily whenever bonuses are read — no tick needed to expire them. */
+export interface ActiveBuff {
+  /** Stable effect id, e.g. "consumo_comida_agua" (matches effectData.type). */
+  effectId: string;
+  /** Absolute expiry timestamp (Date.now() ms). */
+  expiresAt: number;
 }
 
 /** One queued craft. endsAt is only meaningful while the item is being

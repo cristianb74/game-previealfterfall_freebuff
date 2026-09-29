@@ -3,6 +3,7 @@ import { rollNpcCycle } from "./npcTypes";
 import { getZone } from "./zones";
 import { npcDisplayName } from "./npcData";
 import { applySurvivalDrain, hungerTier, thirstTier, TIER_META } from "./survivalSystem";
+import { consumptionFactor } from "./crafting/craftedEffects";
 import { BUILDING_BY_KEY, THEMATIC_BY_KEY } from "./buildings";
 import type { BuildingKey } from "./types";
 import { narrNpcFind, narrSurvivalWarn } from "./narrativeLog";
@@ -63,14 +64,16 @@ export function tickNpcs(state: GameState, now: number): TickChanges {
   const dtMs = Math.max(0, now - state.lastTickAt);
 
   // survival consumption for the player (and NPCs at 25 % factor)
+  // Kit de provisiones buff: −10% Comida/Agua consumption while active.
   const hours = dtMs / 3600000;
   if (hours > 0) {
-    state.foodMin = Math.max(0, state.foodMin - BALANCE.survivorUpkeepPerHour * hours);
-    state.waterMin = Math.max(0, state.waterMin - BALANCE.survivorUpkeepPerHour * hours);
+    const consumption = consumptionFactor(state, now);
+    state.foodMin = Math.max(0, state.foodMin - BALANCE.survivorUpkeepPerHour * hours * consumption);
+    state.waterMin = Math.max(0, state.waterMin - BALANCE.survivorUpkeepPerHour * hours * consumption);
     const npcHours = hours * BALANCE.npcConsumptionFactor;
     if (state.npcs.length > 0) {
-      state.foodMin = Math.max(0, state.foodMin - BALANCE.survivorUpkeepPerHour * npcHours * state.npcs.length);
-      state.waterMin = Math.max(0, state.waterMin - BALANCE.survivorUpkeepPerHour * npcHours * state.npcs.length);
+      state.foodMin = Math.max(0, state.foodMin - BALANCE.survivorUpkeepPerHour * npcHours * state.npcs.length * consumption);
+      state.waterMin = Math.max(0, state.waterMin - BALANCE.survivorUpkeepPerHour * npcHours * state.npcs.length * consumption);
     }
     // Progressive health drain from hunger/thirst tiers (0 when OK).
     applySurvivalDrain(state, hours);

@@ -113,6 +113,7 @@ export function createInitialState(survivor: GameState["survivor"], now = Date.n
     pendingZoneUnlock: null,
     craftingQueue: [],
     craftedInventory: {},
+    activeBuffs: [],
   };
 }
 
@@ -552,6 +553,12 @@ function normalizeState(state: GameState): GameState {
   for (const id of Object.keys(s.craftedInventory)) {
     if (RECIPE_BY_ID[id] == null) delete s.craftedInventory[id];
   }
+  // Timed-buff backfill ({effectId, expiresAt}): pre-buff saves start with
+  // an empty list — old saves never had buffs, nothing to preserve.
+  if (!Array.isArray(s.activeBuffs)) s.activeBuffs = [];
+  s.activeBuffs = s.activeBuffs.filter(
+    (b) => b && typeof b.effectId === "string" && typeof b.expiresAt === "number",
+  );
   if (typeof s.manualExplorationsDone !== "number") s.manualExplorationsDone = s.explorationsDone ?? 0;
   // NPC recruitment migration: NPCs owned before the recruitment system
   // existed are grandfathered as "active" (already part of the shelter).

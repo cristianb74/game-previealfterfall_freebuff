@@ -5,6 +5,12 @@ import { applyEnergyRegen } from "./energySystem";
 import { npcDisplayName } from "./npcData";
 import { explorationMinutesWithAgility } from "./statEffects";
 import { applySurvivalDrain } from "./survivalSystem";
+import {
+  buffRemainingMs,
+  consumptionFactor,
+  findAmountFactor,
+  pruneBuffs,
+} from "./crafting/craftedEffects";
 import { BUILDING_BY_KEY, THEMATIC_BY_KEY } from "./buildings";
 import { RESOURCE_META } from "./resources";
 import type { BuildingKey, GameState, LogEvent, ResourceKey } from "./types";
@@ -105,6 +111,10 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
     health: state.health,
     expTotal: state.expTotal,
   };
+
+  // Timed buffs (Kit de provisiones) prune against the return time: the
+  // buff keeps protecting consumption until it expires, even offline.
+  pruneBuffs(state, now);
 
   const npcFinds: NpcFind[] = [];
   const buildingsCompleted: string[] = [];
@@ -237,21 +247,31 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
         for (let c = 0; c < cycles; c++) {
           const find = rollNpcCycle(npc, state, rnd);
           if (find) {
-            if (find.resource === "comida") state.foodMin += find.amount;
-            else if (find.resource === "agua") state.waterMin += find.amount;
-            else if (find.resource === "dinero") state.resources.dinero += find.amount;
-            else state.resources[find.resource] += find.amount;
-            npc.productionTotals[find.resource] += find.amount;
-            npcFinds.push({ npcId: npc.id, resource: find.resource, amount: find.amount });
+            // Crafted gathering capacity scales NPC finds exactly like
+            // exploration/scavenge finds (same modifiers, same pools).
+            const amount = Math.max(1, Math.round(find.amount * findAmountFactor(state, find.resource)));
+            if (find.resource === "comida") state.foodMin += amount;
+            else if (find.resource === "agua") state.waterMin += amount;
+            else if (find.resource === "dinero") state.resources.dinero += amount;
+            else state.resources[find.resource] += amount;
+            npc.productionTotals[find.resource] += amount;
+            npcFinds.push({ npcId: npc.id, resource: find.resource, amount });
           }
         }
         state.npcCycles[npc.id] = now;
       }
     }
     // NPC survival consumption (25 % factor of survivor upkeep, per hour),
-    // applied to every owned NPC whether producing or not.
+    // applied to every owned NPC whether producing or not. The provision
+    // buff only protects the minutes before it expires (prorated).
     const hours = secondsForNpc / 3600;
-    const upkeep = BALANCE.survivorUpkeepPerHour * hours * BALANCE.npcConsumptionFactor * state.npcs.length;
+    const consumption = consumptionFactor(state, now);
+    const buffedNpcHours = Math.min(hours, buffRemainingMs(state, "consumo_comida_agua", now) / 60000 / 60);
+    const upkeep =
+      BALANCE.survivorUpkeepPerHour *
+      BALANCE.npcConsumptionFactor *
+      state.npcs.length *
+      (buffedNpcHours * consumption + (hours - buffedNpcHours));
     state.foodMin = Math.max(0, state.foodMin - upkeep);
     state.waterMin = Math.max(0, state.waterMin - upkeep);
     // Progressive hunger/thirst health drain while away (tier-based).
@@ -259,9 +279,15 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
   }
 
   // ---- Player survival consumption while away (at settle time) ----
+  // Kit de provisiones: the buff continues offline until it expires — only
+  // the minutes covered by the buff get the reduced rate, the rest is full.
   const hoursAway = settleMinutes / 60;
-  state.foodMin = Math.max(0, state.foodMin - BALANCE.survivorUpkeepPerHour * hoursAway);
-  state.waterMin = Math.max(0, state.waterMin - BALANCE.survivorUpkeepPerHour * hoursAway);
+  const playerConsumption = consumptionFactor(state, now);
+  const buffedHours = Math.min(hoursAway, buffRemainingMs(state, "consumo_comida_agua", now) / 60000 / 60);
+  const playerUpkeep =
+    BALANCE.survivorUpkeepPerHour * (buffedHours * playerConsumption + (hoursAway - buffedHours));
+  state.foodMin = Math.max(0, state.foodMin - playerUpkeep);
+  state.waterMin = Math.max(0, state.waterMin - playerUpkeep);
   if (state.foodMin <= 0) summary.hungerStruck = before.foodMin > 0;
   if (state.waterMin <= 0) summary.thirstStruck = before.waterMin > 0;
   // Additional drain for the remaining (uncapped) hours does NOT apply —

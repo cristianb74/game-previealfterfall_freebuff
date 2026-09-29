@@ -2,6 +2,11 @@ import { useEffect, useState } from "react";
 import { useGame } from "@/game/GameProvider";
 import { RESOURCE_META } from "@/game/resources";
 import { BALANCE } from "@/game/balance";
+import { RECIPE_BY_ID } from "@/game/crafting/recipes";
+import {
+  buffRemainingMs,
+  craftedItemKind,
+} from "@/game/crafting/craftedEffects";
 import type { ResourceKey } from "@/game/types";
 import { cn } from "@/lib/utils";
 
@@ -32,7 +37,7 @@ function buildingHint(key: ResourceKey): string | null {
 }
 
 export function MochilaTab() {
-  const { state, useMedicine } = useGame();
+  const { state, useMedicine, useCraftedItem } = useGame();
   const [, force] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => force((v) => v + 1), 1000);
@@ -150,6 +155,73 @@ export function MochilaTab() {
         </div>
         <p className="mt-2 text-[10px] text-subtle">
           ⚡ Energía: {Math.floor(state.resources.energia)}/{BALANCE.maxEnergy} · regenera 1 cada {BALANCE.energyRegenMinutesPerPoint} min, incluso con la app cerrada.
+        </p>
+      </section>
+
+      {/* crafted items — SAME source of truth as the crafting screen */}
+      <section className="rounded-lg border border-zinc-800 bg-[#101213] p-3">
+        <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-zinc-300">Objetos fabricados</h3>
+        {Object.keys(state.craftedInventory).length === 0 ? (
+          <p className="text-xs text-subtle">
+            Aún no fabricaste nada. Visita el Taller de crafteo en Base para crear objetos.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {Object.entries(state.craftedInventory).map(([id, count]) => {
+              const r = RECIPE_BY_ID[id];
+              if (!r) return null; // unknown ids are pruned on load
+              const kind = craftedItemKind(id);
+              const buffMs = buffRemainingMs(state, "consumo_comida_agua", Date.now());
+              return (
+                <div key={id} className="flex items-center gap-3 rounded-sm border border-white/5 bg-black/40 px-3 py-2">
+                  <span className="text-base">{r.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-bold uppercase tracking-wider text-zinc-200">
+                      {r.name}
+                      <span className="ml-2 font-mono tabular-nums text-zinc-500">×{count}</span>
+                    </p>
+                    <p className="truncate text-[10px] text-subtle">{r.effect}</p>
+                  </div>
+                  {kind === "consumable" ? (
+                    <button
+                      type="button"
+                      onClick={() => useCraftedItem(id)}
+                      title={
+                        id === "botiquin"
+                          ? `Restaura hasta 20 Salud (salud ${Math.round(state.health)}/${BALANCE.maxHealth})`
+                          : buffMs > 0
+                            ? `Renueva el buff · quedan ${fmtDuration(buffMs / 60000)}`
+                            : "Activa −10% consumo de Comida y Agua durante 30 min"
+                      }
+                      className={cn(
+                        "flex h-6 shrink-0 cursor-pointer items-center justify-center rounded-sm border px-2 text-[9px] font-bold uppercase tracking-wider transition-colors",
+                        id === "botiquin" && state.health >= BALANCE.maxHealth
+                          ? "cursor-not-allowed border-zinc-800 bg-black/20 text-zinc-600"
+                          : "border-lime-700/50 bg-lime-950/30 text-lime-300 hover:bg-lime-900/40 hover:text-lime-200 active:bg-lime-950/60",
+                      )}
+                    >
+                      Usar
+                    </button>
+                  ) : (
+                    <span
+                      className={cn(
+                        "shrink-0 rounded-sm px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest",
+                        kind === "unlock"
+                          ? "bg-amber-950/40 text-amber-400"
+                          : "bg-lime-950/40 text-lime-400",
+                      )}
+                    >
+                      {kind === "unlock" ? "Desbloqueado" : "Activo"}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <p className="mt-2 text-[10px] text-subtle">
+          Los objetos pasivos funcionan solos mientras tengas al menos uno (sin duplicar efectos).
+          Los consumibles se gastan al usarlos.
         </p>
       </section>
 

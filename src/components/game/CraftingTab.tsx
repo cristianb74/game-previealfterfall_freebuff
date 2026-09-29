@@ -281,8 +281,9 @@ export function CraftingTab() {
           </div>
         )}
         <p className="mt-1.5 text-[9px] leading-4 text-subtle">
-          Los efectos de los objetos no están conectados todavía: se acumulan aquí y quedarán
-          disponibles para integrarse al juego (ver efecto de cada uno en el panel de detalle).
+          Los pasivos funcionan solos mientras tengas al menos uno; los consumibles se usan desde
+          la Mochila y los objetos de un solo uso (Botiquín, Kit de provisiones) aplican su efecto
+          al gastarse.
         </p>
       </section>
 
