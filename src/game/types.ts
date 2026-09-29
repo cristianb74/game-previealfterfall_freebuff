@@ -152,6 +152,11 @@ export interface GameState {
   npcCycles: Record<string, number>;
   log: LogEvent[];
   pendingZoneUnlock: number | null;
+  /** REBALANCEO v3: floor de zonas desbloqueadas, congelado en migración
+   *  con los umbrales v2 (LEGACY_UNLOCK_EXP_V2). unlockedZoneId() devuelve
+   *  max(curvaNueva(expTotal), floor) — nadie pierde zonas ya desbloqueadas
+   *  aunque la EXP total quede por debajo de los umbrales nuevos. */
+  unlockedZoneFloor?: number;
   /** CRAFTING: sequential queue (item 0 is the active craft; timestamps in
    *  Date.now()). Only this queue and craftedInventory are crafting's
    *  persistence footprint — resources always live in the real GameState. */

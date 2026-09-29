@@ -5,10 +5,11 @@ import {
   BUILDING_BY_KEY,
   CORE_BUILDING_GATE_ZONE,
   THEMATIC_BY_ZONE,
-  cumulativeUpgradeCost,
+  buildingUpgradeCost,
+  floorThematicMap,
   type ThematicDef,
 } from "./buildings";
-import { getZone } from "./zones";
+import { getZone, isZoneUnlocked, legacyUnlockFloorV2 } from "./zones";
 import { RECIPE_BY_ID } from "./crafting/recipes";
 import type {
   BuildingKey,
@@ -23,9 +24,12 @@ import type {
 // AFTERFALL — persistent save system.
 // IndexedDB preferred; falls back to localStorage.
 // Versioned; migrations keep old saves alive after updates.
-// SAVE_VERSION 2: buildings redesign — GameState.base (global core)
-// + zones[].thematic (local thematic). v1 shapes are migrated by
-// migrateV1ToV2 (also applied to cloud restores).
+// SAVE_VERSION 3: rebalanceo de progresión — umbrales de zona en curva
+// expZona (zones.ts), costos con zona+mult_tipo (buildings.ts). Los saves
+// anteriores conservan TODO: el floor de zonas desbloqueadas se congela
+// con los umbrales v2 (migrateV2ToV3) y la EXP nunca se toca.
+// La cadena completa vive en migrateStateToCurrent() (idempotente) y se
+// aplica también a los restores de la nube.
 // ============================================================
 
 const DB_NAME = "afterfall-db";
@@ -94,6 +98,7 @@ export function createInitialState(survivor: GameState["survivor"], now = Date.n
     explorationStates: {},
     autoFarms: {},
     autoExplored: {},
+    unlockedZoneFloor: 1,
     explorationsDone: 0,
     manualExplorationsDone: 0,
     nextExplorationId: 1,
@@ -137,8 +142,40 @@ function v1EffectiveLevel(b: BuildingState | undefined): number {
   return b.upgradeFinishAt != null ? Math.min(BALANCE.buildingMaxLevel, done + 1) : done;
 }
 
+// ---------------- LEGACY v2 COST CURVE (CONGELADA — no rebalancear) ----------------
+// Precios EXACTOS que el juego cobraba con la curva v2 (lineal por bandas).
+// Solo para migraciones: los refunds devuelven lo que SE PAGÓ, nunca lo que
+// valdría hoy. costo_v2(L) = round(base·banda(L−1)) con base MAT 4+3(L−1),
+// CMP 1+1.5(L−1); bandas: L1–3 ×1 · L4–6 ×1.3 · L7–8 ×1.6 · L9–10 ×2.
+function legacyV2Band(level0: number): number {
+  if (level0 <= 2) return 1;
+  if (level0 <= 5) return 1.3;
+  if (level0 <= 7) return 1.6;
+  return 2;
+}
+export function legacyV2UpgradeCost(targetLevel: number): { materiales: number; componentes: number } {
+  const l = Math.max(1, Math.min(BALANCE.buildingMaxLevel, Math.floor(targetLevel) || 1)) - 1;
+  const band = legacyV2Band(l);
+  return {
+    materiales: Math.round((4 + 3 * l) * band),
+    componentes: Math.round((1 + 1.5 * l) * band),
+  };
+}
+/** Coste v2 acumulado de llevar un edificio de N0 a Nlevel. */
+export function legacyV2CumulativeCost(level: number): { materiales: number; componentes: number } {
+  let materiales = 0;
+  let componentes = 0;
+  for (let l = 1; l <= Math.max(0, Math.floor(level)); l++) {
+    const c = legacyV2UpgradeCost(l);
+    materiales += c.materiales;
+    componentes += c.componentes;
+  }
+  return { materiales, componentes };
+}
+
 /** Compute the refund owed for collapsing the duplicate copies of one
- *  core key into the global base. `maxLevel` = preserved level. */
+ *  core key into the global base. `maxLevel` = preserved level. The refund
+ *  is priced with the LEGACY v2 curve — exactly what the player paid. */
 function refundForCoreKey(
   copies: { zid: number; effective: number; raw: BuildingState | undefined }[],
   maxLevel: number,
@@ -155,7 +192,7 @@ function refundForCoreKey(
     // finished levels), including an in-flight run (already paid).
     const paid = Math.max(0, Math.min(BALANCE.buildingMaxLevel, copy.raw?.level ?? 0));
     if (paid > 0 && paid <= maxLevel) {
-      const c = cumulativeUpgradeCost(paid);
+      const c = legacyV2CumulativeCost(paid);
       materiales += c.materiales;
       componentes += c.componentes;
     }
@@ -167,14 +204,13 @@ function refundForCoreKey(
 }
 
 /** Migrate a v1 GameState (or any state missing the v2 shape) to v2.
- *  Exported: cloud restores bypass loadGame() and need this too. */
-export function migrateV1ToV2(state: GameState): GameState {
+ *  Internal step of migrateStateToCurrent(). */
+function migrateV1ToV2(state: GameState): GameState {
   const anyState = state as unknown as Record<string, unknown>;
   if (anyState.base && typeof anyState.base === "object") {
     // Already v2 — nothing to do (migrations must be idempotent).
     return state;
   }
-
   const refundTotals = { materiales: 0, componentes: 0 };
   const base = createInitialBase();
 
@@ -217,6 +253,7 @@ export function migrateV1ToV2(state: GameState): GameState {
   }
 
   state.base = base;
+  state.unlockedZoneFloor = legacyUnlockFloorV2(state.expTotal);
 
   // ---- 3. Refund (B) ----
   if (refundTotals.materiales > 0 || refundTotals.componentes > 0) {
@@ -237,7 +274,101 @@ export function migrateV1ToV2(state: GameState): GameState {
   return state;
 }
 
-// ---------------- IndexedDB ----------------
+/** REBALANCEO v3: los umbrales de desbloqueo pasan de los valores v2
+ *  (tope Z20 = 79.000) a la curva expZona 1500×1.28 (Z20 = 739.820).
+ *  Reglas de seguridad:
+ *  · La EXP TOTAL NUNCA se toca (niveles/EXP conservados).
+ *  · NADIE pierde zonas: el floor histórico se congela en
+ *    unlockedZoneFloor con los umbrales LEGACY_UNLOCK_EXP_V2 y
+ *    unlockedZoneId() respeta max(curvaNueva, floor) para siempre.
+ *  · Los niveles de edificios se conservan tal cual (solo se sanea
+ *    corruptura: floor 0..10 — nada negativo).
+ *  · Edificios EN OBRA al migrar: se reembolsa el exceso si la mejora
+ *    ahora cuesta más de lo pagado (nunca se cobra de más).
+ *  Idempotente: corre una sola vez (unlockedZoneFloor queda persistido). */
+export function migrateV2ToV3(state: GameState): GameState {
+  const anyState = state as unknown as Record<string, unknown>;
+  // Idempotente: el floor persistido es la huella de la migración. Los
+  // saves creados YA en v3 nacen con floor 1 (createInitialState) y no
+  // heredan jamás los umbrales v2.
+  if (typeof anyState.unlockedZoneFloor === "number") {
+    return state;
+  }
+
+  // ---- 1. Floor de zonas desbloqueadas (congelado con umbrales v2) ----
+  const floor = Math.max(
+    1,
+    Math.floor(Number(anyState.unlockedZoneFloor) || 0) || legacyUnlockFloorV2(state.expTotal),
+  );
+  state.unlockedZoneFloor = Math.max(floor, legacyUnlockFloorV2(state.expTotal));
+
+  // ---- 2. Saneo de niveles (conservando lo legítimo) ----
+  for (const coreKey of CORE_KEYS) {
+    const b = state.base?.[coreKey];
+    if (b) {
+      const lvl = Math.max(0, Math.min(BALANCE.buildingMaxLevel, Math.floor(b.level) || 0));
+      if (lvl !== b.level) b.level = lvl;
+    }
+  }
+  for (const zid of Object.keys(state.zones ?? {}).map(Number)) {
+    const z = state.zones[zid];
+    if (z?.thematic) floorThematicMap(z.thematic as Record<string, { level: number; upgradeFinishAt: unknown }>);
+  }
+
+  // ---- 3. Mejoras EN CURSO al migrar ----
+  // La mejora en obra se completará al precio NUEVO (v3). Para que nadie
+  // pague de más por una obra YA iniciada, se reembolsa la DIFERENCIA
+  // entre el precio nuevo y el precio v2 que ya pagó. Nunca se regala
+  // nada (si el precio nuevo fuera menor, la diferencia es 0).
+  const refundTotals = { materiales: 0, componentes: 0 };
+  const gateOf = (key: BuildingKey) => CORE_BUILDING_GATE_ZONE[key] ?? 1;
+  const addExcess = (
+    level: number,
+    zoneId: number,
+    tierKey: string,
+    targetLevel: number,
+  ) => {
+    const newCost = buildingUpgradeCost(level, zoneId, { tier: tierKey });
+    const paidV2 = legacyV2UpgradeCost(targetLevel);
+    refundTotals.materiales += Math.max(0, newCost.materiales - paidV2.materiales);
+    refundTotals.componentes += Math.max(0, newCost.componentes - paidV2.componentes);
+  };
+  for (const coreKey of CORE_KEYS) {
+    const b = state.base?.[coreKey];
+    if (!b?.upgradeFinishAt) continue;
+    addExcess(b.level, gateOf(coreKey), coreKey, b.level + 1);
+  }
+  for (const zid of Object.keys(state.zones ?? {}).map(Number)) {
+    const z = state.zones[zid];
+    if (!z?.thematic) continue;
+    for (const key of Object.keys(z.thematic)) {
+      const b = z.thematic[key];
+      if (!b?.upgradeFinishAt) continue;
+      addExcess(b.level, zid, key, b.level + 1);
+    }
+  }
+  if (refundTotals.materiales > 0 || refundTotals.componentes > 0) {
+    state.resources.materiales += refundTotals.materiales;
+    state.resources.componentes += refundTotals.componentes;
+    state.log.unshift({
+      t: Date.now(),
+      msg: `Ajuste de economía: obras en curso reembolsadas por la diferencia de precio (+${refundTotals.materiales} Materiales, +${refundTotals.componentes} Componentes)`,
+      kind: "build",
+    });
+  }
+
+  state.version = SAVE_VERSION;
+  return state;
+}
+
+/** Migration chain entry point: brings ANY legacy state to the CURRENT
+ *  SAVE_VERSION. Exported — cloud restores bypass loadGame() and need
+ *  this too. Migrations must be idempotent. */
+export function migrateStateToCurrent(state: GameState): GameState {
+  let s = migrateV1ToV2(state);
+  s = migrateV2ToV3(s);
+  return s;
+}
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -345,10 +476,11 @@ export async function saveGame(state: GameState): Promise<void> {
  *  (version bumps via migrate, then defensive repairs). */
 function normalizeState(state: GameState): GameState {
   let s = state;
-  if (!s.base || typeof s.base !== "object") {
-    // v1 state (no base field) → full v2 migration.
-    s = migrateV1ToV2(s);
-  }
+  // Cadena completa de migraciones (idempotente): forma v1→v2 y rebalanceo
+  // v3 (floor de zonas + saneo de niveles). Corre en CADA carga para que
+  // cualquier documento legado (local o nube) aterrice en la versión
+  // actual; migrateV2ToV3 es no-op cuando el floor ya está persistido.
+  s = migrateStateToCurrent(s);
   s.version = SAVE_VERSION;
   // repair missing fields defensively
   if (!s.resources) s.resources = emptyResources();
@@ -478,7 +610,7 @@ export function npcTotalsLabel(npc: NpcSurvivor): string {
 export { CORE_BUILDING_GATE_ZONE as CORE_BUILDING_GATES };
 export function coreBuildingUnlocked(state: GameState, key: BuildingKey): boolean {
   const gate = CORE_BUILDING_GATE_ZONE[key];
-  return gate != null && state.expTotal >= getZone(gate).unlockExp;
+  return gate != null && isZoneUnlocked(state, gate);
 }
 export { BUILDING_BY_KEY };
 export type { ThematicDef };

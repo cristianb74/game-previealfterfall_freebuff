@@ -148,7 +148,7 @@ export function InstalacionesTab({
           const quotaBlocked = zoneBusy && !busy;
           const shownAvailable = !quotaBlocked;
           const remaining = busy ? (b.upgradeFinishAt as number) - vnow() : 0;
-          const cost = buildingUpgradeCost(b.level);
+          const cost = buildingUpgradeCost(b.level, zoneId, { tier: def.key });
           const maxed = b.level >= BALANCE.buildingMaxLevel;
           const canAfford =
             state.resources.materiales >= cost.materiales &&

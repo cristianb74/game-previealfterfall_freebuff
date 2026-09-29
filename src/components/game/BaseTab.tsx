@@ -14,7 +14,7 @@ import {
 import { BALANCE } from "@/game/balance";
 import { vnow } from "@/game/virtualClock";
 import { RESOURCE_META } from "@/game/resources";
-import { getZone } from "@/game/zones";
+import { getZone, isZoneUnlocked } from "@/game/zones";
 import type { BuildingKey } from "@/game/types";
 import { cn } from "@/lib/utils";
 
@@ -148,7 +148,7 @@ export function BaseTab() {
           // Availability: gate zone reached + sequential unlock (previous N1+).
           const gateZone = CORE_BUILDING_GATE_ZONE[key];
           const gateUnlocked =
-            gateZone == null || state.expTotal >= getZone(gateZone).unlockExp;
+            gateZone == null || isZoneUnlocked(state, gateZone);
           const sequentialOk =
             prevKey === null || (state.base[prevKey]?.level ?? 0) >= 1;
 
@@ -158,7 +158,7 @@ export function BaseTab() {
           const quotaBlocked = baseBusy && !busy;
           const shownAvailable = gateUnlocked && sequentialOk && !quotaBlocked;
           const remaining = busy ? (b.upgradeFinishAt as number) - vnow() : 0;
-          const cost = buildingUpgradeCost(b.level);
+          const cost = buildingUpgradeCost(b.level, gateZone ?? 1);
           const maxed = b.level >= BALANCE.buildingMaxLevel;
           const canAfford =
             state.resources.materiales >= cost.materiales &&

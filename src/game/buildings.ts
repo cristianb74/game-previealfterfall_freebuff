@@ -1,4 +1,4 @@
-import { BALANCE } from "./balance";
+import { BALANCE, buildingTierFor, BUILDING_TIER_MULTIPLIER } from "./balance";
 import type { BuildingKey, ResourceKey } from "./types";
 
 // ============================================================
@@ -13,8 +13,12 @@ import type { BuildingKey, ResourceKey } from "./types";
 //     The four former "exclusive" buildings keep their exact keys
 //     (invernadero, laboratorio, perforadora, hormigonera) so old
 //     investments migrate untouched.
-// Levels 0–10 for both families; cost/time curves are shared for now
-// (first iteration) so the migration refund maps 1:1 onto paid levels.
+// Levels 0–10 for both families. REBALANCEO v3: cost curve shared and now
+// zone-aware + tier-aware (basico ×1 / intermedio ×2.5 / avanzado ×6 —
+// BUILDING_TIER en balance.ts) with geometric growth (×1.5 per level):
+// costo = round(base_recurso × mult_tipo × (1 + 0.15·(zona−1)) × 1.5^(n−1)).
+// Production bonuses are geometric too but WEAKER (×1.175 per level), so
+// deep upgrades always lose efficiency — that is the anti-excedente knob.
 // ============================================================
 
 export interface BuildingDef {
@@ -812,48 +816,66 @@ export const THEMATIC_BY_ZONE: Record<number, ThematicDef[]> = ZONE_THEMATIC_BUI
 );
 
 // ============================================================
-// BONUSES
+// BONUSES — geometric curve (weaker than the ×1.5 cost curve).
+// Production growth ≈ 1.15–1.2 per level ⇒ returns diminish every level
+// while costs keep multiplying (the requested slower/harder economy).
 // ============================================================
 
-/** Relative bonus of a GLOBAL core building at a given level: N5 → +25 %.
- *  Applies in every zone. */
+/** Relative bonus of a GLOBAL core building at a given level (applies in
+ *  every zone): N1 +0 % · N5 +91 % · N10 +327 %. */
 export function buildingBonus(level: number): number {
   const clamped = Math.max(0, Math.min(BALANCE.buildingMaxLevel, level));
-  return clamped * BALANCE.buildingBonusPerLevel;
+  if (clamped <= 0) return 0;
+  return BALANCE.bonusCurveBase * Math.pow(BALANCE.bonusCurveGrowth, clamped - 1) - 1;
 }
 
-/** Relative bonus of a zone THEMATIC building at a given level
- *  (LOCAL to its zone). Same curve as core in this first iteration —
- *  their extra power comes from stacking with the global base bonus on
- *  the zone's focus resource. */
+/** Relative bonus of a zone THEMATIC building at a given level (LOCAL to
+ *  its zone): same geometric curve, slightly stronger N1 (+7 %). */
 export function thematicBonus(level: number): number {
   const clamped = Math.max(0, Math.min(BALANCE.buildingMaxLevel, level));
-  return clamped * BALANCE.thematicBonusPerLevel;
+  if (clamped <= 0) return 0;
+  return BALANCE.thematicBonusCurveBase * Math.pow(BALANCE.bonusCurveGrowth, clamped - 1) - 1;
 }
 
+/** One key that maps the BONUS curve back to the COST curve (the tuning
+ *  manual lives in balance.ts: bonusCurveGrowth ≈ 1.175 vs zonaCostLevelGrowth
+ *  = 1.5 — production must grow slower than costs). */
+export const PRODUCTION_LEVEL_GROWTH = BALANCE.bonusCurveGrowth;
+
 // ============================================================
-// COSTS / TIMES — shared curve for both families in this first
-// iteration (tunable via playtest; a differentiated curve can hook in
-// here later without touching callers).
+// COSTS — one shared curve for both families (v3):
+// costo(recurso, zona, nivel) = round(base × mult_tipo × (1 + 0.15·(zona−1))
+//   × 1.5^(nivel−1))   with base = 25 MAT · 12 CMP (BALANCE).
+// `zona` = the zone hosting the building. Core (global base) buildings use
+// their GATE zone (CORE_BUILDING_GATE_ZONE: cocina→Z1 … generador→Z10) —
+// they cannot be cheaper than where they unlock.
 // ============================================================
 
-export function buildingUpgradeCost(level: number): {
+/** Upgrade cost for a building at `level` (0..9) hosted in `zoneId`.
+ *  `tier` overrides the classification from BUILDING_TIER (balance.ts);
+ *  omit it and the key's own tier is used. */
+export function buildingUpgradeCost(
+  level: number,
+  zoneId: number,
+  opts: { tier?: string } = {},
+): {
   materiales: number;
   componentes: number;
 } {
-  const raw = {
-    materiales: BALANCE.buildingCostMaterialBase + BALANCE.buildingCostMaterialPerLevel * level,
-    componentes: BALANCE.buildingCostComponentBase + BALANCE.buildingCostComponentPerLevel * level,
-  };
-  // Opción B: multiplicador por tramos de nivel sobre la curva lineal
-  // (bandas ajustables en BALANCE.buildingCostBands). L1–3 quedan exactos.
-  let multiplier = 1;
-  for (const band of BALANCE.buildingCostBands) {
-    if (level >= band.minLevel) multiplier = band.multiplier;
-  }
+  const zone = Math.max(1, zoneId);
+  const zoneFactor = 1 + BALANCE.zonaCostZoneFactor * (zone - 1);
+  const levelFactor = Math.pow(BALANCE.zonaCostLevelGrowth, level - 1);
+  // opts.tier acepta tanto un NOMBRE de tier ("basico"…, útil para tablas
+  // y pruebas) como una CLAVE de edificio ("hormigonera"…, como pasan los
+  // call-sites del juego).
+  const tierKey = opts.tier ?? "intermedio";
+  const tier = tierKey in BUILDING_TIER_MULTIPLIER
+    ? (tierKey as keyof typeof BUILDING_TIER_MULTIPLIER)
+    : buildingTierFor(tierKey);
+  const tierMult = BUILDING_TIER_MULTIPLIER[tier];
   return {
-    materiales: Math.round(raw.materiales * multiplier),
-    componentes: Math.round(raw.componentes * multiplier),
+    materiales: Math.max(1, Math.round(BALANCE.zonaCostBaseMat * tierMult * zoneFactor * levelFactor)),
+    componentes: Math.max(1, Math.round(BALANCE.zonaCostBaseCmp * tierMult * zoneFactor * levelFactor)),
   };
 }
 
@@ -866,20 +888,46 @@ export function buildingCostLabel(cost: { materiales: number; componentes: numbe
   return `${cost.materiales} MAT · ${cost.componentes} CMP`;
 }
 
-/** Cumulative cost of bringing a building from N0 to Nlevel (for the
- *  save-v2 migration refund of duplicate core-building copies). */
-export function cumulativeUpgradeCost(level: number): {
+/** Cumulative cost of bringing a building from N0 to Nlevel (migration
+ *  refunds). MUST use the same zone+tier as the upgrades being refunded. */
+export function cumulativeUpgradeCost(
+  level: number,
+  zoneId: number,
+  opts: { tier?: string } = {},
+): {
   materiales: number;
   componentes: number;
 } {
   let materiales = 0;
   let componentes = 0;
-  for (let l = 0; l < level; l++) {
-    const c = buildingUpgradeCost(l);
+  for (let l = 1; l <= level; l++) {
+    const c = buildingUpgradeCost(l, zoneId, opts);
     materiales += c.materiales;
     componentes += c.componentes;
   }
   return { materiales, componentes };
+}
+
+/** Floor for ONE building state's level (never negative, never above
+ *  buildingMaxLevel). Used in save migrations. */
+export function floorBuildingLevel(b: { level: unknown } | undefined): number {
+  return Math.max(0, Math.min(BALANCE.buildingMaxLevel, Math.floor(Number(b?.level ?? 0)) || 0));
+}
+
+/** Floor for a whole thematic map in place (corrupt/missing entries reset
+ *  to N0 — nothing becomes negative, finished levels are preserved). */
+export function floorThematicMap(
+  thematic: Record<string, { key?: string; level: number; upgradeFinishAt: unknown }> | undefined,
+): void {
+  if (!thematic) return;
+  for (const key of Object.keys(thematic)) {
+    const b = thematic[key];
+    if (!b || typeof b.level !== "number" || !Number.isFinite(b.level)) {
+      thematic[key] = { key, level: 0, upgradeFinishAt: null };
+      continue;
+    }
+    b.level = Math.max(0, Math.min(BALANCE.buildingMaxLevel, Math.floor(b.level)));
+  }
 }
 
 // ============================================================

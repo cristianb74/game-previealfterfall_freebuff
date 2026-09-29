@@ -20,5 +20,9 @@ export const WORLD = {
 /** Save format version — bump on breaking state shape changes.
  *  v2: buildings redesign — GameState.base (global core buildings) +
  *  zones[].thematic (zone-thematic buildings); zones[].buildings and
- *  zones[].exclusiveBuilding removed (migrated in saveSystem.migrate). */
-export const SAVE_VERSION = 2;
+ *  zones[].exclusiveBuilding removed (migrated in saveSystem.migrate).
+ *  v3: rebalanceo de progresión — unlockExp en curva expZona, costos
+ *  zona+tier, auto-farm offline escalado. unlockedZoneFloor guarda el
+ *  máximo histórico de zonas para que nadie pierda zonas (migración
+ *  migrateV2ToV3 con umbrales v2 congelados). */
+export const SAVE_VERSION = 3;

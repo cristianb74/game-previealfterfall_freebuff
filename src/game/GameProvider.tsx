@@ -6,7 +6,8 @@ import { BALANCE, autoFarmConcurrentFactorFor, STAT_RESOURCE, MERCHANT_SELL_PRIC
 import { getZone, frontierZoneId, ZONES } from "@/game/zones";
 import { NPC_BY_ID, npcDisplayName } from "@/game/npcData";
 import { NPC_TYPE_MODIFIERS, npcProductionMultiplier, npcZoneSpeedFactor } from "@/game/npcTypes";
-import { createInitialState, loadGame, saveGame, deleteSave, migrateV1ToV2 } from "@/game/saveSystem";
+import { createInitialState, loadGame, saveGame, deleteSave, migrateStateToCurrent } from "@/game/saveSystem";
+import { legacyUnlockFloorV2 } from "@/game/zones";
 import {
   setConvexClient,
   pullCloudSave,
@@ -57,6 +58,7 @@ import { scavengeLocationForZone } from "@/game/scavengeLocations";
 import { ScavengeModal } from "@/components/game/ScavengeModal";
 import {
   buildingUpgradeCost,
+  CORE_BUILDING_GATE_ZONE,
   buildingUpgradeMinutes,
   activeConstructionsInBase,
   activeThematicConstructions,
@@ -178,11 +180,14 @@ const MERCHANT_OFFERS: Partial<Record<ResourceKey, { amount: number; price: numb
 export { MERCHANT_OFFERS };
 
 function unlockedZoneId(state: GameState): number {
+  // Curva nueva (v3): la EXP total compra zonas según los umbrales nuevos…
   let unlocked = 1;
   for (const z of ZONES) {
     if (state.expTotal >= z.unlockExp) unlocked = Math.max(unlocked, z.id);
   }
-  return unlocked;
+  // …pero NADIE pierde zonas ya desbloqueadas: el floor congelado de los
+  // umbrales v2 (migración en saveSystem) garantiza el máximo histórico.
+  return Math.max(unlocked, state.unlockedZoneFloor ?? legacyUnlockFloorV2(state.expTotal));
 }
 
 function computeZoneUnlocks(state: GameState): number {
@@ -284,7 +289,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           // Adopt the cloud state (offline progression is applied by the boot
           // flow on the next mount; here we simply take the newer copy).
           resetVirtualClock(); // cloud timeline is real time
-          const s = migrateV1ToV2(result.state); // cloud saves may predate v2
+          const s = migrateStateToCurrent(result.state); // cloud saves may predate current
           const offline = applyOfflineProgress(s, Date.now());
           const next = offline.state;
           next.lastTickAt = Date.now();
@@ -341,7 +346,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const result = await pullCloudSave();
       if (result.kind === "restored") {
         resetVirtualClock(); // cloud timeline is real time
-        const next = migrateV1ToV2(result.state); // cloud saves may predate v2
+        const next = migrateStateToCurrent(result.state); // cloud saves may predate current
         next.lastTickAt = Date.now();
         stateRef.current = next;
         setState(next);
@@ -368,7 +373,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const result = await pullCloudSave();
       if (result.kind === "restored") {
         resetVirtualClock(); // cloud timeline is real time
-        const offline = applyOfflineProgress(migrateV1ToV2(result.state), Date.now());
+        const offline = applyOfflineProgress(migrateStateToCurrent(result.state), Date.now());
         const next = offline.state;
         next.lastTickAt = Date.now();
         stateRef.current = next;
@@ -1116,7 +1121,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           });
           return;
         }
-        const cost = buildingUpgradeCost(b.level);
+        const cost = buildingUpgradeCost(b.level, CORE_BUILDING_GATE_ZONE[key]);
         if (s.resources.materiales < cost.materiales || s.resources.componentes < cost.componentes) {
           toast.error("Recursos insuficientes", {
             description: `${cost.materiales} Materiales · ${cost.componentes} Componentes`,
@@ -1150,7 +1155,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           });
           return;
         }
-        const cost = buildingUpgradeCost(b.level);
+        const cost = buildingUpgradeCost(b.level, zoneId, { tier: key });
         if (s.resources.materiales < cost.materiales || s.resources.componentes < cost.componentes) {
           toast.error("Recursos insuficientes", {
             description: `${cost.materiales} Materiales · ${cost.componentes} Componentes`,

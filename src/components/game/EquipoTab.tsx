@@ -8,7 +8,7 @@ import { useGame } from "@/game/GameProvider";
 import { NPC_TYPE_MODIFIERS, npcCycleChance } from "@/game/npcTypes";
 import { BALANCE } from "@/game/balance";
 import { BUILDING_BY_KEY } from "@/game/buildings";
-import { ZONES } from "@/game/zones";
+import { ZONES, isZoneUnlocked } from "@/game/zones";
 import { RESOURCE_META } from "@/game/resources";
 import type { BuildingKey, NpcSurvivor, NpcTypeCode } from "@/game/types";
 import { cn } from "@/lib/utils";
@@ -96,7 +96,7 @@ export function EquipoTab() {
       return next;
     });
   const unlockedMax = ZONES.reduce(
-    (acc, z) => (state.expTotal >= z.unlockExp ? Math.max(acc, z.id) : acc),
+    (acc, z) => (isZoneUnlocked(state, z.id) ? Math.max(acc, z.id) : acc),
     1,
   );
 

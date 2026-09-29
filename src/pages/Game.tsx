@@ -14,7 +14,7 @@ import { RegistroTab } from "@/components/game/RegistroTab";
 import { useGame, MERCHANT_OFFERS } from "@/game/GameProvider";
 import { buildingUpgradeCost, CORE_BUILDING_GATE_ZONE } from "@/game/buildings";
 import { BALANCE } from "@/game/balance";
-import { getZone, ZONES } from "@/game/zones";
+import { getZone, ZONES, isZoneUnlocked } from "@/game/zones";
 import { cn } from "@/lib/utils";
 import type { BuildingKey, Screen } from "@/game/types";
 
@@ -100,13 +100,13 @@ export default function Game() {
       if (state.base && Object.values(state.base).filter((x) => x.upgradeFinishAt).length >= BALANCE.maxConcurrentConstructionsInBase) return false;
       // Gate zone must be unlocked.
       const gate = CORE_BUILDING_GATE_ZONE[k];
-      if (gate != null && state.expTotal < getZone(gate).unlockExp) return false;
+      if (gate != null && !isZoneUnlocked(state, gate)) return false;
       // Sequential unlock: cocina always, others need previous at Lv1+.
       if (idx > 0) {
         const prev = state.base[order[idx - 1]];
         if (!prev || prev.level < 1) return false;
       }
-      const cost = buildingUpgradeCost(b.level);
+      const cost = buildingUpgradeCost(b.level, gate ?? 1);
       return state.resources.materiales >= cost.materiales && state.resources.componentes >= cost.componentes;
     });
     merchantAffordable = Object.values(MERCHANT_OFFERS).some(

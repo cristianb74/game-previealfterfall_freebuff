@@ -1,5 +1,5 @@
-import { BALANCE, autoFarmConcurrentFactorFor } from "./balance";
-import { getZone, frontierZoneId, ZONES } from "./zones";
+import { BALANCE, autoFarmConcurrentFactorFor, farmExpForZone } from "./balance";
+import { getZone, frontierZoneId, ZONES, nextZoneExpRequirement } from "./zones";
 import { rollNpcCycle, npcZoneSpeedFactor } from "./npcTypes";
 import { applyEnergyRegen } from "./energySystem";
 import { npcDisplayName } from "./npcData";
@@ -179,12 +179,11 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
         npcZoneSpeedFactor(state, zid);
       const settleMin = Math.min(rawMinutes, capMin);
       const cycles = Math.max(0, Math.floor(settleMin / cycleMin) - 1);
-      const farmExp = Math.max(
-        1,
-        Math.round(
-          getZone(zid).playerExpReward * BALANCE.autoExploreExpFactor * autoFarmConcurrentFactorFor(state, zid),
-        ),
-      );
+      // REBALANCEO v3: el valor del ciclo ya NO sale de playerExpReward ×
+      // autoExploreExpFactor (escalaba mal en zonas lentas) — sale de la
+      // curva dedicada farmExpForZone (balance.ts · offlineFarming), que
+      // sigue a expZona para que 8 h ≈ 3–5 % de la siguiente zona.
+      const farmExp = farmExpForZone(zid) * autoFarmConcurrentFactorFor(state, zid);
       state.exp += farmExp * cycles;
       state.expTotal += farmExp * cycles;
       summary.expEarned += farmExp * cycles;
@@ -269,13 +268,22 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
   // the cap exists so the player isn't punished for long absences.
 
   // ---- NPC EXP trickle from offline assigned NPCs ----
-  for (const npc of state.npcs) {
-    if (npc.assignedZoneId) {
-      const zone = getZone(Number(npc.assignedZoneId));
-      const trickle = (zone.npcExpReward / 12) * (minutesForNpc / 60);
-      state.exp += trickle;
-      state.expTotal += trickle;
-      summary.expEarned += trickle;
+  // REBALANCEO v3: el goteo de NPC nunca puede superar el 5 % de la EXP
+  // que exige la siguiente zona (el farmeo real es el auto-farm, no esto).
+  {
+    const trickleCap = BALANCE.offlineNpcTrickleShareOfNextZone * nextZoneExpRequirement(state);
+    let trickle = 0;
+    for (const npc of state.npcs) {
+      if (npc.assignedZoneId) {
+        const zone = getZone(Number(npc.assignedZoneId));
+        trickle += (zone.npcExpReward / 12) * (minutesForNpc / 60);
+      }
+    }
+    if (trickle > 0) {
+      const granted = Math.min(trickle, trickleCap);
+      state.exp += granted;
+      state.expTotal += granted;
+      summary.expEarned += granted;
     }
   }
 

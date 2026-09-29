@@ -1,6 +1,6 @@
 import { Progress } from "@/components/ui/progress";
 import { BALANCE } from "@/game/balance";
-import { ZONES, getZone } from "@/game/zones";
+import { ZONES, getZone, nextLockedZoneFor } from "@/game/zones";
 import { vnow } from "@/game/virtualClock";
 import { useGame } from "@/game/GameProvider";
 import { currentEnergy } from "@/game/energySystem";
@@ -55,7 +55,8 @@ function SurvivalBar({
 }
 
 function nextLockedZone(state: GameState) {
-  return ZONES.find((z) => state.expTotal < z.unlockExp) ?? null;
+  // Respeta el floor de zonas migrado (nadie pierde zonas ya desbloqueadas).
+  return nextLockedZoneFor(state);
 }
 
 export function HUD() {

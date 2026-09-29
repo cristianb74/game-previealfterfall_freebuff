@@ -32,10 +32,13 @@ export const BALANCE = {
 
   /** Chance (0–1) that an exploration rolls a resource find. */
   explorationFindChance: 0.62,
-  /** EXP multiplier for AUTOMATIC re-explorations of conquered zones.
+  /** EXP multiplier for AUTOMATIC re-explorations of conquered zones,
+   *  applied ON TOP of the per-zone farming curve
+   *  (offlineFarming: expPerCycleBase × expGrowth × shareOfNextZone — the
+   *  single place to retune how much EXP automation gives).
    *  Auto runs never advance the frontier — manual exploration must reach
    *  each new zone. Active exploration stays the most valuable action. */
-  autoExploreExpFactor: 0.4,
+  autoExploreExpFactor: 1,
   /** MANUAL advantage: flat +X% added to the resource find chance.
    *  Auto-farm runs never get this bonus. */
   manualFindChanceBonus: 0.15,
@@ -167,36 +170,223 @@ export const BALANCE = {
   /** Max simultaneous constructions per zone (core + exclusive share the
    *  same quota). Only gates NEW upgrades; existing runs finish normally. */
   maxConcurrentConstructionsPerZone: 1,
-  /** Relative bonus per level: N1 = +5 % … N10 = +50 %. */
-  buildingBonusPerLevel: 0.05,
+  // --- PRODUCCIÓN / BONUS DE EDIFICIOS (curva geométrica) ---
+  // bonus(N) = base × crecimiento^(N−1): N1 +0 % … N10 +327 %.
+  // El costo crece ×1.5 por nivel y la producción solo ×1.175 → las mejoras
+  // profundas rinden cada vez menos (anti-excedente).
+  bonusCurveBase: 1,
+  bonusCurveGrowth: 1.175,
   /** Upgrade duration scaling, in minutes (level → minutes). */
   buildingBaseMinutes: 3, // 0→1
   buildingMinutesPerLevel: 2.5, // +2.5 min per level ⇒ 10 is 27 min (< 30 min)
-  buildingCostMaterialBase: 4,
-  buildingCostMaterialPerLevel: 3,
-  buildingCostComponentBase: 1,
-  buildingCostComponentPerLevel: 1.5,
-  /** Opción B — escalado de costos por tramos de nivel (multiplicador sobre
-   *  la curva lineal base+porNivel). Niveles 1–3 quedan EXACTOS a la curva
-   *  original (arranque intacto); 4+ encarece por bandas. Ajustable aquí. */
-  buildingCostBands: [
-    { minLevel: 0, multiplier: 1 },
-    { minLevel: 4, multiplier: 1.3 },
-    { minLevel: 7, multiplier: 1.6 },
-    { minLevel: 9, multiplier: 2 },
-  ] as { minLevel: number; multiplier: number }[],
-  /** Zone-thematic buildings: bonus per level (LOCAL to their zone).
-   *  Same curve as core buildings — their extra power comes from stacking
-   *  with the global base bonus on the zone's focus resource. */
-  thematicBonusPerLevel: 0.05,
+  // --- COSTO DE EDIFICIOS (rebalanceo v3) ---
+  // costo(recurso, zona, nivel) = round(base_recurso × mult_tipo
+  //   × (1 + zonaCostZoneFactor × (zona−1)) × zonaCostLevelGrowth^(nivel−1))
+  // base_recurso: 25 Materiales · 12 Componentes (una mejora siempre pide
+  // ambos). mult_tipo: básico ×1 · intermedio ×2.5 · avanzado ×6 (ver
+  // BUILDING_TIER más abajo). Todo ajustable aquí, sin números sueltos.
+  zonaCostBaseMat: 25,
+  zonaCostBaseCmp: 12,
+  /** Encarecimiento por profundidad de zona: +15 % por zona (n=1 → ×1). */
+  zonaCostZoneFactor: 0.15,
+  /** Encarecimiento por nivel: ×1.5 por nivel (N1→N10 multiplica ×38.4). */
+  zonaCostLevelGrowth: 1.5,
+  /** Zone-thematic buildings (LOCAL to their zone): misma curva geométrica
+   *  que los core pero con ligera ventaja inicial (N1 +7 %). Su poder real
+   *  viene de apilarse con el bonus global de la base en el foco de la zona. */
+  thematicBonusCurveBase: 1.075,
   /** Max simultaneous constructions in the GLOBAL base (core buildings).
    *  Separate quota from the per-zone thematic one. Only gates NEW
    *  upgrades; existing runs finish normally. */
   maxConcurrentConstructionsInBase: 1,
 
+  // --- EXP DE PROGRESIÓN (curva de desbloqueo de zonas) ---
+  // Tramo de zona n (n ≥ 2): round(zoneExpBase × zoneExpGrowth^(n−1)).
+  // El umbral de la zona n es la SUMA acumulada de los tramos 2..n
+  // (Z1 es la zona inicial: 0 EXP). Ej. con 1500/1.28: Z2 = 1.920,
+  // Z20 = 739.820 acumulados. Subir zoneExpBase ⇒ todo más lento.
+  zoneExpBase: 1500,
+  zoneExpGrowth: 1.28,
+
+  // --- AUTO-FARM / OFFLINE EXP (bloque único de tuning) ---
+  // farmExp(zona n, ciclo) = round(expPerCycleBase × expGrowth^(n−1)
+  //   × shareOfNextZone × factorConcurrente). Un "ciclo" = una exploración
+  //  completa de la zona. Con el tope de 8 h offline, el total ronda el
+  //  3–5 % de la EXP que exige la siguiente zona (zonas medias; ver la
+  //  tabla generada en el reporte de balance).
+  // Tuning: subir expPerCycleBase ⇒ más EXP offline; bajar shareOfNextZone
+  // ⇒ castigar más estar con la app cerrada. offlineCapHours sigue mandando.
+  offlineFarming: {
+    /** Zonas 1–3 (tramo tutorial) farmean a esta tasa plana por ciclo. */
+    expPerCycleBase: 20,
+    /** Escalado por profundidad: ×1.28 por zona, igual que el crecimiento
+     *  de expZona (zones.ts) para que el valor del ciclo siga al mundo. */
+    expGrowth: 1.28,
+    /** Valor de UN ciclo como fracción de UN ciclo de la exigencia de EXP
+     *  de la siguiente zona (0.1 = un ciclo farmeo rinde ~10 % de un ciclo
+     *  de exploración real de la siguiente zona). */
+    shareOfNextZone: 0.1,
+  },
+  /** Goteo EXP de NPC offline: fracción MÁXIMA de la EXP de la siguiente
+   *  zona que puede aportar (junto con la ya reducida npcExpReward/12/h). */
+  offlineNpcTrickleShareOfNextZone: 0.05,
+
   /** Unlock thresholds are derived from zone definitions (see zones.ts). */
   zoneUnlockToastLabel: "NUEVA ZONA DESBLOQUEADA",
 } as const;
+
+// ============================================================
+// TIPOS DE EDIFICIO (rebalanceo v3): cada edificio pertenece a un tier
+// (básico / intermedio / avanzado) que multiplica su costo base.
+// Los 6 CORE (base global) son intermedios; los temáticos se clasifican
+// por su rol: generadores de recursos puros = básicos, transformadores /
+// taller = intermedios, edificios de dinero y alta tecnología = avanzados.
+// Cambiar una clasificación aquí es rebalancear ese edificio en un sitio.
+// ============================================================
+export type BuildingTierKey = "basico" | "intermedio" | "avanzado";
+
+export const BUILDING_TIER_MULTIPLIER: Record<BuildingTierKey, number> = {
+  basico: 1,
+  intermedio: 2.5,
+  avanzado: 6,
+};
+
+export const BUILDING_TIER: Record<string, BuildingTierKey> = {
+  // CORE (base global)
+  cocina: "intermedio",
+  tanque: "intermedio",
+  almacen: "intermedio",
+  enfermeria: "intermedio",
+  taller: "intermedio",
+  generador: "intermedio",
+  // Temáticos — generadores / almacenaje simples = básicos
+  invernadero: "basico",
+  huerto_urbano: "basico",
+  campo_cultivo: "basico",
+  colmena: "basico",
+  hongos: "basico",
+  canales: "basico",
+  captador_rocio: "basico",
+  planta_desalinizadora: "basico",
+  cisterna: "basico",
+  chatarreria: "basico",
+  depósito_chatarras: "basico",
+  contenedor_sellado: "basico",
+  botiquin_campamento: "basico",
+  puesto_medico: "basico",
+  mesa_botiquines: "basico",
+  invernadero_atomico: "basico",
+  vivero_quimico: "basico",
+  cultivo_resistente: "basico",
+  equipo_hierro: "basico",
+  alambique_rustico: "basico",
+  colector_solar: "basico",
+  deposito_diesel: "basico",
+  panel_cristal: "basico",
+  tanque_bio: "basico",
+  invernadero_cerrado: "basico",
+  recogida_lluvia: "basico",
+  purificador_portatil: "basico",
+  reactor_piezo: "basico",
+  horno_lena: "basico",
+  zaranda: "basico",
+  balsa_filtrado: "basico",
+  pozo_manual: "basico",
+  destileria: "basico",
+  cámara_fungícola: "basico",
+  compresor_aire: "basico",
+  fermentador: "basico",
+  tren_hierro: "basico",
+  andamio: "basico",
+  sinfon_inundacion: "basico",
+  zona_marisma: "basico",
+  cisterna_bunker: "basico",
+  zona_verde: "basico",
+  arco_aire: "basico",
+  huerto_jaula: "basico",
+  condensador_mina: "basico",
+  campo_militar: "basico",
+  cultivo_mar: "basico",
+  plants_marea: "basico",
+  hidroponia_mar: "basico",
+  muelles_bio: "basico",
+  plants_puertos: "basico",
+  colector_cuartel: "basico",
+  invernadero_hidro: "basico",
+  // Temáticos — transformadores, crafteo, logística = intermedios
+  camara_frigorifica: "intermedio",
+  despensa_comunal: "intermedio",
+  pescaderia: "intermedio",
+  depósito_componentes: "intermedio",
+  banco_componentes: "intermedio",
+  vagon_componentes: "intermedio",
+  laboratorio_portatil: "intermedio",
+  nucleo_sintetico: "intermedio",
+  laboratorio_abandonado: "intermedio",
+  torre_perforadora: "intermedio",
+  hormigonera: "intermedio",
+  rotiseria: "intermedio",
+  laboratorio_farmaceutico: "intermedio",
+  despensa_secreta: "intermedio",
+  banco_semillas: "intermedio",
+  laboratorio_limpio: "intermedio",
+  horno_ceramico: "intermedio",
+  cisterna_acero: "intermedio",
+  cisterna_concreto: "intermedio",
+  redestilador: "intermedio",
+  balsa_componentes: "intermedio",
+  despensa_bunker: "intermedio",
+  cocina_militar: "intermedio",
+  estanque_quimico: "intermedio",
+  tanque_marea: "intermedio",
+  biofiltro_marino: "intermedio",
+  planta_desalinizadora_militar: "intermedio",
+  despensa_militar: "intermedio",
+  cocina_cuartel: "intermedio",
+  granja_piscifactoria: "intermedio",
+  destileria_militar: "intermedio",
+  sistemas_puertos: "intermedio",
+  almacen_cuartel: "intermedio",
+  // Temáticos — dinero y alta tecnología = avanzados
+  punto_venta: "avanzado",
+  subasta_negra: "avanzado",
+  mineria_bitcoin: "avanzado",
+  oficina_contable: "avanzado",
+  comercio_barrial: "avanzado",
+  taquilla_apuestas: "avanzado",
+  sala_recreativa: "avanzado",
+  banco_datos: "avanzado",
+  laboratorio_dinero: "avanzado",
+  fabrica_dinero: "avanzado",
+  central_enlace: "avanzado",
+  central_baterias: "avanzado",
+  sala_servidores: "avanzado",
+  calculo_ia: "avanzado",
+  central_prision: "avanzado",
+  laboratorio_armas: "avanzado",
+  central_reactor: "avanzado",
+  sala_maquinas: "avanzado",
+  taller_mecanico: "avanzado",
+  laboratorio_chemical: "avanzado",
+  bodega_nueva: "avanzado",
+  oficina_bunker: "avanzado",
+  sala_comando: "avanzado",
+  laboratorio_suelo: "avanzado",
+  laboratorio_jaula: "avanzado",
+  laboratorio_mina: "avanzado",
+  laboratorio_cuartel: "avanzado",
+  taller_bunker: "avanzado",
+  fabrica_municion: "avanzado",
+  laboratorio_armado: "avanzado",
+  central_radiologica: "avanzado",
+  taller_cuarTEL: "avanzado",
+};
+
+/** Tier de un edificio (los temáticos que no estén listados cuentan como
+ *  intermedios — nunca debe ocurrir, pero evita costos rotos). */
+export function buildingTierFor(key: string): BuildingTierKey {
+  return BUILDING_TIER[key] ?? "intermedio";
+}
 
 /** AUTO-farm diminishing-returns helpers. Shared by the online tick
  *  (completeAutoRun) and the offline simulation (offlineProgress) so the
@@ -209,6 +399,19 @@ export function autoFarmFactorForActiveIndex(rank: number): number {
     if (rank >= tier.fromIndex) factor = tier.factor;
   }
   return factor;
+}
+
+/** ONE offline/auto-farm cycle's EXP for zone n (shared by the online
+ *  tick's completeAutoRun and the offline simulation — the two paths can
+ *  never drift apart). Target: 8 h offline ≈ 3–5 % of the next zone's EXP
+ *  requirement (see BALANCE.offlineFarming for the tuning block). */
+export function farmExpForZone(zoneId: number): number {
+  const n = Math.max(1, zoneId);
+  const f = BALANCE.offlineFarming;
+  return Math.max(
+    1,
+    Math.round(f.expPerCycleBase * Math.pow(f.expGrowth, n - 1) * f.shareOfNextZone),
+  );
 }
 
 /** Diminishing-returns factor for ONE zone's auto-farm, given how many
