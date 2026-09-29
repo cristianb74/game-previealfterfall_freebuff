@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useGame } from "@/game/GameProvider";
@@ -18,6 +18,8 @@ import { cn } from "@/lib/utils";
 // the app's token conventions. Effects are NOT wired into any
 // system: items accumulate in the crafted inventory and every
 // recipe exposes structured effectData for future integration.
+// Layout: selected-item detail, production queue and crafted
+// inventory on top; the craftable recipe list sits below.
 // ============================================================
 
 /** Real current amount of a resource (floor; comida/agua in minutes). */
@@ -143,121 +145,51 @@ export function CraftingTab() {
         </div>
       </section>
 
-      {/* ---- Category tabs ---- */}
-      <div className="flex flex-wrap gap-1">
-        {categories.map((c) => (
-          <button
-            key={c.key}
-            type="button"
-            onClick={() => setCategory(c.key)}
-            className={cn(
-              "rounded-full border px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition-colors",
-              category === c.key
-                ? "border-[#aeca43] bg-[#aeca43]/15 text-[#d5ef55]"
-                : "border-[#37402e] bg-black/30 text-[#657148] hover:border-[#657148] hover:text-zinc-300",
-            )}
-          >
-            <span aria-hidden className="mr-1">{c.icon}</span>
-            {c.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ---- Desktop: grid + side detail · Mobile: stacked ---- */}
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((r) => {
-            const missing = missingCosts(state, r.costs);
-            const affordable = Object.keys(missing).length === 0;
-            const owned = getCraftedCount(state, r.id);
-            const isSelected = selectedId === r.id;
-            return (
-              <button
-                key={r.id}
-                type="button"
-                onClick={() => setSelectedId(r.id)}
-                className={cn(
-                  "relative flex flex-col gap-1 rounded-lg border p-2.5 text-left transition-colors",
-                  isSelected
-                    ? "border-[#aeca43] bg-[#aeca43]/10"
-                    : affordable
-                      ? "border-[#37402e] bg-[#0d120c] hover:border-[#657148]"
-                      : "border-[#37402e]/60 bg-[#0d120c]/60 opacity-80 hover:border-[#657148]",
-                )}
-              >
-                <div className="flex items-start justify-between gap-1">
-                  <span className="text-xl leading-none">{r.icon}</span>
-                  <span
-                    className={cn(
-                      "rounded-sm px-1 py-0.5 text-[7px] font-black uppercase tracking-widest",
-                      affordable
-                        ? "bg-[#aeca43]/20 text-[#d5ef55]"
-                        : "bg-red-950/40 text-red-400",
-                    )}
-                  >
-                    {affordable ? "Disponible" : "Sin recursos"}
-                  </span>
-                </div>
-                <p className="text-[11px] font-bold leading-tight text-zinc-100">{r.name}</p>
+      {/* ---- Detail panel: selected item (effect + cost + craft) ---- */}
+      {selected && (
+        <aside>
+          <div className="rounded-lg border border-[#657148]/60 bg-[#0d120c] p-3">
+            <div className="flex items-start gap-3">
+              <span className="text-3xl leading-none">{selected.icon}</span>
+              <div className="min-w-0">
+                <h3 className="text-sm font-black uppercase tracking-wider text-[#d5ef55]">
+                  {selected.name}
+                </h3>
                 <p className="text-[8px] font-bold uppercase tracking-widest text-[#657148]">
-                  {RECIPE_CATEGORIES.find((c) => c.key === r.category)?.label} · {r.timeSeconds}s
+                  {RECIPE_CATEGORIES.find((c) => c.key === selected.category)?.label}
                 </p>
-                {owned > 0 && (
-                  <span className="absolute bottom-2 right-2 rounded-sm border border-[#37402e] bg-black/70 px-1 font-mono text-[9px] font-black tabular-nums text-[#d5ef55]">
-                    ×{owned}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* ---- Detail panel (side on desktop, below on mobile) ---- */}
-        {selected && (
-          <aside className="lg:sticky lg:top-[130px]">
-            <div className="rounded-lg border border-[#657148]/60 bg-[#0d120c] p-3">
-              <div className="flex items-start gap-3">
-                <span className="text-3xl leading-none">{selected.icon}</span>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-black uppercase tracking-wider text-[#d5ef55]">
-                    {selected.name}
-                  </h3>
-                  <p className="text-[8px] font-bold uppercase tracking-widest text-[#657148]">
-                    {RECIPE_CATEGORIES.find((c) => c.key === selected.category)?.label}
-                  </p>
-                </div>
               </div>
-              <p className="mt-2 text-[11px] leading-4 text-zinc-400">{selected.description}</p>
-              <p className="mt-1.5 rounded-sm border border-[#37402e] bg-black/40 px-2 py-1.5 text-[10px] leading-4 text-[#d5ef55]">
-                ⚙ {selected.effect}
-              </p>
-
-              <p className="mt-2.5 text-[9px] font-bold uppercase tracking-widest text-[#657148]">
-                Recursos requeridos
-              </p>
-              <div className="mt-1 rounded-sm border border-[#37402e] bg-black/40 px-2 py-1.5">
-                <CostRows costs={selected.costs} />
-              </div>
-              <p className="mt-1.5 text-[9px] uppercase tracking-wider text-subtle">
-                Tiempo de crafteo: {selected.timeSeconds}s
-              </p>
-
-              <Button
-                onClick={() => craftRecipe(selected.id)}
-                disabled={!selectedAffordable}
-                className={cn(
-                  "mt-2 h-10 w-full font-bold uppercase tracking-widest",
-                  selectedAffordable
-                    ? "border border-[#aeca43]/60 bg-[#aeca43] text-[#0b0f0b] hover:bg-[#d5ef55]"
-                    : "cursor-not-allowed border border-[#37402e] bg-black/40 text-[#657148]",
-                )}
-              >
-                Fabricar
-              </Button>
             </div>
-          </aside>
-        )}
-      </div>
+            <p className="mt-2 text-[11px] leading-4 text-zinc-400">{selected.description}</p>
+            <p className="mt-1.5 rounded-sm border border-[#37402e] bg-black/40 px-2 py-1.5 text-[10px] leading-4 text-[#d5ef55]">
+              ⚙ {selected.effect}
+            </p>
+
+            <p className="mt-2.5 text-[9px] font-bold uppercase tracking-widest text-[#657148]">
+              Recursos requeridos
+            </p>
+            <div className="mt-1 rounded-sm border border-[#37402e] bg-black/40 px-2 py-1.5">
+              <CostRows costs={selected.costs} />
+            </div>
+            <p className="mt-1.5 text-[9px] uppercase tracking-wider text-subtle">
+              Tiempo de crafteo: {selected.timeSeconds}s
+            </p>
+
+            <Button
+              onClick={() => craftRecipe(selected.id)}
+              disabled={!selectedAffordable}
+              className={cn(
+                "mt-2 h-10 w-full font-bold uppercase tracking-widest",
+                selectedAffordable
+                  ? "border border-[#aeca43]/60 bg-[#aeca43] text-[#0b0f0b] hover:bg-[#d5ef55]"
+                  : "cursor-not-allowed border border-[#37402e] bg-black/40 text-[#657148]",
+              )}
+            >
+              Fabricar
+            </Button>
+          </div>
+        </aside>
+      )}
 
       {/* ---- Crafting queue (sequential) ---- */}
       <section className="rounded-lg border border-[#37402e] bg-[#0b0f0b] p-2.5">
@@ -353,6 +285,74 @@ export function CraftingTab() {
           disponibles para integrarse al juego (ver efecto de cada uno en el panel de detalle).
         </p>
       </section>
+
+      {/* ---- Category tabs (filter the recipe list below) ---- */}
+      <div className="flex flex-wrap gap-1">
+        {categories.map((c) => (
+          <button
+            key={c.key}
+            type="button"
+            onClick={() => setCategory(c.key)}
+            className={cn(
+              "rounded-full border px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition-colors",
+              category === c.key
+                ? "border-[#aeca43] bg-[#aeca43]/15 text-[#d5ef55]"
+                : "border-[#37402e] bg-black/30 text-[#657148] hover:border-[#657148] hover:text-zinc-300",
+            )}
+          >
+            <span aria-hidden className="mr-1">{c.icon}</span>
+            {c.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ---- Recipe list ---- */}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {filtered.map((r) => {
+          const missing = missingCosts(state, r.costs);
+          const affordable = Object.keys(missing).length === 0;
+          const owned = getCraftedCount(state, r.id);
+          const isSelected = selectedId === r.id;
+          return (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setSelectedId(r.id)}
+              className={cn(
+                "relative flex flex-col gap-1 rounded-lg border p-2.5 text-left transition-colors",
+                isSelected
+                  ? "border-[#aeca43] bg-[#aeca43]/10"
+                  : affordable
+                    ? "border-[#37402e] bg-[#0d120c] hover:border-[#657148]"
+                    : "border-[#37402e]/60 bg-[#0d120c]/60 opacity-80 hover:border-[#657148]",
+              )}
+            >
+              <div className="flex items-start justify-between gap-1">
+                <span className="text-xl leading-none">{r.icon}</span>
+                <span
+                  className={cn(
+                    "rounded-sm px-1 py-0.5 text-[7px] font-black uppercase tracking-widest",
+                    affordable
+                      ? "bg-[#aeca43]/20 text-[#d5ef55]"
+                      : "bg-red-950/40 text-red-400",
+                  )}
+                >
+                  {affordable ? "Disponible" : "Sin recursos"}
+                </span>
+              </div>
+              <p className="text-[11px] font-bold leading-tight text-zinc-100">{r.name}</p>
+              <p className="text-[8px] font-bold uppercase tracking-widest text-[#657148]">
+                {RECIPE_CATEGORIES.find((c) => c.key === r.category)?.label} · {r.timeSeconds}s
+              </p>
+              {owned > 0 && (
+                <span className="absolute bottom-2 right-2 rounded-sm border border-[#37402e] bg-black/70 px-1 font-mono text-[9px] font-black tabular-nums text-[#d5ef55]">
+                  ×{owned}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
       {/* ---- Back to base (real navigation) ---- */}
       <button
