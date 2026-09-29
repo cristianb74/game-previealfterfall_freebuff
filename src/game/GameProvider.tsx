@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from "react";
 import { useConvex, useConvexAuth } from "convex/react";
 import { toast } from "sonner";
-import { BALANCE, autoFarmConcurrentFactorFor, STAT_RESOURCE, MERCHANT_SELL_PRICES, MERCHANT_BATTERY_OFFER } from "@/game/balance";
+import { BALANCE, autoFarmConcurrentFactorFor, farmExpForZone, STAT_RESOURCE, MERCHANT_SELL_PRICES, MERCHANT_BATTERY_OFFER } from "@/game/balance";
 import { getZone, frontierZoneId, ZONES } from "@/game/zones";
 import { NPC_BY_ID, npcDisplayName } from "@/game/npcData";
 import { NPC_TYPE_MODIFIERS, npcProductionMultiplier, npcZoneSpeedFactor } from "@/game/npcTypes";
@@ -803,10 +803,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const expId = s.nextExplorationId++;
     // AUTO run: reduced EXP, no rare tier, no special events, no find bonus.
     const outcome = rollExploration(s, zoneId, { auto: true });
-    outcome.exp = Math.max(
-      1,
-      Math.round(outcome.exp * BALANCE.autoExploreExpFactor * autoFarmConcurrentFactorFor(s, zoneId)),
-    );
+    // REBALANCEO v3: mismo bloque de fórmulas que el offline —
+    // farmExpForZone (balance.ts · offlineFarming) × factor concurrente.
+    // Así 8 h online u offline rinden lo mismo y el auto-farm nunca
+    // vuelve a pagar la recompensa completa de una exploración manual.
+    outcome.exp = farmExpForZone(zoneId) * autoFarmConcurrentFactorFor(s, zoneId);
     applyOutcome(s, outcome, startedAt, { auto: true, expId });
     // NPC check with reduced chance (autoNpcChanceFactor), same shared counter.
     npcCheck(s, expId, startedAt, true);

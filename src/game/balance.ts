@@ -32,13 +32,10 @@ export const BALANCE = {
 
   /** Chance (0–1) that an exploration rolls a resource find. */
   explorationFindChance: 0.62,
-  /** EXP multiplier for AUTOMATIC re-explorations of conquered zones,
-   *  applied ON TOP of the per-zone farming curve
-   *  (offlineFarming: expPerCycleBase × expGrowth × shareOfNextZone — the
-   *  single place to retune how much EXP automation gives).
-   *  Auto runs never advance the frontier — manual exploration must reach
-   *  each new zone. Active exploration stays the most valuable action. */
-  autoExploreExpFactor: 1,
+  // NOTA: el valor de la EXP del auto-farm vive en `offlineFarming`
+  // (farmExpForZone) — online y offline comparten ese único bloque.
+  // Los runs automáticos nunca avanzan la frontera: la exploración manual
+  // es la única acción que alcanza zonas nuevas.
   /** MANUAL advantage: flat +X% added to the resource find chance.
    *  Auto-farm runs never get this bonus. */
   manualFindChanceBonus: 0.15,
