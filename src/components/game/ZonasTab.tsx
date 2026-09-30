@@ -6,7 +6,9 @@ import { vnow } from "@/game/virtualClock";
 import { currentEnergy } from "@/game/energySystem";
 import { NPC_TYPE_MODIFIERS, npcProductionMultiplier } from "@/game/npcTypes";
 import { BALANCE, BUILDING_SPECIALIZATION } from "@/game/balance";
-import type { BuildingKey } from "@/game/types";
+import { activeAssignments } from "@/game/crafting/craftedEffects";
+import { RECIPE_BY_ID } from "@/game/crafting/recipes";
+import type { BuildingKey, CraftedAssignment } from "@/game/types";
 import { cn } from "@/lib/utils";
 
 function fmtCountdown(ms: number): string {
@@ -105,6 +107,50 @@ function NpcIndicator({
   );
 }
 
+/** Short per-recipe effect labels for the zone-assignment badges (the full
+ *  recipe.effect lines are too long for a card badge). Zone-targeted only —
+ *  NPC-targeted assignments get their own Equipo-screen indicator later. */
+const ZONE_ASSIGN_SHORT: Record<string, string> = {
+  linterna: "−10% duración",
+  mapa: "+5% recursos",
+  mochila_recoleccion: "+10% materiales",
+  kit_tecnico: "+10% componentes",
+  iman: "+8% componentes",
+  detector: "+10% especiales",
+  escaner: "+10% dinero",
+  guantes: "−10% heridas",
+  proteccion: "−15% daño",
+};
+
+/** Active zone-assignment badges for one zone card: stacked column over the
+ *  image's bottom-right (above the ★ MAX badge). Live countdown reuses the
+ *  tab's 1 s re-render + fmtCountdown — expiry just stops matching. */
+function ZoneAssignBadges({ assignments, now }: { assignments: CraftedAssignment[]; now: number }) {
+  if (assignments.length === 0) return null;
+  return (
+    <div className="absolute bottom-[22px] right-1.5 z-10 flex flex-col items-end gap-0.5">
+      {assignments.map((a) => {
+        const recipe = RECIPE_BY_ID[a.recipeId];
+        return (
+          <span
+            key={a.id}
+            title={`${recipe?.name ?? a.recipeId} · ${a.effect}`}
+            className="flex items-center gap-1 rounded-sm border border-lime-800/50 bg-black/80 px-1 py-0.5 shadow-[0_0_6px_1px_rgba(0,0,0,0.7)]"
+          >
+            <span aria-hidden className="text-[8px] leading-none">{recipe?.icon ?? "📦"}</span>
+            <span className="text-[7px] font-bold uppercase leading-none tracking-wider text-lime-300">
+              {ZONE_ASSIGN_SHORT[a.recipeId] ?? recipe?.name ?? a.recipeId}
+            </span>
+            <span className="font-mono text-[8px] font-bold leading-none tabular-nums text-lime-400">
+              {fmtCountdown(a.endsAt - now)}
+            </span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 // Module-level double-tap tracker (reset per mount is not critical for tap timing).
 const _lastTap = new Map<number, number>();
 
@@ -127,6 +173,9 @@ export function ZonasTab() {
   if (!state) return null;
   const unlockedMax = maxUnlockedZoneId;
   const nextZone = ZONES.find((z) => z.id === unlockedMax + 1);
+  // Same source Mochila reads: activeAssignments filters endsAt > now, so
+  // expired assignments vanish from the cards on the next 1 s re-render.
+  const zoneAssignmentsNow = activeAssignments(state, vnow());
 
   return (
     <div className="flex flex-col gap-3">
@@ -149,6 +198,10 @@ export function ZonasTab() {
             state.expTotal >= z.unlockExp;
 
           const activeBuildings = getActiveBuildings(state.zones[z.id]?.thematic);
+          const now = vnow();
+          const zoneAssignments = zoneAssignmentsNow.filter(
+            (a) => a.targetType === "zone" && a.targetId === String(z.id),
+          );
 
           return (
             <div key={z.id} className="flex h-[202px] flex-col gap-1 sm:h-[218px]">
@@ -219,9 +272,11 @@ export function ZonasTab() {
                       🔒
                     </span>
                   )}
-                  {/* MAX badge (fully upgraded zone) + NPC indicator */}
+                  {/* MAX badge (fully upgraded zone) + NPC indicator +
+                      zone-assignment badges (item effects running here) */}
                   {unlocked && zoneMaxed && <ZoneMaxBadge />}
                   {unlocked && <NpcIndicator npcId={assignedNpc} />}
+                  {unlocked && <ZoneAssignBadges assignments={zoneAssignments} now={now} />}
                 </div>
                 <div className="flex min-h-0 flex-1 flex-col p-2">
                   <p className="truncate text-[11px] font-bold leading-[14px] text-zinc-200">
