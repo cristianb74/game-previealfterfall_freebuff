@@ -81,7 +81,7 @@ function NpcIndicator({
 
   if (!npc) {
     return (
-      <span className="absolute bottom-1.5 left-1.5 rounded-sm bg-black/70 px-1 text-[7px] font-bold uppercase tracking-wider text-subtle">
+      <span className="mb-1 w-fit rounded-sm border border-zinc-800/60 bg-black/40 px-1 text-[7px] font-bold uppercase tracking-wider text-subtle">
         Sin NPC
       </span>
     );
@@ -98,7 +98,7 @@ function NpcIndicator({
 
   return (
     <span
-      className="absolute bottom-1.5 left-1.5 rounded-sm px-1.5 py-0.5 text-[7px] font-bold leading-none tracking-wider shadow-[0_0_6px_1px_rgba(0,0,0,0.7)]"
+      className="mb-1 w-fit rounded-sm px-1.5 py-0.5 text-[7px] font-bold leading-none tracking-wider"
       style={{ backgroundColor: typeInfo.color + "22", color: typeInfo.color, border: `1px solid ${typeInfo.color}44` }}
     >
       👤 {npc.id} · {typeInfo.label.toUpperCase()}
@@ -122,13 +122,14 @@ const ZONE_ASSIGN_SHORT: Record<string, string> = {
   proteccion: "−15% daño",
 };
 
-/** Active zone-assignment badges for one zone card: stacked column over the
- *  image's bottom-right (above the ★ MAX badge). Live countdown reuses the
+/** Active zone-assignment badges for one zone card: normal-flow wrap row at
+ *  the top of the card body (after the image header) — they push the content
+ *  below down instead of overlapping anything. Live countdown reuses the
  *  tab's 1 s re-render + fmtCountdown — expiry just stops matching. */
 function ZoneAssignBadges({ assignments, now }: { assignments: CraftedAssignment[]; now: number }) {
   if (assignments.length === 0) return null;
   return (
-    <div className="absolute bottom-[22px] right-1.5 z-10 flex flex-col items-end gap-0.5">
+    <div className="mb-1 flex w-full flex-wrap gap-1">
       {assignments.map((a) => {
         const recipe = RECIPE_BY_ID[a.recipeId];
         return (
@@ -203,8 +204,10 @@ export function ZonasTab() {
             (a) => a.targetType === "zone" && a.targetId === String(z.id),
           );
 
+          // min-h (no fixed h): the card grows taller when the assignment
+          // badges wrap to multiple lines — nothing ever overlaps.
           return (
-            <div key={z.id} className="flex h-[202px] flex-col gap-1 sm:h-[218px]">
+            <div key={z.id} className="flex min-h-[202px] flex-col gap-1 sm:min-h-[218px]">
               <button
                 onDoubleClick={() => {
                   if (!unlocked) return;
@@ -228,7 +231,7 @@ export function ZonasTab() {
                   }
                 }}
                 className={cn(
-                  "group relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border text-left transition-colors",
+                  "group relative flex flex-1 flex-col overflow-hidden rounded-lg border text-left transition-colors",
                   isCurrent
                     ? "border-green-500/70"
                     : unlocked
@@ -272,13 +275,17 @@ export function ZonasTab() {
                       🔒
                     </span>
                   )}
-                  {/* MAX badge (fully upgraded zone) + NPC indicator +
-                      zone-assignment badges (item effects running here) */}
+                  {/* MAX badge (fully upgraded zone) — stays as an image
+                      overlay; badges and NPC chip moved into normal flow. */}
                   {unlocked && zoneMaxed && <ZoneMaxBadge />}
-                  {unlocked && <NpcIndicator npcId={assignedNpc} />}
-                  {unlocked && <ZoneAssignBadges assignments={zoneAssignments} now={now} />}
                 </div>
-                <div className="flex min-h-0 flex-1 flex-col p-2">
+                <div className="flex flex-1 flex-col p-2">
+                  {/* ASIGNACIONES activas (flujo normal, wrap) y luego el
+                      chip de NPC — nunca tapan EXPLORANDO ni nada más. */}
+                  {unlocked && zoneAssignments.length > 0 && (
+                    <ZoneAssignBadges assignments={zoneAssignments} now={now} />
+                  )}
+                  {unlocked && <NpcIndicator npcId={assignedNpc} />}
                   <p className="truncate text-[11px] font-bold leading-[14px] text-zinc-200">
                     {z.name}
                   </p>
