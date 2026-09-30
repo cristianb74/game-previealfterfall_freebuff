@@ -1,5 +1,6 @@
 import { BALANCE, BUILDING_SPECIALIZATION } from "./balance";
 import { buildingBonus, thematicBonus, THEMATIC_BY_KEY } from "./buildings";
+import { activeAssignmentForNpc } from "./crafting/craftedEffects";
 import type {
   NpcSurvivor,
   NpcTypeCode,
@@ -46,6 +47,26 @@ export function npcStatFor(npc: NpcSurvivor, resource: ResourceKey): number {
   return npc.stats[NPC_STAT_RESOURCE[resource]] ?? 1;
 }
 
+/** ---------------------------------------------------------
+ * ASIGNACIONES — crafted items assigned to a specific NPC raise the
+ * stat that NPC actually uses in production (prismáticos → Percepción
+ * for medicamentos/dinero, botas → Agilidad for comida). Applied at
+ * the ONE place stats feed rolls (npcStatFor via npcCycleChance), so
+ * online tick and offline progress can never drift apart.
+ * --------------------------------------------------------- */
+export function npcStatForRoll(
+  npc: NpcSurvivor,
+  state: { assignments?: { recipeId: string; targetType: "zone" | "npc"; targetId: string; endsAt: number }[] },
+  resource: ResourceKey,
+  now: number,
+): number {
+  const stat = NPC_STAT_RESOURCE[resource];
+  let value = npc.stats[stat] ?? 1;
+  if (stat === "percepcion" && activeAssignmentForNpc(state as never, "prismaticos", npc.id, now)) value *= 1.08;
+  if (stat === "agilidad" && activeAssignmentForNpc(state as never, "botas", npc.id, now)) value *= 1.08;
+  return value;
+}
+
 /** Total relative bonus multiplier for an NPC working a zone on a resource:
  * ×(1 + npcTypeBonus + globalBaseBonus + localThematicBonus + zoneFocusBonus).
  * Accepts the FULL GameState (v2 shape) — buildings live in state.base
@@ -80,11 +101,13 @@ export function npcProductionMultiplier(
 }
 
 /** Effective per-cycle find probability for an NPC in a zone.
- * Targets ~10 % effective resource opportunity, scaled by stats and bonuses. */
+ * Targets ~10 % effective resource opportunity, scaled by stats and bonuses.
+ * `now` feeds the NPC-assignment overlays (prismáticos/botas). */
 export function npcCycleChance(
   npc: NpcSurvivor,
   state: Parameters<typeof npcProductionMultiplier>[1],
   resource: ResourceKey,
+  now = Date.now(),
 ): number {
   const zone = getZone(npc.assignedZoneId ? Number(npc.assignedZoneId) : 1);
   const valid = zone.resources.includes(resource) || resource === "dinero";
@@ -92,7 +115,7 @@ export function npcCycleChance(
   const base = resource === "dinero"
     ? BALANCE.npcMoneyChance
     : BALANCE.npcProductionChance;
-  const stat = npcStatFor(npc, resource);
+  const stat = npcStatForRoll(npc, state as never, resource, now);
   const statFactor = 1 + stat * BALANCE.statEffectFactor;
   const bonus = npcProductionMultiplier(npc, state, resource);
   return Math.min(0.6, base * statFactor * bonus);
@@ -114,25 +137,44 @@ export function npcZoneSpeedFactor(
   return Math.max(0.8, 1 - reduction);
 }
 
-/** Roll one NPC production cycle. Returns null when nothing found. */
+/** Roll one NPC production cycle. Returns null when nothing found.
+ * NPC-assigned items apply here: prismáticos/botas raise the governing
+ * stat of the roll and mochila de superviviente boosts the amount. */
 export function rollNpcCycle(
   npc: NpcSurvivor,
   state: Parameters<typeof npcCycleChance>[1],
   rnd: () => number,
+  now = Date.now(),
 ): { resource: ResourceKey; amount: number } | null {
   const zone = getZone(npc.assignedZoneId ? Number(npc.assignedZoneId) : 1);
   // Money chance is independent and not affected by production bonuses.
   if (rnd() < BALANCE.npcMoneyChance) {
-    return { resource: "dinero", amount: 2 + Math.floor(rnd() * 4) };
+    const amount = 2 + Math.floor(rnd() * 4);
+    return { resource: "dinero", amount: scaledNpcAmount(npc, state, "dinero", amount, now) };
   }
   const candidates = zone.resources.filter((r) => r !== "dinero");
   if (candidates.length === 0) return null;
   const resource = candidates[Math.floor(rnd() * candidates.length)];
-  const chance = npcCycleChance(npc, state, resource);
+  const chance = npcCycleChance(npc, state, resource, now);
   if (rnd() >= chance) return null;
   const isTime = resource === "comida" || resource === "agua";
   const amount = isTime
     ? BALANCE.npcProductionTimeMin + Math.floor(rnd() * (BALANCE.npcProductionTimeMax - BALANCE.npcProductionTimeMin + 1))
     : BALANCE.npcProductionUnitsMin + Math.floor(rnd() * (BALANCE.npcProductionUnitsMax - BALANCE.npcProductionUnitsMin + 1));
-  return { resource, amount };
+  return { resource, amount: scaledNpcAmount(npc, state, resource, amount, now) };
+}
+
+/** Mochila de superviviente assigned to this NPC: +15% to its finds
+ *  (unit AND minute amounts — the recipe's "capacidad general" line). */
+function scaledNpcAmount(
+  npc: NpcSurvivor,
+  state: Parameters<typeof npcCycleChance>[1],
+  resource: ResourceKey,
+  amount: number,
+  now: number,
+): number {
+  const boosted =
+    activeAssignmentForNpc(state as never, "mochila_superviviente", npc.id, now) != null;
+  if (!boosted) return amount;
+  return Math.max(1, Math.round(amount * 1.15));
 }

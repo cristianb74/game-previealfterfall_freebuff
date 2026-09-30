@@ -18,6 +18,7 @@ import {
   perceptionFactor,
   resourceFindFactor,
   specialFindFactor,
+  zoneAssignmentFactors,
 } from "./crafting/craftedEffects";
 import type {
   BuildingKey,
@@ -111,15 +112,20 @@ export function findChanceForStat(stat: number): number {
   return 1 + stat * BALANCE.statEffectFactor;
 }
 
-/** Effective survivor stat during exploration: passive crafted items add
- *  a relative factor on top of the real stat (prismáticos +8% percepción,
- *  botas +8% agilidad). Base rolls never change — only the derived factor. */
+/** Effective survivor stat during exploration: NPC-assigned prismáticos
+ *  (percepción) or botas (agilidad) add a relative factor on top of the
+ *  real stat — but only in a zone whose assigned NPC wears the item (NPCs
+ *  don't explore; the item lends its bonus to whoever searches that zone).
+ *  Base rolls never change — only the derived factor. */
 export function effectiveExplorationStat(
-  state: Pick<GameState, "survivor" | "craftedInventory">,
+  state: GameState,
   stat: "percepcion" | "agilidad",
+  zoneId?: number,
+  now = Date.now(),
 ): number {
   const base = state.survivor.stats[stat];
-  return stat === "percepcion" ? base * perceptionFactor(state) : base * agilityFactor(state);
+  const factor = stat === "percepcion" ? perceptionFactor(state, zoneId, now) : agilityFactor(state, zoneId, now);
+  return base * factor;
 }
 
 /** Total relative building bonus for a find of `resource` in `zoneId`:
@@ -177,15 +183,20 @@ export function rollExploration(
   const zone = getZone(zoneId);
   const findings: ExplorationFinding[] = [];
   let exp = zone.playerExpReward;
+  const now = Date.now();
   // Zone specialization: the focus resource is amplified in this zone.
   const focusBonus = zone.focus ? 1 + zoneFocusBonus(zoneId) : 1;
   // Manual advantage: +X% find chance (auto runs use the plain chance).
   const manualFindBonus = opts.auto ? 0 : BALANCE.manualFindChanceBonus;
-  // Crafted passives: mapa +5% resource find, escáner +10% money find,
-  // detector +10% special finds (manual only — auto never rolls them).
-  const mapaFactor = resourceFindFactor(state);
-  const escanerFactor = findAmountFactor(state, "dinero");
-  const detectorFactor = opts.auto ? 1 : specialFindFactor(state);
+  // ASIGNACIONES (zone-targeted): mapa, escáner, detector, imán, mochila
+  // recolección, kit técnico, linterna, guantes y protección apply ONLY
+  // while assigned to THIS zone (detector: manual only — auto never rolls
+  // special events).
+  const zf = zoneAssignmentFactors(state, zoneId, now);
+  const mapaFactor = zf.resourceFind;
+  const escanerFactor = zf.moneyFind;
+  const detectorFactor = opts.auto ? 1 : zf.specialFind;
+  const imanFactor = zf.iman;
 
   // Money find (independent chance)
   if (Math.random() < BALANCE.moneyFindChance * escanerFactor) {
@@ -197,7 +208,7 @@ export function rollExploration(
         Math.round(
           (BALANCE.moneyFindMin +
             Math.floor(Math.random() * (BALANCE.moneyFindMax - BALANCE.moneyFindMin + 1))) *
-            findAmountFactor(state, "dinero"),
+            zf.moneyFind,
         ),
       ),
     });
@@ -220,25 +231,28 @@ export function rollExploration(
       const buildingMult = buildingMultiplierFor(state, zoneId, picked, techBonus);
       // Zone focus amplifies finds of its specialty resource.
       const focusMult = picked === zone.focus ? focusBonus : 1;
+      // Imán asignado a esta zona: +8% prob. de encontrar Componentes
+      // (multiplies the final chance when Componentes is the picked find).
+      const imanMult = picked === "componentes" ? imanFactor : 1;
       // Hunger/thirst tier of the WORST meter reduces find efficiency.
       const finalChance = Math.min(
         0.95,
-        BALANCE.explorationFindChance * statMult * buildingMult * focusMult * mapaFactor * survivalEfficiency(state) + manualFindBonus,
+        BALANCE.explorationFindChance * statMult * buildingMult * focusMult * mapaFactor * imanMult * survivalEfficiency(state) + manualFindBonus,
       );
       if (Math.random() < finalChance) {
         // Rare find tier (Percepción): ×3 amount. MANUAL ONLY.
-        // Prismáticos (+8% percepción efectiva) lift this tier's chance too.
+        // Prismáticos assigned to this zone's NPC lift this tier's chance.
         const rare =
           !opts.auto &&
           Math.random() <
-            rareFindChance(effectiveExplorationStat(state, "percepcion"));
+            rareFindChance(effectiveExplorationStat(state, "percepcion", zoneId, now));
         let amount = isTime(picked)
           ? BALANCE.findTimeMin + Math.floor(Math.random() * (BALANCE.findTimeMax - BALANCE.findTimeMin + 1))
           : BALANCE.findUnitsMin + Math.floor(Math.random() * (maxUnitsPerFind(state.survivor.stats.fuerza) - BALANCE.findUnitsMin + 1));
         if (rare) amount *= 3;
-        // Crafted capacity: mochila recolección +10% materiales, kit técnico
-        // +10% componentes, mochila superviviente +15% overall gathering.
-        amount = Math.max(1, Math.round(amount * findAmountFactor(state, picked)));
+        // ASIGNACIONES zone capacity: mochila recolección +10% materiales,
+        // kit técnico +10% componentes (solo su zona asignada).
+        amount = Math.max(1, Math.round(amount * zf.amount(picked)));
         findings.push({ kind: "resource", resource: picked, amount, rare });
       }
     }
@@ -246,15 +260,15 @@ export function rollExploration(
 
   // Survival incident (no battle) — only when no resource was found.
   // Chance scaled DOWN by Voluntad; severity reduced by Voluntad + Resistencia
-  // and by crafted armor (protección −15%, guantes/botas reduce the risk roll
-  // via injuryRiskFactor — same multiplicative pattern as voluntad).
+  // and by the zone-assigned guantes (−10% risk) — same multiplicative
+  // pattern as voluntad.
   const hasResource = findings.some((f) => f.kind === "resource");
   if (
     !hasResource &&
     Math.random() <
       BALANCE.explorationIncidentChance *
         incidentChanceFactor(state.survivor.stats.voluntad) *
-        injuryRiskFactor(state)
+        injuryRiskFactor(state, zoneId, now)
   ) {
     const incident = randomIncident();
     findings.push({
@@ -263,7 +277,7 @@ export function rollExploration(
         1,
         Math.round(
           mitigatedDamage(incident.damage, state.survivor.stats.voluntad, state.survivor.stats.resistencia) *
-            damageTakenFactor(state),
+            damageTakenFactor(state, zoneId, now),
         ),
       ),
       cause: incident.cause,
@@ -271,7 +285,7 @@ export function rollExploration(
   }
   // MANUAL-ONLY special events: a concrete advantage of active exploration.
   // Rolls regardless of findings (its own small chance), never on auto runs.
-  // Detector de objetos: +10% hallazgos especiales.
+  // Detector de objetos assigned to this zone: +10% hallazgos especiales.
   if (!opts.auto && Math.random() < BALANCE.manualSpecialEventChance * detectorFactor) {
     findings.push({ kind: "event", event: rollSpecialEvent() });
   }

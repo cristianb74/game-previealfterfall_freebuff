@@ -4,11 +4,11 @@ import { rollNpcCycle, npcZoneSpeedFactor } from "./npcTypes";
 import { applyEnergyRegen } from "./energySystem";
 import { npcDisplayName } from "./npcData";
 import { explorationMinutesWithAgility } from "./statEffects";
+import { explorationDurationFactor, agilityFactor } from "./crafting/craftedEffects";
 import { applySurvivalDrain } from "./survivalSystem";
 import {
   buffRemainingMs,
   consumptionFactor,
-  findAmountFactor,
   pruneBuffs,
 } from "./crafting/craftedEffects";
 import { BUILDING_BY_KEY, THEMATIC_BY_KEY } from "./buildings";
@@ -184,8 +184,11 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
     const run = state.autoFarms?.[zid];
     if (run && settleMs >= run.finishAt) {
       // Agilidad + passive NPC benefit apply to offline auto-farm cycles too.
+      // ASIGNACIONES: linterna/botas per zone apply identically to offline.
       const cycleMin =
         explorationMinutesWithAgility(getZone(zid).explorationMinutes, state.survivor.stats.agilidad) *
+        explorationDurationFactor(state, zid) *
+        agilityFactor(state, zid) *
         npcZoneSpeedFactor(state, zid);
       const settleMin = Math.min(rawMinutes, capMin);
       const cycles = Math.max(0, Math.floor(settleMin / cycleMin) - 1);
@@ -245,11 +248,11 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
         // cap runaway loops
         const cycles = Math.min(Math.floor(elapsed / cycleSec), 1440);
         for (let c = 0; c < cycles; c++) {
-          const find = rollNpcCycle(npc, state, rnd);
+          // NPC-assigned items (prismáticos/botas/mochila superviviente)
+          // apply INSIDE rollNpcCycle for this specific NPC at `now`.
+          const find = rollNpcCycle(npc, state, rnd, now);
           if (find) {
-            // Crafted gathering capacity scales NPC finds exactly like
-            // exploration/scavenge finds (same modifiers, same pools).
-            const amount = Math.max(1, Math.round(find.amount * findAmountFactor(state, find.resource)));
+            const amount = find.amount;
             if (find.resource === "comida") state.foodMin += amount;
             else if (find.resource === "agua") state.waterMin += amount;
             else if (find.resource === "dinero") state.resources.dinero += amount;

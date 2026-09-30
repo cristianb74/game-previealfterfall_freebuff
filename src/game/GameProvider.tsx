@@ -37,8 +37,11 @@ import {
 import {
   agilityFactor,
   explorationDurationFactor,
+  nextAssignmentExpiry,
+  pruneExpiredAssignments,
   useCraftedItem as applyCraftedUse,
 } from "./crafting/craftedEffects";
+import type { CraftedAssignment } from "./types";
 import { tickNpcs } from "@/game/onlineTick";
 import { applyEnergyRegen, currentEnergy, gainEnergy, spendEnergy, nextEnergyRegenAt } from "@/game/energySystem";
 import { explorationMinutesWithAgility } from "@/game/statEffects";
@@ -154,6 +157,14 @@ export interface GameContextValue {
   /** Use one crafted CONSUMABLE (botiquín / kit de provisiones): applies
    *  the effect immediately and decrements the crafted inventory by 1. */
   useCraftedItem: (recipeId: string) => void;
+  /** ASIGNAR a crafted NON-CONSUMABLE to a zone or NPC: quantity −1 and
+   *  the recipe's effect applies ONLY to that target until it expires
+   *  (per-recipe duration, no refund). Blocked when the same recipe is
+   *  already assigned to the same target. */
+  assignCraftedItem: (recipeId: string, targetType: "zone" | "npc", targetId: string) => void;
+  /** Cancel an active assignment early: the effect stops NOW — no refund
+   *  (the item was already consumed at assignment). */
+  cancelCraftedAssignment: (assignmentId: string) => void;
   buyResource: (key: ResourceKey, qty?: number) => void;
   /** Buy a battery (MERCHANT_BATTERY_OFFER): +energy, blocked if it does
    *  not fit fully under maxEnergy (no partial waste). */
@@ -221,6 +232,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [craftingUiTick, setCraftingUiTick] = useState(0);
   /** CRAFTING: next resolution check timestamp (active item's endsAt). */
   const craftingNextCheckRef = useRef<number | null>(null);
+  /** ASIGNACIONES: UI version — bumps when assignments change through
+   *  deferred paths (expiry timer) so Mochila/assign UI re-render. */
+  const [assignmentsUiTick, setAssignmentsUiTick] = useState(0);
+  const bumpAssignmentsUi = useCallback(() => setAssignmentsUiTick((t) => t + 1), []);
   /** Offline summary prepared by boot, shown once the player actually
    *  enters /juego ("Continuar") — never on the welcome/login screen. */
   const pendingOfflineSummaryRef = useRef<OfflineSummary | null>(null);
@@ -430,6 +445,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
         // CRAFTING catch-up: resolve everything that finished while the app
         // was closed (in order, idempotent) before the first render.
         catchUpCrafting(s);
+        // ASIGNACIONES catch-up: drop assignments that expired while away
+        // (no refund — items were consumed at assignment time).
+        const expiredNames = pruneExpiredAssignments(s, Date.now());
+        for (const name of expiredNames) {
+          pushLog(s, `ASIGNACIÓN expirada | ${name}`, "info");
+        }
         setState(s);
         stateRef.current = s;
         setHasSaveFile(true);
@@ -579,6 +600,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
         dirty = true;
       }
 
+      // ASIGNACIONES: expire assignments whose endsAt has passed (also
+      // caught up on load; no refund — items were consumed at assignment).
+      const expiredNow = pruneExpiredAssignments(s, now);
+      if (expiredNow.length > 0) {
+        for (const name of expiredNow) {
+          pushLog(s, `ASIGNACIÓN expirada | ${name}`, "info");
+        }
+        dirty = true;
+        bumpAssignmentsUi();
+      }
+
       if (dirty) void saveGame(s);
       setState({ ...s });
       // periodic save (every 15 s) to keep timestamps fresh
@@ -617,6 +649,33 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (timerId != null) window.clearTimeout(timerId);
     };
   }, [booted, craftingUiTick]);
+
+  // ---- ASIGNACIONES expiry timer: fires when the soonest endsAt is
+  // reached (even with the tab hidden or on another screen), mirroring
+  // the crafting catch-up. On load the boot catch-up already pruned.
+  useEffect(() => {
+    if (!booted) return;
+    let timerId: number | null = null;
+    const run = () => {
+      const s = stateRef.current;
+      if (!s) return;
+      const expired = pruneExpiredAssignments(s, vnow());
+      if (expired.length > 0) {
+        for (const name of expired) pushLog(s, `ASIGNACIÓN expirada | ${name}`, "info");
+        void saveGame(s);
+        bumpAssignmentsUi();
+      }
+      const next = stateRef.current ? nextAssignmentExpiry(stateRef.current, vnow()) : null;
+      timerId = next != null ? window.setTimeout(run, Math.max(0, next - vnow())) : null;
+    };
+    const first = stateRef.current ? nextAssignmentExpiry(stateRef.current, vnow()) : null;
+    timerId = first != null ? window.setTimeout(run, Math.max(0, first - vnow())) : null;
+    return () => {
+      if (timerId != null) window.clearTimeout(timerId);
+    };
+    // assignmentsUiTick bumps on create/cancel/expiry — every path that
+    // changes the soonest endsAt re-schedules the timer.
+  }, [booted, assignmentsUiTick]);
 
   // save on tab hide (mobile backgrounding)
   useEffect(() => {
@@ -850,12 +909,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (s.health <= 0) return;
     // Agilidad reduces exploration duration (statEffects module).
     // Passive NPC benefit: an assigned NPC speeds up their zone further.
-    // Crafted gear applies here too (linterna + botas), exactly as in
+    // ASIGNACIONES apply here too (linterna/botas per zone), exactly as in
     // manual exploration — both paths can never drift apart.
     const minutes =
       explorationMinutesWithAgility(getZone(zoneId).explorationMinutes, s.survivor.stats.agilidad) *
-      explorationDurationFactor(s) *
-      agilityFactor(s) *
+      explorationDurationFactor(s, zoneId) *
+      agilityFactor(s, zoneId) *
       npcZoneSpeedFactor(s, zoneId);
     s.autoFarms[zoneId] = { zoneId, startedAt: now, finishAt: now + minutes * 60000 };
   }
@@ -985,16 +1044,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
           return;
         }
         spendEnergy(s, 1, now);
-        // Agilidad reduces exploration duration (statEffects module).
-        // Passive NPC benefit: an assigned NPC speeds up their zone further.
-        // Crafted gear: linterna +10% effective night time and botas +8%
-        // agility fold into the same duration formula (never below bounds).
-        const minutes =
-          explorationMinutesWithAgility(getZone(zoneId).explorationMinutes, s.survivor.stats.agilidad) *
-          explorationDurationFactor(s) *
-          agilityFactor(s) *
-          npcZoneSpeedFactor(s, zoneId);
-        s.currentZoneId = zoneId;
+    // Agilidad reduces exploration duration (statEffects module).
+    // Passive NPC benefit: an assigned NPC speeds up their zone further.
+    // ASIGNACIONES (zone-targeted): linterna −10% duration ONLY in its
+    // assigned zone; botas +8% agility ONLY via that zone's assigned NPC.
+    const minutes =
+      explorationMinutesWithAgility(getZone(zoneId).explorationMinutes, s.survivor.stats.agilidad) *
+      explorationDurationFactor(s, zoneId) *
+      agilityFactor(s, zoneId) *
+      npcZoneSpeedFactor(s, zoneId);
+    s.currentZoneId = zoneId;
         const expId = s.nextExplorationId++;
         s.explorationStates[zoneId] = { zoneId, startedAt: now, finishAt: now + minutes * 60000, expId };
         pushLog(s, `[EXP #${expId}] Z${String(zoneId).padStart(2, "0")} | INICIO | duración ${minutes * 60}s`, "info", now);
@@ -1230,7 +1289,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   /** Use one crafted CONSUMABLE: applies the effect and decrements the
    *  inventory by 1 (single atomic update). Passive/unlock items are NOT
-   *  usable — they are automatic while owned (UI shows ACTIVO instead). */
+   *  usable — passives are assigned to a zone/NPC from Mochila. */
   const useCraftedItemAction = useCallback(
     (recipeId: string) => {
       const recipe = RECIPE_BY_ID[recipeId];
@@ -1243,6 +1302,103 @@ export function GameProvider({ children }: { children: ReactNode }) {
         }
         pushLog(s, `Objeto usado · ${result}`, "info");
         toast.success(recipe.name.toUpperCase(), { description: result });
+      });
+    },
+    [setAndSave],
+  );
+
+  /** ASIGNAR (modelo de activación): consume 1 unit of the non-consumable
+   *  and register an active assignment for its per-recipe duration. Zone
+   *  targets must be unlocked; NPC targets must be active team members.
+   *  Same recipe on the same target is blocked (UI + guard). */
+  const assignCraftedItem = useCallback(
+    (recipeId: string, targetType: "zone" | "npc", targetId: string) => {
+      const recipe = RECIPE_BY_ID[recipeId];
+      if (!recipe) return;
+      setAndSave((s) => {
+        const count = s.craftedInventory[recipeId] ?? 0;
+        if (count < 1) {
+          toast.error("No tienes ese objeto");
+          return;
+        }
+        const now = vnow();
+        if (
+          (s.assignments ?? []).some(
+            (a) => a.recipeId === recipeId && a.targetId === targetId && a.endsAt > now,
+          )
+        ) {
+          toast.error("Ya asignado", {
+            description: `${recipe.name} ya está asignado a ese destino.`,
+          });
+          return;
+        }
+        if (targetType === "zone") {
+          const zoneId = Number(targetId);
+          if (!Number.isFinite(zoneId) || zoneId < 1 || zoneId > computeZoneUnlocks(s)) {
+            toast.error("Zona no disponible");
+            return;
+          }
+        } else {
+          const npc = s.npcs.find((n) => n.id === targetId);
+          if (!npc || (npc.status ?? "active") !== "active") {
+            toast.error("Superviviente no disponible");
+            return;
+          }
+        }
+        const seconds = recipe.assignDurationSeconds ?? 7200;
+        const assignment: CraftedAssignment = {
+          id: `${recipeId}-${now}-${Math.floor(Math.random() * 1e6)}`,
+          recipeId,
+          targetType,
+          targetId,
+          effect: recipe.effect,
+          startedAt: now,
+          endsAt: now + seconds * 1000,
+        };
+        s.assignments = [...(s.assignments ?? []), assignment];
+        s.craftedInventory[recipeId] = count - 1;
+        if (s.craftedInventory[recipeId] <= 0) delete s.craftedInventory[recipeId];
+        const targetLabel =
+          targetType === "zone"
+            ? `${getZone(Number(targetId)).name} (Z${String(Number(targetId)).padStart(2, "0")})`
+            : (() => {
+                const npc = s.npcs.find((n) => n.id === targetId);
+                return npc ? `${npc.name} «${npc.alias}»` : targetId;
+              })();
+        pushLog(
+          s,
+          `ASIGNACIÓN | ${recipe.name} → ${targetLabel} · ${Math.round(seconds / 60)} min (objeto consumido)`,
+          "info",
+          now,
+        );
+        toast.success("OBJETO ASIGNADO", {
+          description: `${recipe.name} → ${targetLabel} · ${Math.round(seconds / 60)} min`,
+        });
+        bumpAssignmentsUi();
+      });
+    },
+    [setAndSave],
+  );
+
+  /** Cancel an active assignment early: effect stops now, NO refund — the
+   *  item was consumed when the assignment was created (consistent with
+   *  the rest of the app's economy). */
+  const cancelCraftedAssignment = useCallback(
+    (assignmentId: string) => {
+      setAndSave((s) => {
+        const idx = (s.assignments ?? []).findIndex((a) => a.id === assignmentId);
+        if (idx === -1) return;
+        const [removed] = s.assignments.splice(idx, 1);
+        const recipe = RECIPE_BY_ID[removed.recipeId];
+        pushLog(
+          s,
+          `ASIGNACIÓN cancelada | ${recipe?.name ?? removed.recipeId} (sin reembolso)`,
+          "info",
+        );
+        toast.info("Asignación cancelada", {
+          description: "El objeto ya se consumió al asignarlo: sin reembolso.",
+        });
+        bumpAssignmentsUi();
       });
     },
     [setAndSave],
@@ -1372,6 +1528,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
         }
         s.npcs.splice(npcIdx, 1);
         delete s.npcCycles[npcId];
+        // Its crafted-item assignments die with it (already consumed — no refund).
+        if (Array.isArray(s.assignments) && s.assignments.some((a) => a.targetType === "npc" && a.targetId === npcId)) {
+          s.assignments = s.assignments.filter((a) => !(a.targetType === "npc" && a.targetId === npcId));
+        }
         pushLog(s, `[NPC] ${npc.id} · ${npc.name} expulsada del refugio`, "npc");
         toast.info(`${npc.name} expulsada`, { description: "El superviviente ha sido eliminado del refugio." });
       });
@@ -1410,6 +1570,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       upgradeThematicBuilding,
       useMedicine,
       useCraftedItem: useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
       buyResource,
       buyBattery,
       sellResource,
@@ -1425,7 +1587,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       speedMultiplier,
       setSpeed,
     }),
-    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave,      cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, searchScavenge, finishScavengeEvent, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, useCraftedItemAction, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, savedZonasScrollRef, speedMultiplier, setSpeed],
+    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave,      cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, searchScavenge, finishScavengeEvent, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, useCraftedItemAction, assignCraftedItem, cancelCraftedAssignment, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, savedZonasScrollRef, speedMultiplier, setSpeed],
   );
 
   return (

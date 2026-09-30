@@ -37,6 +37,8 @@ export const RECIPES: Recipe[] = [
     timeSeconds: 45,
     costs: { materiales: 10, componentes: 5 },
     effectData: { type: "exploracion_tiempo_nocturna", value: 0.1 },
+    assignTarget: "zone",
+    assignDurationSeconds: 7200,
   },
   {
     id: "mapa",
@@ -48,6 +50,8 @@ export const RECIPES: Recipe[] = [
     timeSeconds: 40,
     costs: { materiales: 8, componentes: 3 },
     effectData: { type: "prob_recurso", value: 0.05 },
+    assignTarget: "zone",
+    assignDurationSeconds: 7200,
   },
   {
     id: "prismaticos",
@@ -59,6 +63,8 @@ export const RECIPES: Recipe[] = [
     timeSeconds: 75,
     costs: { materiales: 15, componentes: 10 },
     effectData: { type: "stat_percepcion", value: 0.08 },
+    assignTarget: "npc",
+    assignDurationSeconds: 7200,
   },
   {
     id: "mochila_recoleccion",
@@ -70,6 +76,8 @@ export const RECIPES: Recipe[] = [
     timeSeconds: 90,
     costs: { materiales: 25, componentes: 5 },
     effectData: { type: "recurso_materiales", value: 0.1 },
+    assignTarget: "zone",
+    assignDurationSeconds: 7200,
   },
   {
     id: "kit_provisiones",
@@ -92,6 +100,8 @@ export const RECIPES: Recipe[] = [
     timeSeconds: 110,
     costs: { materiales: 15, componentes: 15 },
     effectData: { type: "recurso_componentes", value: 0.1 },
+    assignTarget: "zone",
+    assignDurationSeconds: 7200,
   },
   {
     id: "iman",
@@ -103,6 +113,8 @@ export const RECIPES: Recipe[] = [
     timeSeconds: 80,
     costs: { materiales: 12, componentes: 10 },
     effectData: { type: "prob_componentes", value: 0.08 },
+    assignTarget: "zone",
+    assignDurationSeconds: 7200,
   },
   {
     id: "detector",
@@ -114,6 +126,8 @@ export const RECIPES: Recipe[] = [
     timeSeconds: 120,
     costs: { materiales: 18, componentes: 20, energia: 2 },
     effectData: { type: "hallazgos_especiales", value: 0.1 },
+    assignTarget: "zone",
+    assignDurationSeconds: 7200,
   },
   {
     id: "escaner",
@@ -125,6 +139,8 @@ export const RECIPES: Recipe[] = [
     timeSeconds: 140,
     costs: { materiales: 15, componentes: 25, energia: 3 },
     effectData: { type: "recurso_dinero", value: 0.1 },
+    assignTarget: "zone",
+    assignDurationSeconds: 7200,
   },
   {
     id: "guantes",
@@ -136,6 +152,8 @@ export const RECIPES: Recipe[] = [
     timeSeconds: 55,
     costs: { materiales: 18, componentes: 3 },
     effectData: { type: "riesgo_heridas", value: 0.1 },
+    assignTarget: "zone",
+    assignDurationSeconds: 7200,
   },
   {
     id: "proteccion",
@@ -147,6 +165,8 @@ export const RECIPES: Recipe[] = [
     timeSeconds: 100,
     costs: { materiales: 30, componentes: 8 },
     effectData: { type: "dano_eventos_menores", value: 0.15 },
+    assignTarget: "zone",
+    assignDurationSeconds: 7200,
   },
   {
     id: "botiquin",
@@ -169,6 +189,8 @@ export const RECIPES: Recipe[] = [
     timeSeconds: 150,
     costs: { materiales: 35, componentes: 13 },
     effectData: { type: "capacidad_recoleccion", value: 0.15 },
+    assignTarget: "npc",
+    assignDurationSeconds: 7200,
   },
   {
     id: "radio",
@@ -191,6 +213,8 @@ export const RECIPES: Recipe[] = [
     timeSeconds: 130,
     costs: { materiales: 25, componentes: 10 },
     effectData: { type: "stat_agilidad", value: 0.08, riesgo_lesion: 0.08 },
+    assignTarget: "npc",
+    assignDurationSeconds: 7200,
   },
 ];
 

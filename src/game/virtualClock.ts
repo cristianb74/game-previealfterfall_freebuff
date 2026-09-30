@@ -122,6 +122,16 @@ function shiftStateTimestamps(state: GameState, leadMs: number): void {
   for (const entry of state.log) {
     entry.t -= leadMs;
   }
+  // Timed buffs (kit de provisiones) and crafted assignments (linterna,
+  // mapa, …): their expiresAt/endsAt live on the same absolute timeline
+  // as everything else, so the fold keeps their remaining durations.
+  for (const buff of state.activeBuffs ?? []) {
+    buff.expiresAt -= leadMs;
+  }
+  for (const a of state.assignments ?? []) {
+    a.startedAt -= leadMs;
+    a.endsAt -= leadMs;
+  }
 }
 
 /**

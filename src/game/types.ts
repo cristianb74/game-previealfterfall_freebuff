@@ -167,6 +167,10 @@ export interface GameState {
   /** Timed buffs from crafted consumables ({effectId, expiresAt}), absolute
    *  Date.now() ms. Empty in pre-buff saves (backfilled on load). */
   activeBuffs: ActiveBuff[];
+  /** ASIGNACIONES: active assignments of crafted non-consumables to zones
+   *  or NPCs. Expired entries are pruned on load and by the tick (same
+   *  catch-up pattern as the crafting queue). Backfilled on load. */
+  assignments: CraftedAssignment[];
 }
 
 /** One timed effect of a crafted consumable. Expired entries are pruned
@@ -176,6 +180,24 @@ export interface ActiveBuff {
   effectId: string;
   /** Absolute expiry timestamp (Date.now() ms). */
   expiresAt: number;
+}
+
+/** One active assignment of a crafted NON-CONSUMABLE item to a zone or NPC
+ *  (modelo de activación por asignaciones). Created from Mochila's "Asignar":
+ *  quantity −1 at creation (no refund on expiry/cancel) and the recipe's
+ *  effect only applies to the target while now < endsAt. Timestamps live on
+ *  the real Date.now() timeline, like the crafting queue. */
+export interface CraftedAssignment {
+  /** Unique instance id (`${recipeId}-${startedAtMs}-${rand}`). */
+  id: string;
+  recipeId: string;
+  targetType: "zone" | "npc";
+  /** Zone id as a string (matches assignedZoneId) or NPC id (B01…D04). */
+  targetId: string;
+  /** Frozen recipe effect line at assignment time (UI display). */
+  effect: string;
+  startedAt: number; // Date.now() ms
+  endsAt: number; // Date.now() ms
 }
 
 /** One queued craft. endsAt is only meaningful while the item is being
@@ -214,6 +236,14 @@ export interface Recipe {
   /** Structured effect payload for future wiring (not consumed by any
    *  system yet). */
   effectData?: Record<string, number | string>;
+  /** ASIGNACIONES (modelo de activación): los no-consumibles NO son
+   *  pasivos por posesión — se asignan a un destino y su efecto solo
+   *  aplica ahí mientras dure la asignación. Target fijado por receta
+   *  ('zone' = una zona concreta, 'npc' = un superviviente concreto)
+   *  y duración por receta (7200 s = 2 h por defecto). Consumibles y
+   *  unlock (radio) no lo definen. */
+  assignTarget?: "zone" | "npc";
+  assignDurationSeconds?: number;
 }
 
 export interface ExplorationFinding {

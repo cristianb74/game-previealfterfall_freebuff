@@ -127,10 +127,12 @@ function rollPoint(
     return { kind: "nada", text: "No hay nada aquí." };
   }
   const { loot, nada, dano } = def.weights;
-  // Crafted protection: guantes/botas lower the injury RISK (scaled damage
-  // weight) and protección cuts the damage itself — same modifiers as the
-  // exploration incident roll, applied at this system's own base roll.
-  const danoWeight = Math.max(0, dano * injuryRiskFactor(state));
+  const now = Date.now();
+  // ASIGNACIONES zone-targeted protection: guantes lower the injury RISK
+  // (scaled damage weight) and protección cuts the damage itself, ONLY in
+  // the zone where they are assigned — same modifiers as the exploration
+  // incident roll, applied at this system's own base roll.
+  const danoWeight = Math.max(0, dano * injuryRiskFactor(state, zoneId, now));
   const total = loot + nada + danoWeight;
   let roll = Math.random() * total;
 
@@ -145,7 +147,7 @@ function rollPoint(
       Math.round(
         (BALANCE.scavengeDamageMin +
           Math.floor(Math.random() * (BALANCE.scavengeDamageMax - BALANCE.scavengeDamageMin + 1))) *
-          damageTakenFactor(state),
+          damageTakenFactor(state, zoneId, now),
       ),
     );
     // Damage hits the REAL health, floored so a bad streak can never
@@ -164,11 +166,11 @@ function rollPoint(
   }
   // Loot
   const resource = pickLootResource(def.loot);
-  // Crafted gathering capacity (materiales/componentes/dinero + mochila
-  // de superviviente overall) applies to minigame hauls too.
+  // ASIGNACIONES zone capacity: mochila recolección +10% materiales and
+  // kit técnico +10% componentes apply to minigame hauls in their zone.
   const amount = Math.max(
     1,
-    Math.round(rollLootAmount(resource) * findAmountFactor(state, resource)),
+    Math.round(rollLootAmount(resource) * findAmountFactor(state, resource, zoneId, now)),
   );
   applyGrant(state, resource, amount);
   const isTime = resource === "comida" || resource === "agua";

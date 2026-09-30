@@ -281,9 +281,9 @@ export function CraftingTab() {
           </div>
         )}
         <p className="mt-1.5 text-[9px] leading-4 text-subtle">
-          Los pasivos funcionan solos mientras tengas al menos uno; los consumibles se usan desde
-          la Mochila y los objetos de un solo uso (Botiquín, Kit de provisiones) aplican su efecto
-          al gastarse.
+          Los objetos no consumibles se activan ASIGNÁNDOLOS desde la Mochila a una zona o a un
+          superviviente (duran 2 h y se consumen al asignar); los consumibles se usan desde la Mochila
+          (Botiquín, Kit de provisiones) y la Radio se desbloquea para siempre al fabricarla.
         </p>
       </section>
 

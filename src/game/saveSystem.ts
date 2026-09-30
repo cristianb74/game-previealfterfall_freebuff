@@ -114,6 +114,7 @@ export function createInitialState(survivor: GameState["survivor"], now = Date.n
     craftingQueue: [],
     craftedInventory: {},
     activeBuffs: [],
+    assignments: [],
   };
 }
 
@@ -558,6 +559,21 @@ function normalizeState(state: GameState): GameState {
   if (!Array.isArray(s.activeBuffs)) s.activeBuffs = [];
   s.activeBuffs = s.activeBuffs.filter(
     (b) => b && typeof b.effectId === "string" && typeof b.expiresAt === "number",
+  );
+  // ASIGNACIONES backfill: pre-assignment saves never had them. Drop
+  // malformed entries; unknown recipe ids and wrong-kind recipes are
+  // removed (assignments only exist for non-consumables).
+  if (!Array.isArray(s.assignments)) s.assignments = [];
+  s.assignments = s.assignments.filter(
+    (a) =>
+      a &&
+      typeof a.id === "string" &&
+      typeof a.recipeId === "string" &&
+      RECIPE_BY_ID[a.recipeId] != null &&
+      (a.targetType === "zone" || a.targetType === "npc") &&
+      typeof a.targetId === "string" &&
+      typeof a.startedAt === "number" &&
+      typeof a.endsAt === "number",
   );
   if (typeof s.manualExplorationsDone !== "number") s.manualExplorationsDone = s.explorationsDone ?? 0;
   // NPC recruitment migration: NPCs owned before the recruitment system
