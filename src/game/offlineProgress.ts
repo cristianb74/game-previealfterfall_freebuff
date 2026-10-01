@@ -13,6 +13,7 @@ import {
 } from "./crafting/craftedEffects";
 import { BUILDING_BY_KEY, THEMATIC_BY_KEY } from "./buildings";
 import { RESOURCE_META } from "./resources";
+import { formatTime } from "./log";
 import type { BuildingKey, GameState, LogEvent, ResourceKey } from "./types";
 
 // ============================================================
@@ -154,9 +155,14 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
     const minsAway = Math.floor(minutesAway % 60);
     const timeLabel = hoursAway > 0 ? `${hoursAway} horas${minsAway > 0 ? ` ${minsAway} min` : ""}` : `${minsAway} minutos`;
     pushLog(state.log, {
-      t: now,
-      msg: `[ENERGÍA] Recuperación offline · ${timeLabel} · +${energyRegen}`,
-      kind: "info",
+      zona: undefined,
+      origen: "manual",
+      category: "ENERGÍA",
+      subtype: "regeneración",
+      fields: { recovery: timeLabel, gained: energyRegen },
+      mensaje: `[ENERGÍA] Recuperación offline · ${timeLabel} · +${energyRegen}`,
+      hora: formatTime(now),
+      event_id: state.nextLogEventId++,
     });
   }
 
@@ -337,9 +343,14 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
   // ---- Log ----
   if (explorationsCompleted > 0) {
     pushLog(state.log, {
-      t: now,
-      msg: "Exploración completada durante tu ausencia",
-      kind: "exp",
+      zona: undefined,
+      origen: "manual",
+      category: "EXP",
+      subtype: "fin",
+      fields: { desc: "Exploración completada durante tu ausencia" },
+      mensaje: "Exploración completada durante tu ausencia",
+      hora: formatTime(now),
+      event_id: state.nextLogEventId++,
     });
   }
   const findCount = npcFinds.length;
@@ -348,31 +359,51 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
       const npc = state.npcs.find((n) => n.id === f.npcId);
       const isTime = f.resource === "comida" || f.resource === "agua";
       pushLog(state.log, {
-        t: now,
-        msg: `${npc ? npcDisplayName(npc) : f.npcId} encontró ${isTime ? `+${f.amount} min` : `+${f.amount}`} ${f.resource === "dinero" ? "$" : f.resource}`,
-        kind: "npc",
+        zona: undefined,
+        origen: "manual",
+        category: "NPC CHECK",
+        subtype: "find",
+        fields: { npc: npc ? npc.id : f.npcId, resource: f.resource, amount: f.amount, unidad: isTime ? "min" : "" },
+        mensaje: `${npc ? npcDisplayName(npc) : f.npcId} encontró ${isTime ? `+${f.amount} min` : `+${f.amount}`} ${f.resource === "dinero" ? "$" : f.resource}`,
+        hora: formatTime(now),
+        event_id: state.nextLogEventId++,
       });
     }
     if (findCount > 5) {
       pushLog(state.log, {
-        t: now,
-        msg: `Tu equipo produjo ${findCount} hallazgos mientras no estabas`,
-        kind: "npc",
+        zona: undefined,
+        origen: "manual",
+        category: "NPC CHECK",
+        subtype: "encontró",
+        fields: { hallazgos: findCount },
+        mensaje: `Tu equipo produjo ${findCount} hallazgos mientras no estabas`,
+        hora: formatTime(now),
+        event_id: state.nextLogEventId++,
       });
     }
   }
   if (buildingsCompleted.length > 0) {
     pushLog(state.log, {
-      t: now,
-      msg: `Construcción completada: ${buildingsCompleted.join(", ")}`,
-      kind: "build",
+      zona: undefined,
+      origen: "manual",
+      category: "CONSTR",
+      subtype: "completada",
+      fields: { edificios: buildingsCompleted.join(", ") },
+      mensaje: `Construcción completada: ${buildingsCompleted.join(", ")}`,
+      hora: formatTime(now),
+      event_id: state.nextLogEventId++,
     });
   }
   if (capped) {
     pushLog(state.log, {
-      t: now,
-      msg: `[OFFLINE] Progreso limitado a ${BALANCE.offlineCapHours} h — el resto del tiempo no se contabilizó`,
-      kind: "info",
+      zona: undefined,
+      origen: "manual",
+      category: "ENERGÍA",
+      subtype: "regeneración",
+      fields: { desc: `Progreso limitado a ${BALANCE.offlineCapHours} h` },
+      mensaje: `[OFFLINE] Progreso limitado a ${BALANCE.offlineCapHours} h — el resto del tiempo no se contabilizó`,
+      hora: formatTime(now),
+      event_id: state.nextLogEventId++,
     });
   }
 

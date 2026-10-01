@@ -10,11 +10,12 @@ import type { ScavengePointDef } from "./scavengeLocations";
 import type {
   ActiveScavengeEvent,
   GameState,
-  LogEvent,
   ResourceKey,
   ScavengePointId,
   ScavengePointResult,
 } from "./types";
+import { formatTime } from "./log";
+import type { LogCategory } from "./log";
 
 // ============================================================
 // AFTERFALL — SCAVENGE event (minijuego de recolección).
@@ -77,8 +78,26 @@ export function checkScavengeTrigger(state: GameState, zoneId: number, fromAuto:
 
 /** Provider-style log push (kept local to avoid a circular import with
  *  GameProvider; mirrors the 60-entry cap used there). */
-function pushLog(state: GameState, msg: string, kind: LogEvent["kind"], t: number): void {
-  state.log.unshift({ t, msg, kind });
+function pushLog(state: GameState, msg: string, kind: string, t: number): void {
+  // Map legacy kind to a new LogCategory (subtype carries the original kind).
+  const KIND_CATEGORY: Record<string, LogCategory> = {
+    info: "INICIO",
+    check: "SCAVENGE CHECK",
+    daño: "ENERGÍA",
+    hallazgo: "SCAVENGE",
+    nada: "SCAVENGE",
+  };
+  const category = KIND_CATEGORY[kind] ?? "SCAVENGE";
+  state.log.unshift({
+    zona: undefined,
+    origen: "manual",
+    category,
+    subtype: category,
+    fields: {},
+    mensaje: msg,
+    hora: formatTime(t),
+    event_id: state.nextLogEventId++,
+  });
   if (state.log.length > 60) state.log.length = 60;
 }
 

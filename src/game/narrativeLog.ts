@@ -11,6 +11,8 @@
 // ============================================================
 
 import type { GameState, ResourceKey } from "./types";
+import { formatTime } from "./log";
+import type { LogCategory, LogEvent } from "./log";
 
 /** ---------------------------------------------------------
  * TUNABLE — log size per channel.
@@ -231,17 +233,43 @@ const SURVIVAL_WARN: Pool = {
 
 // ---------------- Push helpers ----------------
 
-function pushNarr(state: GameState, msg: string, kind: GameState["log"][number]["kind"], t: number = Date.now()): void {
-  state.log.unshift({ t, msg, kind, channel: "narr" });
+// Old narrative event types -> new LogCategory (narrative channel is
+// folded into the category so RegistroTab can group by it).
+const NARR_CATEGORY: Record<string, LogCategory> = {
+  start: "INICIO",
+  info: "INICIO",
+  resource: "RECURSO",
+  damage: "ENERGÍA",
+  exp: "EXP",
+  npc: "NPC CHECK",
+  zone: "ZONA",
+  build: "CONSTR",
+  surv: "ENERGÍA",
+  npcfound: "NPC CHECK",
+  npcfound2: "NPC CHECK",
+};
+
+function pushNarr(state: GameState, msg: string, kind: string, t: number = Date.now()): void {
+  const category = NARR_CATEGORY[kind] ?? "INICIO";
+  state.log.unshift({
+    zona: undefined,
+    origen: "manual",
+    category,
+    subtype: category,
+    fields: {},
+    mensaje: msg,
+    hora: formatTime(t),
+    event_id: state.nextLogEventId++
+  });
   // Trim narrative overflow only (keep tech log untouched).
   let narrCount = 0;
   for (let i = 0; i < state.log.length; i++) {
-    if (state.log[i].channel === "narr") narrCount++;
+    if (state.log[i].category === category) narrCount++;
   }
   if (narrCount > NARRATIVE_CONFIG.maxNarrEntries) {
     // Remove the OLDEST narrative entry (highest index, since log is unshifted).
     for (let i = state.log.length - 1; i >= 0; i--) {
-      if (state.log[i].channel === "narr") {
+      if (state.log[i].category === category) {
         state.log.splice(i, 1);
         break;
       }

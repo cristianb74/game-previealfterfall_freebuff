@@ -7,6 +7,7 @@ import { consumptionFactor } from "./crafting/craftedEffects";
 import { BUILDING_BY_KEY, THEMATIC_BY_KEY } from "./buildings";
 import type { BuildingKey } from "./types";
 import { narrNpcFind, narrSurvivalWarn } from "./narrativeLog";
+import { formatTime } from "./log";
 import type { GameState, LogEvent, ResourceKey } from "./types";
 
 // ============================================================
@@ -124,11 +125,11 @@ export function tickNpcs(state: GameState, now: number): TickChanges {
   const hTier = hungerTier(state);
   const tTier = thirstTier(state);
   if (lastHungerTier !== null && hTier !== lastHungerTier) {
-    pushLog(state.log, { zona: undefined, origen: 'auto', category: 'ENERGÍA', subtype: 'tier', fields: {}, mensaje: `[SUPERVIVENCIA] Comida: ${TIER_META[hTier].label}`, hora: now });
+    pushLog(state.log, { zona: undefined, origen: 'auto', category: 'ENERGÍA', subtype: 'tier', fields: {}, mensaje: `[SUPERVIVENCIA] Comida: ${TIER_META[hTier].label}`, hora: formatTime(now), event_id: state.nextLogEventId++ });
     if (hTier !== "ok") narrSurvivalWarn(state, "comida");
   }
   if (lastThirstTier !== null && tTier !== lastThirstTier) {
-    pushLog(state.log, { zona: undefined, origen: 'auto', category: 'ENERGÍA', subtype: 'tier', fields: {}, mensaje: `[SUPERVIVENCIA] Agua: ${TIER_META[tTier].label}`, hora: now });
+    pushLog(state.log, { zona: undefined, origen: 'auto', category: 'ENERGÍA', subtype: 'tier', fields: {}, mensaje: `[SUPERVIVENCIA] Agua: ${TIER_META[tTier].label}`, hora: formatTime(now), event_id: state.nextLogEventId++ });
     if (tTier !== "ok") narrSurvivalWarn(state, "agua");
   }
   lastHungerTier = hTier;
@@ -143,12 +144,13 @@ export function tickNpcs(state: GameState, now: number): TickChanges {
       subtype: 'find',
       fields: { res: f.resource, amount: f.amount },
       mensaje: `${npc ? npcDisplayName(npc) : f.npcId} encontró ${isTime ? `+${f.amount} min` : `+${f.amount}`} ${f.resource === "dinero" ? "$" : f.resource}`,
-      hora: now,
+      hora: formatTime(now),
+      event_id: state.nextLogEventId++,
     });
     if (npc) narrNpcFind(state, npc.name, f.resource, f.amount);
   }
   for (const b of buildingsCompleted) {
-    pushLog(state.log, { zona: undefined, origen: 'auto', category: 'CONSTR', subtype: 'completada', fields: {}, mensaje: `Construcción completada: ${b}`, hora: now });
+    pushLog(state.log, { zona: undefined, origen: 'auto', category: 'CONSTR', subtype: 'completada', fields: {}, mensaje: `Construcción completada: ${b}`, hora: formatTime(now), event_id: state.nextLogEventId++ });
   }
 
   return { finds, buildingsCompleted, energyGained: 0 };

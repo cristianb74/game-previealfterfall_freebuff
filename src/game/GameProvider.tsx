@@ -1270,7 +1270,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
             pushLog(s, { zona: undefined, origen: 'manual', category: 'NPC_ACTION', subtype: 'asignado', fields: { npc: npc.id, zona_anterior: npc.assignedZoneId ?? 'sin_asignar', zona_nueva: String(getZone(zoneId).id) }, mensaje: `${npcDisplayName(npc)} asignado a ${getZone(zoneId).name}` });
           }
         } else if (npcWasAssigned) {
-          pushLog(s, { zona: undefined, origen: 'manual', category: 'NPC_ACTION', subtype: 'reasignado', fields: { npc: npc.id, zona_anterior: npc.assignedZoneId ? String(getZone(Number(npc.assignedZoneId)).id) : 'sin_asignar', zona_nueva: String(getZone(zoneId).id) }, mensaje: `${npcDisplayName(npc)} sin asignación` });
+          const zonaAnterior: string = npc.assignedZoneId == null ? 'sin_asignar' : String(getZone(Number(npc.assignedZoneId)).id);
+          pushLog(s, { zona: undefined, origen: 'manual', category: 'NPC_ACTION', subtype: 'reasignado', fields: { npc: npc.id, zona_anterior: zonaAnterior, zona_nueva: zoneId == null ? 'sin_asignar' : String(getZone(zoneId).id) }, mensaje: `${npcDisplayName(npc)} sin asignación` });
         }
       });
     },
@@ -1398,7 +1399,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           toast.error("No se puede usar", { description: recipe.name });
           return;
         }
-        pushLog(s, { zona: undefined, origen: 'auto', category: 'USO_ITEM', subtype: 'consumido', mensaje: `Objeto usado · ${result}` });
+        pushLog(s, { zona: undefined, origen: 'auto', category: 'USO_ITEM', subtype: 'consumido', fields: {}, mensaje: `Objeto usado · ${result}` });
         toast.success(recipe.name.toUpperCase(), { description: result });
       });
     },

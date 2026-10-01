@@ -1,5 +1,6 @@
 import { GAME_INFO, SAVE_VERSION } from "./gameConfig";
 import { BALANCE, migrationRefundFactor } from "./balance";
+import { formatTime } from "./log";
 import {
   BUILDINGS,
   BUILDING_BY_KEY,
@@ -110,6 +111,7 @@ export function createInitialState(survivor: GameState["survivor"], now = Date.n
     npcs: [],
     npcCycles: {},
     log: [],
+    nextLogEventId: 0,
     pendingZoneUnlock: null,
     craftingQueue: [],
     craftedInventory: {},
@@ -262,15 +264,25 @@ function migrateV1ToV2(state: GameState): GameState {
     state.resources.materiales += refundTotals.materiales;
     state.resources.componentes += refundTotals.componentes;
     state.log.unshift({
-      t: Date.now(),
-      msg: `Reorganización de la base: los edificios comunes pasan a ser globales · +${refundTotals.materiales} Materiales, +${refundTotals.componentes} Componentes reembolsados`,
-      kind: "build",
+      zona: undefined,
+      origen: "manual",
+      category: "CONSTR",
+      subtype: "completada",
+      fields: { acción: "reorganización" },
+      mensaje: `Reorganización de la base: los edificios comunes pasan a ser globales · +${refundTotals.materiales} Materiales, +${refundTotals.componentes} Componentes reembolsados`,
+      hora: formatTime(Date.now()),
+      event_id: state.nextLogEventId++,
     });
   } else {
     state.log.unshift({
-      t: Date.now(),
-      msg: "Reorganización de la base: los edificios comunes pasan a ser globales (Instalaciones por zona aparte)",
-      kind: "build",
+      zona: undefined,
+      origen: "manual",
+      category: "CONSTR",
+      subtype: "completada",
+      fields: { acción: "reorganización" },
+      mensaje: "Reorganización de la base: los edificios comunes pasan a ser globales (Instalaciones por zona aparte)",
+      hora: formatTime(Date.now()),
+      event_id: state.nextLogEventId++,
     });
   }
   return state;
@@ -353,9 +365,14 @@ export function migrateV2ToV3(state: GameState): GameState {
     state.resources.materiales += refundTotals.materiales;
     state.resources.componentes += refundTotals.componentes;
     state.log.unshift({
-      t: Date.now(),
-      msg: `Ajuste de economía: obras en curso reembolsadas por la diferencia de precio (+${refundTotals.materiales} Materiales, +${refundTotals.componentes} Componentes)`,
-      kind: "build",
+      zona: undefined,
+      origen: "manual",
+      category: "CONSTR",
+      subtype: "completada",
+      fields: { acción: "reembolso" },
+      mensaje: `Ajuste de economía: obras en curso reembolsadas por la diferencia de precio (+${refundTotals.materiales} Materiales, +${refundTotals.componentes} Componentes)`,
+      hora: formatTime(Date.now()),
+      event_id: state.nextLogEventId++,
     });
   }
 

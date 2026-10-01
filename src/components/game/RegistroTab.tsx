@@ -159,7 +159,7 @@ export function RegistroTab() {
   const fullLog = useMemo(() => {
     if (!state) return "";
     // Sort ascending (oldest first) for chronological reading
-    const sorted = [...state.log].sort((a, b) => (a.hora ?? 0) - (b.hora ?? 0));
+    const sorted = [...state.log].sort((a, b) => a.hora.localeCompare(b.hora));
     const logLines = sorted.map((e) => {
       // New structured format: [HH:MM:SS] [CATEGORY] subtipo | campo=valor | ...
       const line = [`[${e.hora ?? fmtTs(Date.now())}] [${e.category ?? "INFO"}] ${e.subtype ?? "evento"}`];
@@ -416,8 +416,7 @@ export function RegistroTab() {
               return <p className="text-subtle">Sin eventos en este canal</p>;
             }
             return filtered.map((e, i) => (
-              <div key={i} className="flex gap-2 border-b border-zinc-900 py-0.5">
-                <span className="shrink-0 text-subtle">[{fmtTs(e.hora ?? Date.now())}]</span>
+              <div key={i} className="flex gap-2 border-b border-zinc-900 py-0.5">                  <span className="shrink-0 text-subtle">[{e.hora ?? fmtTs(Date.now())}]</span>
                 <span
                   className={
                     e.category === "ENERGÍA" || e.category === "RECURSO" || e.category === "CONSTR" || e.category === "ZONA" || e.category === "USO_ITEM" || e.category === "SCAVENGE" || e.category === "AUTO_EXPLORER" || e.category === "SCAVENGE CHECK"
