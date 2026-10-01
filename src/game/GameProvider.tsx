@@ -182,11 +182,6 @@ export function useGame(): GameContextValue {
   return ctx;
 }
 
-function pushLog(state: GameState, msg: string, kind: GameState["log"][number]["kind"], t = Date.now()) {
-  state.log.unshift({ t, msg, kind });
-  if (state.log.length > 60) state.log.length = 60;
-}
-
 /** Merchant offers (money sink). Money is earned in-game only. */
 const MERCHANT_OFFERS: Partial<Record<ResourceKey, { amount: number; price: number; label: string }>> = {
   materiales: { amount: 1, price: 8, label: "+1 Materiales" },
@@ -499,14 +494,27 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const gained = applyEnergyRegen(s, now);
       const energyAfter = Math.floor(s.resources.energia);
       if (gained >= 1) {
-        pushLog(s, `[ENERGÍA] +${gained} regeneración · ${energyBefore}/${BALANCE.maxEnergy} → ${energyAfter}/${BALANCE.maxEnergy}`, "info");
+        pushLog(s, {
+          zona: getZone(s.currentZoneId).id,
+          origen: "auto",
+          category: "ENERGÍA",
+          subtype: "regeneración",
+          fields: { gained, energyBefore, energyAfter },
+          mensaje: `[ENERGÍA] +${gained} regeneración · ${energyBefore}/${BALANCE.maxEnergy} → ${energyAfter}/${BALANCE.maxEnergy}`,
+        });
         // Log next cycle start if still below max
         if (energyAfter < BALANCE.maxEnergy) {
           const nextAt = nextEnergyRegenAt(s);
           const remainMs = Math.max(0, nextAt - now);
           const mm = String(Math.floor(remainMs / 60000)).padStart(2, "0");
           const ss = String(Math.floor((remainMs % 60000) / 1000)).padStart(2, "0");
-          pushLog(s, `[ENERGÍA] Ciclo iniciado · próxima regeneración ${mm}:${ss}`, "info");
+          pushLog(s, {
+            zona: getZone(s.currentZoneId).id,
+            origen: "auto",
+            category: "ENERGÍA",
+            subtype: "ciclo_iniciado",
+            fields: { próxima: `${mm}:${ss}` },
+          });
         }
       }
       // Auto-farm pause/resume on energy state transitions
@@ -516,14 +524,28 @@ export function GameProvider({ children }: { children: ReactNode }) {
         // Energy just hit 0: pause all active auto-farms
         for (const zid of Object.keys(s.autoExplored).map(Number)) {
           if (s.autoExplored[zid]) {
-            pushLog(s, `[AUTO] Z${String(zid).padStart(2, "0")} pausado por falta de Energía`, "info");
+            pushLog(s, {
+              zona: `Z${String(zid).padStart(2, "0")}`,
+              origen: "auto",
+              category: "AUTO_EXPLORER",
+              subtype: "pausado",
+              fields: { motivo: "falta_energía" },
+              mensaje: `[AUTO] Z${String(zid).padStart(2, "0")} pausado por falta de Energía`,
+            });
           }
         }
       } else if (!isZeroNow && wasZero) {
         // Energy just recovered from 0: resume auto-farms
         for (const zid of Object.keys(s.autoExplored).map(Number)) {
           if (s.autoExplored[zid]) {
-            pushLog(s, `[AUTO] Z${String(zid).padStart(2, "0")} reanudado · Energía disponible`, "info");
+            pushLog(s, {
+              zona: `Z${String(zid).padStart(2, "0")}`,
+              origen: "auto",
+              category: "AUTO_EXPLORER",
+              subtype: "reanudado",
+              fields: { motivo: "energía_disponible" },
+              mensaje: `[AUTO] Z${String(zid).padStart(2, "0")} reanudado · Energía disponible`,
+            });
           }
         }
       }
@@ -568,7 +590,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (b && b.upgradeFinishAt && now >= b.upgradeFinishAt) {
           b.level = Math.min(BALANCE.buildingMaxLevel, b.level + 1);
           b.upgradeFinishAt = null;
-          pushLog(s, `Construcción completada: ${BUILDING_BY_KEY[key].name} → N${b.level} (Base global)`, "build");
+          pushLog(s, {
+          zona: "Base global",
+          origen: "auto",
+          category: "CONSTR",
+          subtype: "completada",
+          fields: { construcción: BUILDING_BY_KEY[key].name, nivel: b.level },
+          mensaje: `Construcción completada: ${BUILDING_BY_KEY[key].name} → N${b.level} (Base global)`,
+        });
           narrBuildDone(s, BUILDING_BY_KEY[key].name, b.level);
           dirty = true;
         }
@@ -581,7 +610,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
             b.level = Math.min(BALANCE.buildingMaxLevel, b.level + 1);
             b.upgradeFinishAt = null;
             const def = THEMATIC_BY_KEY[key];
-            pushLog(s, `Construcción completada: ${def?.name ?? key} → N${b.level} (Z${String(zid).padStart(2, "0")})`, "build");
+            pushLog(s, {
+              zona: `Z${String(zid).padStart(2, "0")}`,
+              origen: "auto",
+              category: "CONSTR",
+              subtype: "completada",
+              fields: { construcción: def?.name ?? key, nivel: b.level },
+              mensaje: `Construcción completada: ${def?.name ?? key} → N${b.level} (Z${String(zid).padStart(2, "0")})`,
+            });
             if (def) narrBuildDone(s, def.name, b.level);
             dirty = true;
           }
@@ -593,7 +629,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const craftedNow = resolveFinishedCrafts(s);
       if (craftedNow.length > 0) {
         for (const name of craftedNow) {
-          pushLog(s, `Crafteo completado: ${name}`, "info");
+          pushLog(s, {
+            origen: "auto",
+            category: "CRAFTEO",
+            subtype: "fin",
+            fields: { item: name, resultado: "exito" },
+            mensaje: `Crafteo completado: ${name}`,
+          });
         }
         toast.success("CRAFTEO COMPLETADO", { description: craftedNow.join(" · ") });
         dirty = true;
@@ -604,7 +646,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const expiredNow = pruneExpiredAssignments(s, now);
       if (expiredNow.length > 0) {
         for (const name of expiredNow) {
-          pushLog(s, `ASIGNACIÓN expirada | ${name}`, "info");
+          pushLog(s, {
+            zona: getZone(s.currentZoneId).id,
+            origen: "auto",
+            category: "NPC_ACTION",
+            subtype: "expirado",
+            fields: { npc: name, motivo: "fecha_de_expiración" },
+            mensaje: `ASIGNACIÓN expirada | ${name}`,
+          });
         }
         dirty = true;
         bumpAssignmentsUi();
@@ -635,7 +684,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (!s) return;
       const done = resolveFinishedCrafts(s);
       if (done.length > 0) {
-        for (const name of done) pushLog(s, `Crafteo completado: ${name}`, "info");
+        for (const name of done) pushLog(s, { origen: 'auto', category: 'CRAFTEO', subtype: 'fin', fields: { item: name, resultado: 'exito' }, mensaje: `Crafteo completado: ${name}` });
         toast.success("CRAFTEO COMPLETADO", { description: done.join(" · ") });
         void saveGame(s);
       }
@@ -713,11 +762,25 @@ export function GameProvider({ children }: { children: ReactNode }) {
         else if (f.resource === "agua") s.waterMin += amount;
         else s.resources[f.resource] += amount;
         const isTime = f.resource === "comida" || f.resource === "agua";
-        pushLog(s, `${expTag}RECURSO | ${isTime ? `+${amount} min ${f.resource}` : `+${amount} ${f.resource === "dinero" ? "$" : f.resource}`}`, "resource", startedAt);
+        pushLog(s, {
+          zona: `Z${String(outcome.zoneId).padStart(2, "0")}`,
+          origen: opts.auto ? "auto" : "manual",
+          category: "RECURSO",
+          subtype: "hallazgo",
+          fields: { resource: f.resource, cantidad: amount, unidad: isTime ? "min" : "unidad", valor: isTime ? `+${amount} min` : `+${amount}` },
+          mensaje: expTag + (isTime ? ' +' + amount + ' min ' + f.resource : ' +' + amount + ' ' + (f.resource === 'dinero' ? '$' : f.resource)),
+        });
         narrResourceFind(s, outcome.zoneId, f.resource, amount, !!f.rare);
       } else if (f.kind === "damage") {
         s.health = Math.max(0, s.health - (f.damage ?? 0));
-        pushLog(s, `${expTag}DAÑO | ${f.cause} · -${f.damage} Salud`, "damage", startedAt);
+        pushLog(s, {
+          zona: `Z${String(outcome.zoneId).padStart(2, "0")}`,
+          origen: opts.auto ? "auto" : "manual",
+          category: "ENERGÍA",
+          subtype: "daño",
+          fields: { causa: f.cause, salud_perdida: f.damage },
+          mensaje: `${expTag}DAÑO | ${f.cause} · -${f.damage} Salud`,
+        });
         narrDamage(s, outcome.zoneId, f.cause ?? "Accidente", f.damage ?? 0);
       } else if (f.kind === "event" && f.event) {
         // Manual-only special event: apply its real rewards.
@@ -736,17 +799,36 @@ export function GameProvider({ children }: { children: ReactNode }) {
           const isTimeG = g.resource === "comida" || g.resource === "agua";
           parts.push(`+${g.amount}${isTimeG ? " min" : ""} ${g.resource === "dinero" ? "$" : g.resource}`);
         }
-        pushLog(s, `${expTag}EVENTO | ${ev.text}${parts.length > 0 ? ` (${parts.join(" · ")})` : ""}`, "exp", startedAt);
+        pushLog(s, {
+          zona: `Z${String(outcome.zoneId).padStart(2, "0")}`,
+          origen: opts.auto ? "auto" : "manual",
+          category: "EXP",
+          subtype: "evento",
+          fields: { evento: ev.text, recompensas: parts.join(" · ") },
+          mensaje: expTag + 'EVENTO | ' + ev.text + (parts.length > 0 ? ' (' + parts.join(' · ') + ')' : ''),
+        });
         narrEvent(s, ev.text);
       }
     }
     if (outcome.findings.length === 0) {
-      pushLog(s, `${expTag}Sin hallazgos`, "info", startedAt);
+      pushLog(s, {
+        zona: `Z${String(outcome.zoneId).padStart(2, "0")}`,
+        origen: opts.auto ? "auto" : "manual",
+        category: "EXP",
+        subtype: "sin_hallazgos",
+        mensaje: `${expTag}Sin hallazgos`,
+      });
     }
     pushLog(
       s,
-      `${expTag}${opts.auto ? "Auto" : "FIN"} | Z${String(outcome.zoneId).padStart(2, "0")} · ${zone.name} completada · +${outcome.exp} EXP`,
-      "exp",
+      {
+        zona: `Z${String(outcome.zoneId).padStart(2, "0")}`,
+        origen: opts.auto ? "auto" : "manual",
+        category: "EXP",
+        subtype: opts.auto ? "auto_fin" : "fin",
+        fields: { zona: `Z${String(outcome.zoneId).padStart(2, "0")}`, exp: outcome.exp },
+        mensaje: `${expTag}${opts.auto ? "Auto" : "FIN"} | Z${String(outcome.zoneId).padStart(2, "0")} · ${zone.name} completada · +${outcome.exp} EXP`,
+      },
       startedAt,
     );
 
@@ -756,7 +838,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const maxUnlocked = computeZoneUnlocks(s);
       if (maxUnlocked > frontierZoneId(s)) {
         s.pendingZoneUnlock = maxUnlocked;
-        pushLog(s, `Nueva zona desbloqueada: ${getZone(maxUnlocked).name}`, "zone", startedAt);
+        pushLog(s, { zona: undefined, origen: 'manual', category: 'ZONA', subtype: 'desbloqueada', fields: { zona: getZone(maxUnlocked).id }, mensaje: `Nueva zona desbloqueada: ${getZone(maxUnlocked).name}` });
         narrZoneUnlock(s, getZone(maxUnlocked).name);
         toast.success("☢ NUEVA ZONA DESBLOQUEADA", {
           description: `${getZone(maxUnlocked).name} · la anterior sigue farmeándose sola`,
@@ -796,8 +878,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const via = fromAuto ? "AUTO" : "MANUAL";
       pushLog(
         s,
-        `[EXP #${expId}] NPC CHECK | contador ${counter} | ${via} | probabilidad ${(chance * 100).toFixed(1)}% | resultado NO`,
-        "info",
+        {
+          zona: `Z${String(outcome.zoneId).padStart(2, "0")}`,
+          origen: via === "AUTO" ? "auto" : "manual",
+          category: "NPC CHECK",
+          subtype: "check",
+          fields: { contador: counter, vía: via, probabilidad: (chance * 100).toFixed(1) },
+          mensaje: `[EXP #${expId}] NPC CHECK | contador ${counter} | ${via} | probabilidad ${(chance * 100).toFixed(1)}% | resultado NO`,
+        },
         startedAt,
       );
       return;
@@ -819,9 +907,22 @@ export function GameProvider({ children }: { children: ReactNode }) {
     };
     s.npcs.push(npc);
     const via = fromAuto ? "AUTO-FARM" : "MANUAL";
-    pushLog(s, `[EXP #${expId}] NPC OBTENIDO (${via}) | ${npc.id} · ${npc.name} · ${NPC_TYPE_MODIFIERS[npc.type].label}`, "npc", startedAt);
+    pushLog(s, {
+      zona: `Z${String(outcome.zoneId).padStart(2, "0")}`,
+      origen: via === "AUTO-FARM" ? "auto" : "manual",
+      category: "NPC_ACTION",
+      subtype: "hallazgo",
+      fields: { npc: npc.id, nombre: npc.name, tipo: NPC_TYPE_MODIFIERS[npc.type].label },
+      mensaje: `[EXP #${expId}] NPC OBTENIDO (${via}) | ${npc.id} · ${npc.name} · ${NPC_TYPE_MODIFIERS[npc.type].label}`,
+    }, startedAt);
     narrNpcFound(s, npc.name, npc.alias);
-    pushLog(s, `[NPC] contador reiniciado a 0`, "info", vnow());
+    pushLog(s, {
+      zona: `Z${String(outcome.zoneId).padStart(2, "0")}`,
+      origen: "auto",
+      category: "NPC_ACTION",
+      subtype: "contador_reiniciado",
+      mensaje: `[NPC] contador reiniciado a 0`,
+    }, vnow());
     s.explorationsSinceLastNPC = 0;
     toast.info(fromAuto ? "SUPERVIVIENTE ENCONTRADO (AUTO)" : "SUPERVIVIENTE ENCONTRADO", {
       description: `${npc.name} «${npc.alias}» · ${NPC_TYPE_MODIFIERS[npc.type].label}`,
@@ -855,7 +956,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
     // probabilidad / resultado) so the trigger curve stays auditable.
     if (checkScavengeTrigger(s, zoneId, false)) {
       const loc = scavengeLocationForZone(zoneId);
-      pushLog(s, `[EXP #${expId}] EVENTO | ${loc.name} detectada · minijuego SCAVENGE`, "info", vnow());
+      pushLog(s, {
+        zona: `Z${String(zoneId).padStart(2, "0")}`,
+        origen: "manual",
+        category: "NPC_ACTION",
+        subtype: "evento",
+        fields: { minijuego: "SCAVENGE" },
+        mensaje: `[EXP #${expId}] EVENTO | ${loc.name} detectada · minijuego SCAVENGE`,
+      }, vnow());
     }
   }
 
@@ -882,7 +990,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
     // SCAVENGE in auto: resolve all 8 points in chain, no interface.
     if (checkScavengeTrigger(s, zoneId, true)) {
       const loc = scavengeLocationForZone(zoneId);
-      pushLog(s, `[EXP #${expId}] EVENTO | ${loc.name} detectada · minijuego SCAVENGE (auto)`, "info", startedAt);
+      pushLog(s, {
+        zona: `Z${String(zoneId).padStart(2, "0")}`,
+        origen: "auto",
+        category: "NPC_ACTION",
+        subtype: "evento",
+        fields: { minijuego: "SCAVENGE" },
+        mensaje: `[EXP #${expId}] EVENTO | ${loc.name} detectada · minijuego SCAVENGE (auto)`,
+      }, startedAt);
       const results = resolveScavengeAuto(s, zoneId);
       for (const r of results) {
         const line =
@@ -891,7 +1006,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
             : r.kind === "dano"
               ? `-${r.damage} Salud`
               : "sin hallazgos";
-        pushLog(s, `EVENTO | SCAVENGE · ${line} — ${r.text}`, r.kind === "dano" ? "damage" : "resource", startedAt);
+        pushLog(s, {
+          zona: `Z${String(zoneId).padStart(2, "0")}`,
+          origen: "auto",
+          category: "SCAVENGE",
+          subtype: r.kind === "dano" ? "daño" : r.kind === "loot" ? "hallazgo" : "nada",
+          fields: { resultado: line, texto: r.text },
+          mensaje: `EVENTO | SCAVENGE · ${line} — ${r.text}`,
+        }, startedAt);
       }
       finishScavenge(s); // auto sessions close immediately (no UI)
     }
@@ -938,7 +1060,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
       }
       s.explorationsSinceLastNPC = 0;
       pendingOfflineSummaryRef.current = null; // fresh start: drop boot stash
-      pushLog(s, "Comienza tu supervivencia", "info", now);
+      pushLog(s, {
+        zona: getZone(s.currentZoneId).id,
+        origen: "manual",
+        category: "INICIO",
+        subtype: "partida",
+        fields: { estado: "nueva_partida" },
+        mensaje: "Comienza tu supervivencia",
+      }, now);
       setState(s);
       stateRef.current = s;
       setHasSaveFile(true);
@@ -1008,7 +1137,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
           return;
         }
         startCraft(s, recipe);
-        pushLog(s, `Crafteo iniciado: ${recipe.name}`, "info");
+        pushLog(s, {
+          zona: getZone(s.currentZoneId).id,
+          origen: "manual",
+          category: "CRAFTEO",
+          subtype: "inicio",
+          fields: { item: recipe.name, duración: recipe.timeSeconds },
+          mensaje: `Crafteo iniciado: ${recipe.name}`,
+        });
         setCraftingUiTick((t) => t + 1);
       });
     },
@@ -1055,7 +1191,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
     s.currentZoneId = zoneId;
         const expId = s.nextExplorationId++;
         s.explorationStates[zoneId] = { zoneId, startedAt: now, finishAt: now + minutes * 60000, expId };
-        pushLog(s, `[EXP #${expId}] Z${String(zoneId).padStart(2, "0")} | INICIO | duración ${minutes * 60}s`, "info", now);
+        pushLog(s, {
+          zona: `Z${String(zoneId).padStart(2, "0")}`,
+          origen: "manual",
+          category: "EXP",
+          subtype: "inicio",
+          fields: { duración: minutes * 60 },
+          mensaje: `[EXP #${expId}] Z${String(zoneId).padStart(2, "0")} | INICIO | duración ${minutes * 60}s`,
+        }, now);
         narrExplorationStart(s, zoneId, getZone(zoneId).name);
       });
     },
@@ -1079,7 +1222,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
             : result.kind === "dano"
               ? `-${result.damage} Salud`
               : "sin hallazgos";
-        pushLog(s, `EVENTO | SCAVENGE · ${line} — ${result.text}`, result.kind === "dano" ? "damage" : "resource");
+        pushLog(s, {
+          zona: `Z${String(s.currentZoneId).padStart(2, "0")}`,
+          origen: "manual",
+          category: "SCAVENGE",
+          subtype: result.kind === "dano" ? "daño" : result.kind === "loot" ? "hallazgo" : "nada",
+          fields: { resultado: line, texto: result.text },
+          mensaje: `EVENTO | SCAVENGE · ${line} — ${result.text}`,
+        });
       });
     },
     [setAndSave],
@@ -1098,9 +1248,22 @@ export function GameProvider({ children }: { children: ReactNode }) {
           .map((r) => `+${r.loot!.amount}${r.loot!.resource === "comida" || r.loot!.resource === "agua" ? " min" : ""} ${r.loot!.resource === "dinero" ? "$" : r.loot!.resource}`)
           .join(" · ");
         toast.success("SAQUEO COMPLETADO", { description: summary });
-        pushLog(s, `EVENTO | SCAVENGE cerrado · ${summary}`, "resource");
+        pushLog(s, {
+          zona: `Z${String(s.currentZoneId).padStart(2, "0")}`,
+          origen: "manual",
+          category: "SCAVENGE",
+          subtype: "fin",
+          fields: { hallazgos: summary },
+          mensaje: `EVENTO | SCAVENGE cerrado · ${summary}`,
+        });
       } else {
-        pushLog(s, "EVENTO | SCAVENGE cerrado sin hallazgos", "info");
+        pushLog(s, {
+          zona: `Z${String(s.currentZoneId).padStart(2, "0")}`,
+          origen: "manual",
+          category: "SCAVENGE",
+          subtype: "fin",
+          mensaje: "EVENTO | SCAVENGE cerrado sin hallazgos",
+        });
         toast.info("Saqueo terminado", {
           description: "No encontraste nada aprovechable esta vez.",
         });
@@ -1128,7 +1291,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
         }
         s.autoExplored[zoneId] = !was;
         const zoneName = getZone(zoneId).name;
-        pushLog(s, !was ? `Auto-exploración activada en ${zoneName}` : `Auto-exploración desactivada en ${zoneName}`, "info");
+        pushLog(s, {
+          zona: `Z${String(zoneId).padStart(2, "0")}`,
+          origen: "manual",
+          category: "AUTO_EXPLORER",
+          subtype: !was ? "ciclo_iniciado" : "ciclo_fin",
+          fields: { zonas: getZone(zoneId).id, estado: !was ? "activada" : "desactivada" },
+          mensaje: !was ? 'Auto-exploración activada en ' + zoneName : 'Auto-exploración desactivada en ' + zoneName,
+        });
         if (!was) {
           scheduleAutoFarm(s, zoneId);
         } else {
@@ -1171,10 +1341,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
             }
             z.assignedNpcId = npcId;
             s.npcCycles[npcId] = vnow();
-            pushLog(s, `${npcDisplayName(npc)} asignado a ${getZone(zoneId).name}`, "npc");
+            pushLog(s, { zona: undefined, origen: 'manual', category: 'NPC_ACTION', subtype: 'asignado', fields: { npc: npc.id, zona_anterior: npc.assignedZoneId ?? 'sin_asignar', zona_nueva: getZone(zoneId).id }, mensaje: `${npcDisplayName(npc)} asignado a ${getZone(zoneId).name}` });
           }
         } else if (npcWasAssigned) {
-          pushLog(s, `${npcDisplayName(npc)} sin asignación`, "npc");
+          pushLog(s, { zona: undefined, origen: 'manual', category: 'NPC_ACTION', subtype: 'reasignado', fields: { npc: npc.id, zona_anterior: getZone(npc.assignedZoneId).id, zona_nueva: getZone(zoneId).id }, mensaje: `${npcDisplayName(npc)} sin asignación` });
         }
       });
     },
@@ -1207,7 +1377,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         s.resources.componentes -= cost.componentes;
         const minutes = buildingUpgradeMinutes(b.level);
         b.upgradeFinishAt = vnow() + minutes * 60000;
-        pushLog(s, `Mejora iniciada: ${BUILDING_BY_KEY[key].name} N${b.level + 1} (Base global)`, "build");
+        pushLog(s, { zona: 'Base global', origen: 'auto', category: 'CONSTR', subtype: 'completada', fields: { construcción: BUILDING_BY_KEY[key].name, nivel: b.level }, mensaje: `Mejora iniciada: ${BUILDING_BY_KEY[key].name} N${b.level + 1} (Base global)` });
       });
     },
     [setAndSave],
@@ -1241,7 +1411,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         s.resources.componentes -= cost.componentes;
         const minutes = buildingUpgradeMinutes(b.level);
         b.upgradeFinishAt = vnow() + minutes * 60000;
-        pushLog(s, `Mejora iniciada: ${def.name} N${b.level + 1} (Z${String(zoneId).padStart(2, "0")})`, "build");
+        pushLog(s, { zona: `Z${String(zoneId).padStart(2, "0")}`, origen: 'auto', category: 'CONSTR', subtype: 'completada', fields: { construcción: def.name, nivel: b.level }, mensaje: `Mejora iniciada: ${def.name} N${b.level + 1} (Z${String(zoneId).padStart(2, "0")})` });
       });
     },
     [setAndSave],
@@ -1299,7 +1469,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           toast.error("No se puede usar", { description: recipe.name });
           return;
         }
-        pushLog(s, `Objeto usado · ${result}`, "info");
+        pushLog(s, { zona: undefined, origen: 'auto', category: 'USO_ITEM', subtype: 'consumido', mensaje: `Objeto usado · ${result}` });
         toast.success(recipe.name.toUpperCase(), { description: result });
       });
     },
@@ -1418,7 +1588,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (key === "comida") s.foodMin += offer.amount * q;
         else if (key === "agua") s.waterMin += offer.amount * q;
         else s.resources[key] += offer.amount * q;
-        pushLog(s, `Mercader: +${offer.amount * q}${key === "comida" || key === "agua" ? " min" : ""} ${key} · -$${total}`, "resource");
+        pushLog(s, { zona: undefined, origen: 'manual', category: 'MERCADER', subtype: 'compra', fields: { item: key, cantidad: offer.amount * q, precio: total }, mensaje: `Mercader: +${offer.amount * q}${key === 'comida' || key === 'agua' ? ' min' : ''} ${key} · -$${total}` });
       });
     },
     [setAndSave],
@@ -1443,7 +1613,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         }
         s.resources.dinero -= total;
         gainEnergy(s, MERCHANT_BATTERY_OFFER.energy * q, now);
-        pushLog(s, `Mercader: ${MERCHANT_BATTERY_OFFER.label} +${MERCHANT_BATTERY_OFFER.energy * q} Energía · -$${total}`, "resource");
+        pushLog(s, { zona: undefined, origen: 'manual', category: 'MERCADER', subtype: 'compra', fields: { item: 'batería', cantidad: MERCHANT_BATTERY_OFFER.energy * q, precio: total }, mensaje: `Mercader: ${MERCHANT_BATTERY_OFFER.label} +${MERCHANT_BATTERY_OFFER.energy * q} Energía · -$${total}` });
         toast.success("Batería comprada", { description: `+${MERCHANT_BATTERY_OFFER.energy * q} Energía` });
       });
     },
@@ -1477,7 +1647,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           s.resources[key] -= sellAmount;
         }
         s.resources.dinero += totalMoney;
-        pushLog(s, `[MERCADER] Venta · -${sellAmount} ${key === "comida" || key === "agua" ? `min ${key}` : key} · +$${totalMoney}`, "resource");
+        pushLog(s, { zona: undefined, origen: 'manual', category: 'MERCADER', subtype: 'venta', fields: { item: key, cantidad: sellAmount, precio: totalMoney }, mensaje: `[MERCADER] Venta · -${sellAmount} ${key === 'comida' || key === 'agua' ? 'min ' + key : key} · +$${totalMoney}` });
         toast.success(`Venta realizada`, { description: `+ $${totalMoney}` });
       });
     },
@@ -1505,7 +1675,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         s.resources.materiales -= matCost;
         s.foodMin -= foodCost;
         npc.status = "active";
-        pushLog(s, `[NPC] ${npc.id} · ${npc.name} reclutado · -${matCost} Materiales · -${foodCost} min Comida`, "npc");
+        pushLog(s, { zona: undefined, origen: 'manual', category: 'NPC_ACTION', subtype: 'reclutado', fields: { npc: npc.id, nombre: npc.name, costo_materiales: matCost, costo_comida: foodCost }, mensaje: `[NPC] ${npc.id} · ${npc.name} reclutado · -${matCost} Materiales · -${foodCost} min Comida` });
         toast.success("SUPERVIVIENTE RECLUTADO", {
           description: `${npc.name} «${npc.alias}» se une al refugio.`,
         });
@@ -1531,7 +1701,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (Array.isArray(s.assignments) && s.assignments.some((a) => a.targetType === "npc" && a.targetId === npcId)) {
           s.assignments = s.assignments.filter((a) => !(a.targetType === "npc" && a.targetId === npcId));
         }
-        pushLog(s, `[NPC] ${npc.id} · ${npc.name} expulsada del refugio`, "npc");
+        pushLog(s, { zona: undefined, origen: 'manual', category: 'NPC_ACTION', subtype: 'expulsado', fields: { npc: npc.id, nombre: npc.name }, mensaje: `[NPC] ${npc.id} · ${npc.name} expulsada del refugio` });
         toast.info(`${npc.name} expulsada`, { description: "El superviviente ha sido eliminado del refugio." });
       });
     },
