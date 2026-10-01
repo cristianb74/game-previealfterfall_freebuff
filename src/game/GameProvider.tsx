@@ -15,9 +15,7 @@ import {
   wipeAllSaves,
 } from "@/game/cloudSave";
 import { applyOfflineProgress } from "@/game/offlineProgress";
-import type { OfflineSummary } from "@/game/offlineProgress";
-import {
-  vnow,
+import type { OfflineSummary } from "@/game/offlineProgress";import { vnow,
   setSpeedMultiplier,
   getSpeedMultiplier,
   tickVirtualClock,
@@ -25,6 +23,7 @@ import {
   resetVirtualClock,
   type SpeedMultiplier,
 } from "@/game/virtualClock";
+import { pushLog, type LogEvent } from "./log";
 import { OfflineSummaryModal } from "@/components/game/OfflineSummaryModal";
 import { RECIPE_BY_ID } from "./crafting/recipes";
 import {

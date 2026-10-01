@@ -1,5 +1,15 @@
 // AFTERFALL — shared types. No combat, no crafting, no premium currency.
 
+import type {
+  LogCategory,
+  LogCommonFields,
+  LogEvent,
+  LogFieldValue,
+  LogFieldRecord,
+} from "./log";
+
+export { LogCategory, LogCommonFields, LogEvent, LogFieldValue, LogFieldRecord };
+
 export type StatKey =
   | "fuerza"
   | "resistencia"
@@ -99,14 +109,12 @@ export interface ExplorationRun {
   expId?: number;
 }
 
-export interface LogEvent {
-  t: number; // timestamp
-  msg: string;
-  kind: "resource" | "exp" | "damage" | "npc" | "zone" | "build" | "info";
-  /** Log channel: "tech" (debug, default) or "narr" (player-facing
-   *  narrative). Older saves have no channel → treated as "tech". */
-  channel?: "tech" | "narr";
-}
+/** Represents a single line of the game log, in the format:
+   *  [HH:MM:SS] [CATEGORY] subtype | campo=valor | campo=valor | ...
+   * Fields zona and origen are required whenever applicable and are carried
+   * as top-level properties; the rest of the dynamic pairs live in `fields`.
+   * Optional narrative text is preserved for the player-facing summary. */
+// LogEvent is re-exported from src/game/log to avoid duplication.
 
 export interface GameState {
   version: number;
@@ -150,6 +158,9 @@ export interface GameState {
   npcs: NpcSurvivor[];
   /** Per-NPC production accumulator timestamps (absolute ms). */
   npcCycles: Record<string, number>;
+  /** Global correlative log id — advances by one on every pushed event so
+   *  the whole session forms one unambiguous sequence. */
+  nextLogEventId: number;
   log: LogEvent[];
   pendingZoneUnlock: number | null;
   /** REBALANCEO v3: floor de zonas desbloqueadas, congelado en migración
