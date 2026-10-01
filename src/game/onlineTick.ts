@@ -124,11 +124,11 @@ export function tickNpcs(state: GameState, now: number): TickChanges {
   const hTier = hungerTier(state);
   const tTier = thirstTier(state);
   if (lastHungerTier !== null && hTier !== lastHungerTier) {
-    pushLog(state.log, { t: now, msg: `[SUPERVIVENCIA] Comida: ${TIER_META[hTier].label}`, kind: hTier === "ok" ? "info" : "damage" });
+    pushLog(state.log, { t: now, msg: `[SUPERVIVENCIA] Comida: ${TIER_META[hTier].label}`, kind: hTier === "info" ? "info" : "ENERGÍA" });
     if (hTier !== "ok") narrSurvivalWarn(state, "comida");
   }
   if (lastThirstTier !== null && tTier !== lastThirstTier) {
-    pushLog(state.log, { t: now, msg: `[SUPERVIVENCIA] Agua: ${TIER_META[tTier].label}`, kind: tTier === "ok" ? "info" : "damage" });
+    pushLog(state.log, { t: now, msg: `[SUPERVIVENCIA] Agua: ${TIER_META[tTier].label}`, kind: tTier === "info" ? "info" : "ENERGÍA" });
     if (tTier !== "ok") narrSurvivalWarn(state, "agua");
   }
   lastHungerTier = hTier;
@@ -139,12 +139,12 @@ export function tickNpcs(state: GameState, now: number): TickChanges {
     pushLog(state.log, {
       t: now,
       msg: `${npc ? npcDisplayName(npc) : f.npcId} encontró ${isTime ? `+${f.amount} min` : `+${f.amount}`} ${f.resource === "dinero" ? "$" : f.resource}`,
-      kind: "npc",
+      kind: "NPC ACTION",
     });
     if (npc) narrNpcFind(state, npc.name, f.resource, f.amount);
   }
   for (const b of buildingsCompleted) {
-    pushLog(state.log, { t: now, msg: `Construcción completada: ${b}`, kind: "build" });
+    pushLog(state.log, { t: now, msg: `Construcción completada: ${b}`, kind: "CONSTR" });
   }
 
   return { finds, buildingsCompleted, energyGained: 0 };

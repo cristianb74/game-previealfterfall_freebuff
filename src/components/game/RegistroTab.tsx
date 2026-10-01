@@ -7,7 +7,7 @@ import { GAME_INFO } from "@/game/gameConfig";
 import { BALANCE } from "@/game/balance";
 import { BUILDING_BY_KEY, buildingBonus, THEMATIC_BY_KEY, thematicBonus } from "@/game/buildings";
 import { currentEnergy, nextEnergyRegenAt } from "@/game/energySystem";
-import type { BuildingKey } from "@/game/types";
+import type { BuildingKey, LogEvent } from "@/game/types";
 
 const BUILDING_ORDER: BuildingKey[] = ["cocina", "tanque", "almacen", "enfermeria", "taller", "generador"];
 import { cn } from "@/lib/utils";
@@ -80,7 +80,22 @@ export function RegistroTab() {
     const nextAt = nextEnergyRegenAt(state);
     const nextRegenMs = Math.max(0, nextAt - vnow());
     const nextRegenMin = Math.ceil(nextRegenMs / 60000);
-    lines.push(`Última regeneración de energía: ${fmtDate(state.lastEnergyRegenAt)}`);
+    // Última regeneración: derivada del último evento ENERGÍA (regeneración),
+    // no del estado aparte lastEnergyRegenAt (que es solo la fuente de la barra).
+    let ultimaRegen: number | null = null;
+    let ultimaRegenMs = 0;
+    for (const e of state.log) {
+      if (e.category === "ENERGÍA" && e.subtype === "regeneración" && typeof e.hora === "number" && e.hora > ultimaRegenMs) {
+        ultimaRegenMs = e.hora;
+        ultimaRegen = e.hora;
+      }
+    }
+    if (ultimaRegenMs > 0) {
+      const d = new Date(ultimaRegenMs);
+      lines.push(`Última regeneración de energía: ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`);
+    } else {
+      lines.push(`Última regeneración de energía: ${fmtDate(state.lastEnergyRegenAt)}`);
+    }
     lines.push(`Próxima regeneración en: ${nextRegenMin} min`);
     lines.push("");
     lines.push("--- EXPLORACIONES ---");
@@ -144,10 +159,20 @@ export function RegistroTab() {
   const fullLog = useMemo(() => {
     if (!state) return "";
     // Sort ascending (oldest first) for chronological reading
-    const sorted = [...state.log].sort((a, b) => a.t - b.t);
-    const logLines = sorted.map(
-      (e) => `[${fmtTs(e.t)}] ${e.msg}`,
-    );
+    const sorted = [...state.log].sort((a, b) => (a.hora ?? 0) - (b.hora ?? 0));
+    const logLines = sorted.map((e) => {
+      // New structured format: [HH:MM:SS] [CATEGORY] subtipo | campo=valor | ...
+      const line = [`[${fmtTs(e.hora ?? Date.now())}] [${e.category ?? "INFO"}] ${e.subtype ?? "evento"}`];
+      if (e.fields && Object.keys(e.fields).length > 0) {
+        const pairs = Object.entries(e.fields as Record<string, string | number | boolean>).map(([k, v]) => {
+          if (typeof v === "boolean") return `${k}=${v ? "1" : "0"}`;
+          if (typeof v === "object" && v !== null) return `${k}=${JSON.stringify(v)}`;
+          return `${k}=${v}`;
+        });
+        line.push(...pairs);
+      }
+      return line.join(" | ");
+    });
     return summary + "\n" + logLines.join("\n");
   }, [state, summary]);
 
@@ -381,9 +406,11 @@ export function RegistroTab() {
         <div className="max-h-[50vh] overflow-y-auto rounded-sm bg-black/40 p-2 font-mono text-[10px] leading-5">
           {(() => {
             const filtered = state.log.filter((e) => {
-              const ch = e.channel ?? "tech";
+              // New structured logs carry no per-entry channel; derive a display
+              // grouping from the category so the old tech/narr split stays.
+              const displayKind = e.category ?? "INFO";
               if (channelFilter === "both") return true;
-              return ch === channelFilter;
+              return displayKind === channelFilter || displayKind === "INFO";
             });
             if (filtered.length === 0) {
               return <p className="text-subtle">Sin eventos en este canal</p>;

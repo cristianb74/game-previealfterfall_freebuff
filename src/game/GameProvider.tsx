@@ -443,7 +443,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         // (no refund — items were consumed at assignment time).
         const expiredNames = pruneExpiredAssignments(s, Date.now());
         for (const name of expiredNames) {
-          pushLog(s, `ASIGNACIÓN expirada | ${name}`, "info");
+          pushLog(s, { zona: getZone(s.currentZoneId).id, origen: "auto", category: "NPC_ACTION", subtype: "expirado", fields: { npc: name, motivo: "fecha_de_expiración" }, mensaje: `ASIGNACIÓN expirada | ${name}` });
         }
         setState(s);
         stateRef.current = s;
@@ -590,14 +590,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (b && b.upgradeFinishAt && now >= b.upgradeFinishAt) {
           b.level = Math.min(BALANCE.buildingMaxLevel, b.level + 1);
           b.upgradeFinishAt = null;
-          pushLog(s, {
-          zona: "Base global",
-          origen: "auto",
-          category: "CONSTR",
-          subtype: "completada",
-          fields: { construcción: BUILDING_BY_KEY[key].name, nivel: b.level },
-          mensaje: `Construcción completada: ${BUILDING_BY_KEY[key].name} → N${b.level} (Base global)`,
-        });
+          pushLog(s, { zona: "Base global", origen: "auto", category: "CONSTR", subtype: "completada", fields: { construcción: BUILDING_BY_KEY[key].name, nivel: b.level }, mensaje: `Construcción completada: ${BUILDING_BY_KEY[key].name} → N${b.level} (Base global)` });
+          narrBuildDone(s, BUILDING_BY_KEY[key].name, b.level);
           narrBuildDone(s, BUILDING_BY_KEY[key].name, b.level);
           dirty = true;
         }
@@ -629,13 +623,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const craftedNow = resolveFinishedCrafts(s);
       if (craftedNow.length > 0) {
         for (const name of craftedNow) {
-          pushLog(s, {
-            origen: "auto",
-            category: "CRAFTEO",
-            subtype: "fin",
-            fields: { item: name, resultado: "exito" },
-            mensaje: `Crafteo completado: ${name}`,
-          });
+          pushLog(s, { zona: getZone(s.currentZoneId).id, origen: "auto", category: "CRAFTEO", subtype: "fin", fields: { item: name, resultado: "exito" }, mensaje: `Crafteo completado: ${name}` });
         }
         toast.success("CRAFTEO COMPLETADO", { description: craftedNow.join(" · ") });
         dirty = true;
@@ -684,7 +672,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (!s) return;
       const done = resolveFinishedCrafts(s);
       if (done.length > 0) {
-        for (const name of done) pushLog(s, { origen: 'auto', category: 'CRAFTEO', subtype: 'fin', fields: { item: name, resultado: 'exito' }, mensaje: `Crafteo completado: ${name}` });
+        for (const name of done) pushLog(s, { zona: getZone(s.currentZoneId).id, origen: "auto", category: "CRAFTEO", subtype: "fin", fields: { item: name, resultado: "exito" }, mensaje: `Crafteo completado: ${name}` });
         toast.success("CRAFTEO COMPLETADO", { description: done.join(" · ") });
         void saveGame(s);
       }
@@ -709,7 +697,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (!s) return;
       const expired = pruneExpiredAssignments(s, vnow());
       if (expired.length > 0) {
-        for (const name of expired) pushLog(s, `ASIGNACIÓN expirada | ${name}`, "info");
+        for (const name of expired) pushLog(s, { zona: getZone(s.currentZoneId).id, origen: "auto", category: "NPC_ACTION", subtype: "expirado", fields: { npc: name, motivo: "fecha_de_expiración" }, mensaje: `ASIGNACIÓN expirada | ${name}` });
         void saveGame(s);
         bumpAssignmentsUi();
       }
@@ -811,26 +799,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
       }
     }
     if (outcome.findings.length === 0) {
-      pushLog(s, {
-        zona: `Z${String(outcome.zoneId).padStart(2, "0")}`,
-        origen: opts.auto ? "auto" : "manual",
-        category: "EXP",
-        subtype: "sin_hallazgos",
-        mensaje: `${expTag}Sin hallazgos`,
-      });
+      pushLog(s, { zona: `Z${String(outcome.zoneId).padStart(2, "0")}`, origen: opts.auto ? "auto" : "manual", category: "EXP", subtype: "sin_hallazgos", mensaje: `${expTag}Sin hallazgos` });
     }
-    pushLog(
-      s,
-      {
-        zona: `Z${String(outcome.zoneId).padStart(2, "0")}`,
-        origen: opts.auto ? "auto" : "manual",
-        category: "EXP",
-        subtype: opts.auto ? "auto_fin" : "fin",
-        fields: { zona: `Z${String(outcome.zoneId).padStart(2, "0")}`, exp: outcome.exp },
-        mensaje: `${expTag}${opts.auto ? "Auto" : "FIN"} | Z${String(outcome.zoneId).padStart(2, "0")} · ${zone.name} completada · +${outcome.exp} EXP`,
-      },
-      startedAt,
-    );
+    pushLog(s, { zona: `Z${String(outcome.zoneId).padStart(2, "0")}`, origen: opts.auto ? "auto" : "manual", category: "EXP", subtype: opts.auto ? "auto_fin" : "fin", fields: { zona: `Z${String(outcome.zoneId).padStart(2, "0")}`, exp: outcome.exp }, mensaje: `${expTag}${opts.auto ? "Auto" : "FIN"} | Z${String(outcome.zoneId).padStart(2, "0")} · ${zone.name} completada · +${outcome.exp} EXP` }, startedAt);
 
     // Only MANUAL explorations advance the frontier. Auto farm runs in
     // conquered zones can never unlock anything (zone < frontier anyway).
@@ -876,18 +847,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (Math.random() >= chance) {
       s.explorationsSinceLastNPC = counter;
       const via = fromAuto ? "AUTO" : "MANUAL";
-      pushLog(
-        s,
-        {
-          zona: `Z${String(outcome.zoneId).padStart(2, "0")}`,
-          origen: via === "AUTO" ? "auto" : "manual",
-          category: "NPC CHECK",
-          subtype: "check",
-          fields: { contador: counter, vía: via, probabilidad: (chance * 100).toFixed(1) },
-          mensaje: `[EXP #${expId}] NPC CHECK | contador ${counter} | ${via} | probabilidad ${(chance * 100).toFixed(1)}% | resultado NO`,
-        },
-        startedAt,
-      );
+      pushLog(s, { zona: `Z${String(outcome.zoneId).padStart(2, "0")}`, origen: via === "AUTO" ? "auto" : "manual", category: "NPC CHECK", subtype: "check", fields: { contador: counter, vía: via, probabilidad: (chance * 100).toFixed(1) }, mensaje: `[EXP #${expId}] NPC CHECK | contador ${counter} | ${via} | probabilidad ${(chance * 100).toFixed(1)}% | resultado NO` }, startedAt);
       return;
     }
     const pick = pool[Math.floor(Math.random() * pool.length)];
@@ -907,22 +867,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     };
     s.npcs.push(npc);
     const via = fromAuto ? "AUTO-FARM" : "MANUAL";
-    pushLog(s, {
-      zona: `Z${String(outcome.zoneId).padStart(2, "0")}`,
-      origen: via === "AUTO-FARM" ? "auto" : "manual",
-      category: "NPC_ACTION",
-      subtype: "hallazgo",
-      fields: { npc: npc.id, nombre: npc.name, tipo: NPC_TYPE_MODIFIERS[npc.type].label },
-      mensaje: `[EXP #${expId}] NPC OBTENIDO (${via}) | ${npc.id} · ${npc.name} · ${NPC_TYPE_MODIFIERS[npc.type].label}`,
-    }, startedAt);
+    pushLog(s, { zona: `Z${String(outcome.zoneId).padStart(2, "0")}`, origen: via === "AUTO-FARM" ? "auto" : "manual", category: "NPC_ACTION", subtype: "hallazgo", fields: { npc: npc.id, nombre: npc.name, tipo: NPC_TYPE_MODIFIERS[npc.type].label }, mensaje: `[EXP #${expId}] NPC OBTENIDO (${via}) | ${npc.id} · ${npc.name} · ${NPC_TYPE_MODIFIERS[npc.type].label}` }, startedAt);
     narrNpcFound(s, npc.name, npc.alias);
-    pushLog(s, {
-      zona: `Z${String(outcome.zoneId).padStart(2, "0")}`,
-      origen: "auto",
-      category: "NPC_ACTION",
-      subtype: "contador_reiniciado",
-      mensaje: `[NPC] contador reiniciado a 0`,
-    }, vnow());
+    pushLog(s, { zona: `Z${String(outcome.zoneId).padStart(2, "0")}`, origen: "auto", category: "NPC_ACTION", subtype: "contador_reiniciado", mensaje: `[NPC] contador reiniciado a 0` }, vnow());
     s.explorationsSinceLastNPC = 0;
     toast.info(fromAuto ? "SUPERVIVIENTE ENCONTRADO (AUTO)" : "SUPERVIVIENTE ENCONTRADO", {
       description: `${npc.name} «${npc.alias}» · ${NPC_TYPE_MODIFIERS[npc.type].label}`,
@@ -956,14 +903,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     // probabilidad / resultado) so the trigger curve stays auditable.
     if (checkScavengeTrigger(s, zoneId, false)) {
       const loc = scavengeLocationForZone(zoneId);
-      pushLog(s, {
-        zona: `Z${String(zoneId).padStart(2, "0")}`,
-        origen: "manual",
-        category: "NPC_ACTION",
-        subtype: "evento",
-        fields: { minijuego: "SCAVENGE" },
-        mensaje: `[EXP #${expId}] EVENTO | ${loc.name} detectada · minijuego SCAVENGE`,
-      }, vnow());
+      pushLog(s, { zona: `Z${String(zoneId).padStart(2, "0")}`, origen: "manual", category: "NPC_ACTION", subtype: "evento", fields: { minijuego: "SCAVENGE" }, mensaje: `[EXP #${expId}] EVENTO | ${loc.name} detectada · minijuego SCAVENGE` }, vnow());
     }
   }
 
@@ -990,14 +930,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     // SCAVENGE in auto: resolve all 8 points in chain, no interface.
     if (checkScavengeTrigger(s, zoneId, true)) {
       const loc = scavengeLocationForZone(zoneId);
-      pushLog(s, {
-        zona: `Z${String(zoneId).padStart(2, "0")}`,
-        origen: "auto",
-        category: "NPC_ACTION",
-        subtype: "evento",
-        fields: { minijuego: "SCAVENGE" },
-        mensaje: `[EXP #${expId}] EVENTO | ${loc.name} detectada · minijuego SCAVENGE (auto)`,
-      }, startedAt);
+      pushLog(s, { zona: `Z${String(zoneId).padStart(2, "0")}`, origen: "auto", category: "NPC_ACTION", subtype: "evento", fields: { minijuego: "SCAVENGE" }, mensaje: `[EXP #${expId}] EVENTO | ${loc.name} detectada · minijuego SCAVENGE (auto)` }, startedAt);
       const results = resolveScavengeAuto(s, zoneId);
       for (const r of results) {
         const line =
@@ -1006,14 +939,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
             : r.kind === "dano"
               ? `-${r.damage} Salud`
               : "sin hallazgos";
-        pushLog(s, {
-          zona: `Z${String(zoneId).padStart(2, "0")}`,
-          origen: "auto",
-          category: "SCAVENGE",
-          subtype: r.kind === "dano" ? "daño" : r.kind === "loot" ? "hallazgo" : "nada",
-          fields: { resultado: line, texto: r.text },
-          mensaje: `EVENTO | SCAVENGE · ${line} — ${r.text}`,
-        }, startedAt);
+        pushLog(s, { zona: `Z${String(zoneId).padStart(2, "0")}`, origen: "auto", category: "SCAVENGE", subtype: r.kind === "dano" ? "daño" : r.kind === "loot" ? "hallazgo" : "nada", fields: { resultado: line, texto: r.text }, mensaje: `EVENTO | SCAVENGE · ${line} — ${r.text}` }, startedAt);
       }
       finishScavenge(s); // auto sessions close immediately (no UI)
     }
@@ -1067,7 +993,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         subtype: "partida",
         fields: { estado: "nueva_partida" },
         mensaje: "Comienza tu supervivencia",
-      }, now);
+      });
       setState(s);
       stateRef.current = s;
       setHasSaveFile(true);
@@ -1444,13 +1370,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
           BALANCE.maxHealth,
           s.health + units * BALANCE.medicineHealthPerUnit,
         );
-        pushLog(
-          s,
-          units > 1
+        pushLog(s, {
+          zona: undefined,
+          origen: 'auto',
+          category: "USO_ITEM",
+          subtype: "consumido",
+          mensaje: units > 1
             ? `Medicina usada · +${units * BALANCE.medicineHealthPerUnit} Salud (${units} medicamentos)`
             : "Medicina usada · +1 Salud",
-          "info",
-        );
+        });
       });
     },
     [setAndSave],
@@ -1534,12 +1462,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
                 const npc = s.npcs.find((n) => n.id === targetId);
                 return npc ? `${npc.name} «${npc.alias}»` : targetId;
               })();
-        pushLog(
-          s,
-          `ASIGNACIÓN | ${recipe.name} → ${targetLabel} · ${Math.round(seconds / 60)} min (objeto consumido)`,
-          "info",
-          now,
-        );
+        pushLog(s, {
+          zona: undefined,
+          origen: 'manual',
+          category: "NPC_ACTION",
+          subtype: "asignado",
+          mensaje: `ASIGNACIÓN | ${recipe.name} → ${targetLabel} · ${Math.round(seconds / 60)} min (objeto consumido)`,
+        });
         toast.success("OBJETO ASIGNADO", {
           description: `${recipe.name} → ${targetLabel} · ${Math.round(seconds / 60)} min`,
         });
@@ -1559,11 +1488,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (idx === -1) return;
         const [removed] = s.assignments.splice(idx, 1);
         const recipe = RECIPE_BY_ID[removed.recipeId];
-        pushLog(
-          s,
-          `ASIGNACIÓN cancelada | ${recipe?.name ?? removed.recipeId} (sin reembolso)`,
-          "info",
-        );
+        pushLog(s, {
+          zona: undefined,
+          origen: 'auto',
+          category: "NPC_ACTION",
+          subtype: "cancelado",
+          mensaje: `ASIGNACIÓN cancelada | ${recipe?.name ?? removed.recipeId} (sin reembolso)`,
+        });
         toast.info("Asignación cancelada", {
           description: "El objeto ya se consumió al asignarlo: sin reembolso.",
         });
