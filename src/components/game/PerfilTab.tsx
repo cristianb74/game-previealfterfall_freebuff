@@ -1,5 +1,7 @@
 import { useState } from "react";
+import type { LogEvent } from "@/game/log";
 import { cn } from "@/lib/utils";
+
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { HUD } from "@/components/game/HUD";
@@ -182,22 +184,20 @@ export function PerfilTab() {
         ) : (
           <ul className="flex max-h-96 flex-col gap-1.5 overflow-y-auto">
             {fullLog.map((e, i) => (
-              <li key={`${e.t}-${i}`} className="flex items-baseline gap-2 text-xs">
+              <li key={`${e.event_id}-${i}`} className="flex items-baseline gap-2 text-xs">
                 <span className="shrink-0 font-mono text-[10px] text-subtle">
-                  {new Date(e.t).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}
+                  {e.hora}
                 </span>
                 <span
                   className={
-                    e.kind === "damage"
-                      ? "text-red-400"
-                      : e.kind === "npc" || e.kind === "zone" || e.kind === "build"
+                    e.category === "ENERGÍA" || e.category === "RECURSO"
+                      ? "text-zinc-300"
+                      : e.category === "NPC CHECK" || e.category === "SCAVENGE CHECK" || e.category === "CLICK" || e.category === "INICIO" || e.category === "ZONA" || e.category === "CONSTR"
                         ? "text-green-400"
-                        : e.kind === "resource"
-                          ? "text-zinc-300"
-                          : "text-subtle"
+                        : "text-subtle"
                   }
                 >
-                  {e.msg}
+                  {e.mensaje ?? e.subtype}
                 </span>
               </li>
             ))}

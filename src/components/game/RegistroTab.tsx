@@ -162,7 +162,7 @@ export function RegistroTab() {
     const sorted = [...state.log].sort((a, b) => (a.hora ?? 0) - (b.hora ?? 0));
     const logLines = sorted.map((e) => {
       // New structured format: [HH:MM:SS] [CATEGORY] subtipo | campo=valor | ...
-      const line = [`[${fmtTs(e.hora ?? Date.now())}] [${e.category ?? "INFO"}] ${e.subtype ?? "evento"}`];
+      const line = [`[${e.hora ?? fmtTs(Date.now())}] [${e.category ?? "INFO"}] ${e.subtype ?? "evento"}`];
       if (e.fields && Object.keys(e.fields).length > 0) {
         const pairs = Object.entries(e.fields as Record<string, string | number | boolean>).map(([k, v]) => {
           if (typeof v === "boolean") return `${k}=${v ? "1" : "0"}`;
@@ -408,7 +408,7 @@ export function RegistroTab() {
             const filtered = state.log.filter((e) => {
               // New structured logs carry no per-entry channel; derive a display
               // grouping from the category so the old tech/narr split stays.
-              const displayKind = e.category ?? "INFO";
+              const displayKind = String(e.category ?? "INFO");
               if (channelFilter === "both") return true;
               return displayKind === channelFilter || displayKind === "INFO";
             });
@@ -417,15 +417,15 @@ export function RegistroTab() {
             }
             return filtered.map((e, i) => (
               <div key={i} className="flex gap-2 border-b border-zinc-900 py-0.5">
-                <span className="shrink-0 text-subtle">[{fmtTs(e.t)}]</span>
+                <span className="shrink-0 text-subtle">[{fmtTs(e.hora ?? Date.now())}]</span>
                 <span
                   className={
-                    e.channel === "narr"
+                    e.category === "ENERGÍA" || e.category === "RECURSO" || e.category === "CONSTR" || e.category === "ZONA" || e.category === "USO_ITEM" || e.category === "SCAVENGE" || e.category === "AUTO_EXPLORER" || e.category === "SCAVENGE CHECK"
                       ? "italic text-green-300/90"
                       : "text-zinc-300"
                   }
                 >
-                  {e.msg}
+                  {e.subtype ?? "evento"} {e.mensaje ?? ""}
                 </span>
               </div>
             ));

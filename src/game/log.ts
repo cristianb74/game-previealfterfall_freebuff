@@ -29,7 +29,10 @@ export type LogCategory =
   | "NPC CHECK"
   | "SCAVENGE CHECK"
   | "RECURSO"
-  | "ENERGÍA";
+  | "ENERGÍA"
+  | "CONSTR"
+  | "ZONA"
+  | "INICIO";
 
 /**
  * Represents a single line of the game log, in the format:
