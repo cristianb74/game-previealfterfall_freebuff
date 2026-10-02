@@ -162,6 +162,12 @@ export interface GameState {
    *  the whole session forms one unambiguous sequence. */
   nextLogEventId: number;
   log: LogEvent[];
+  /** Badges de actividad por pantalla del nav inferior: el próximo log
+   *  event_id que sigue "sin ver" en esa pantalla. Cualquier evento con
+   *  event_id >= activitySeen[pantalla] cuya categoría mapea a esa pantalla
+   *  enciende su punto; entrar a la pantalla marca todo como visto
+   *  (hasta el id actual). Persiste con el resto del guardado. */
+  activitySeen: Partial<Record<Screen, number>>;
   pendingZoneUnlock: number | null;
   /** REBALANCEO v3: floor de zonas desbloqueadas, congelado en migración
    *  con los umbrales v2 (LEGACY_UNLOCK_EXP_V2). unlockedZoneId() devuelve

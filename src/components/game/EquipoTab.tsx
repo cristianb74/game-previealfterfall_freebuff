@@ -38,8 +38,19 @@ const SORT_OPTIONS = [
 ] as const;
 type SortMode = (typeof SORT_OPTIONS)[number]["key"];
 
+/** Specialization → resource key (same mapping the recruited detail dialog
+ *  shows inline; extracted so candidate cards can mirror that exact data). */
+const NPC_SPEC_RESOURCE = {
+  cocina: "comida",
+  tanque: "agua",
+  almacen: "materiales",
+  enfermeria: "medicamentos",
+  taller: "componentes",
+  generador: "energia",
+} as const;
+
 export function EquipoTab() {
-  const { state, assignNpc, recruitNpc, expelNpc } = useGame();
+  const { state, assignNpc, recruitNpc, ignoreNpc, expelNpc } = useGame();
   const [detail, setDetail] = useState<string | null>(null);
   const [confirmExpel, setConfirmExpel] = useState<string | null>(null);
   const [showMarketplace, setShowMarketplace] = useState<string | null>(null);
@@ -238,18 +249,33 @@ export function EquipoTab() {
                     <p className="truncate text-[10px] text-subtle">
                       {n.profession} · {n.id}
                     </p>
+                    {/* Especialidad + bonus ANTES de decidir: mismos datos que
+                        la vista del NPC ya reclutado (diálogo de detalle). */}
+                    <p className="mt-0.5 truncate text-[10px] text-zinc-300">
+                      Especialidad: {BUILDING_BY_KEY[n.specialization].name} ({RESOURCE_META[NPC_SPEC_RESOURCE[n.specialization]].label}) — +{Math.round(info.bonus * 100)}%
+                    </p>
                     <p className="mt-0.5 text-[9px] text-subtle">
                       Costo: {matCost} ⚒ · {foodCost} min ▣
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    disabled={!canAfford}
-                    onClick={() => recruitNpc(n.id)}
-                    className="shrink-0 border border-amber-500/40 bg-amber-600/90 font-bold uppercase tracking-wider text-black hover:bg-amber-500"
-                  >
-                    Reclutar
-                  </Button>
+                  <div className="flex shrink-0 flex-col gap-1">
+                    <Button
+                      size="sm"
+                      disabled={!canAfford}
+                      onClick={() => recruitNpc(n.id)}
+                      className="border border-amber-500/40 bg-amber-600/90 font-bold uppercase tracking-wider text-black hover:bg-amber-500"
+                    >
+                      Reclutar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => ignoreNpc(n.id)}
+                      className="border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"
+                    >
+                      Ignorar
+                    </Button>
+                  </div>
                 </div>
               );
             })}

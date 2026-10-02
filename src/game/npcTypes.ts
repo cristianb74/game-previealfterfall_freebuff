@@ -1,7 +1,8 @@
 import { BALANCE, BUILDING_SPECIALIZATION } from "./balance";
 import { buildingBonus, thematicBonus, THEMATIC_BY_KEY } from "./buildings";
-import { activeAssignmentForNpc } from "./crafting/craftedEffects";
+import { activeAssignmentForNpc, activeAssignmentForZone } from "./crafting/craftedEffects";
 import type {
+  GameState,
   NpcSurvivor,
   NpcTypeCode,
   ResourceKey,
@@ -177,4 +178,86 @@ function scaledNpcAmount(
     activeAssignmentForNpc(state as never, "mochila_superviviente", npc.id, now) != null;
   if (!boosted) return amount;
   return Math.max(1, Math.round(amount * 1.15));
+}
+
+// ============================================================
+// ZONE BONUS BREAKDOWN — bloque de HUD por zona: bonus del recurso de
+// especialización (focus) de la zona, desglosado por fuente. Todas las
+// lecturas son estado REAL y usan las MISMAS fórmulas que el juego ya
+// aplica (zoneFocusBonus, buildingBonus/thematicBonus vía
+// npcProductionMultiplier, asignaciones crafteadas activas).
+// ============================================================
+
+export interface ZoneBonusItem {
+  recipeId: string;
+  /** Share aditivo sobre el bonus del recurso foco (0.05 = +5 %). */
+  pct: number;
+  /** True cuando el ítem está asignado al NPC de la zona (no a la zona). */
+  onNpc?: boolean;
+}
+
+export interface ZoneBonusBreakdown {
+  focus: ResourceKey;
+  /** Especialización de la zona (zoneFocusBonus, por banda de profundidad). */
+  focusPct: number;
+  /** Construcciones: edificio GLOBAL del recurso foco + temáticas de ESTA
+   *  zona que lo especializan (misma suma que npcProductionMultiplier). */
+  constructionsPct: number;
+  /** NPC asignado a la zona: bonus de producción por rareza (0 si no hay). */
+  npcPct: number;
+  /** Ítems crafteados activos que afectan al recurso foco. */
+  items: ZoneBonusItem[];
+  itemsPct: number;
+  /** focus + construcciones + npc + ítems. */
+  totalPct: number;
+}
+
+export function zoneBonusBreakdown(
+  state: Pick<GameState, "base" | "zones" | "npcs" | "assignments">,
+  zoneId: number,
+  now = Date.now(),
+): ZoneBonusBreakdown {
+  const focus = getZone(zoneId).focus;
+  const focusPct = zoneFocusBonus(zoneId);
+
+  // Construcciones: core global del recurso foco (misma búsqueda que
+  // npcProductionMultiplier) + temáticas locales de la zona.
+  let constructionsPct = 0;
+  for (const k of Object.keys(BUILDING_SPECIALIZATION) as (keyof typeof BUILDING_SPECIALIZATION)[]) {
+    if (BUILDING_SPECIALIZATION[k] === focus) {
+      constructionsPct += buildingBonus(state.base?.[k]?.level ?? 0);
+      break;
+    }
+  }
+  const thematic = state.zones?.[zoneId]?.thematic ?? {};
+  for (const key of Object.keys(thematic)) {
+    if (THEMATIC_BY_KEY[key]?.specializes === focus) {
+      constructionsPct += thematicBonus(thematic[key].level);
+    }
+  }
+
+  // NPC asignado: bonus de producción por rareza (NPC_TYPE_MODIFIERS).
+  const npc = state.npcs.find((n) => n.assignedZoneId === String(zoneId));
+  const npcPct = npc ? NPC_TYPE_MODIFIERS[npc.type].bonus : 0;
+
+  // Ítems crafteados activos: asignaciones de zona que afectan al recurso
+  // foco + la mochila de superviviente puesta al NPC asignado (+15% cantidad).
+  const items: ZoneBonusItem[] = [];
+  if (activeAssignmentForZone(state, "mapa", zoneId, now)) items.push({ recipeId: "mapa", pct: 0.05 });
+  if (focus === "materiales" && activeAssignmentForZone(state, "mochila_recoleccion", zoneId, now)) items.push({ recipeId: "mochila_recoleccion", pct: 0.1 });
+  if (focus === "componentes" && activeAssignmentForZone(state, "kit_tecnico", zoneId, now)) items.push({ recipeId: "kit_tecnico", pct: 0.1 });
+  if (focus === "componentes" && activeAssignmentForZone(state, "iman", zoneId, now)) items.push({ recipeId: "iman", pct: 0.08 });
+  if (focus === "dinero" && activeAssignmentForZone(state, "escaner", zoneId, now)) items.push({ recipeId: "escaner", pct: 0.1 });
+  if (npc && activeAssignmentForNpc(state, "mochila_superviviente", npc.id, now)) items.push({ recipeId: "mochila_superviviente", pct: 0.15, onNpc: true });
+  const itemsPct = items.reduce((acc, it) => acc + it.pct, 0);
+
+  return {
+    focus,
+    focusPct,
+    constructionsPct,
+    npcPct,
+    items,
+    itemsPct,
+    totalPct: focusPct + constructionsPct + npcPct + itemsPct,
+  };
 }

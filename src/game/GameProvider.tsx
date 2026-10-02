@@ -145,6 +145,10 @@ export interface GameContextValue {
   assignNpc: (npcId: string, zoneId: number | null) => void;
   /** Recruit a candidate NPC into the shelter (pays the recruit cost). */
   recruitNpc: (npcId: string) => void;
+  /** Dismiss a found-but-unrecruited survivor: no recruit, no cost. */
+  ignoreNpc: (npcId: string) => void;
+  /** Mark all current activity of a nav screen as seen (activity badge). */
+  markScreenSeen: (screen: Screen) => void;
   /** Upgrade a GLOBAL core building (GameState.base). Shares one base quota. */
   upgradeBaseBuilding: (key: BuildingKey) => void;
   /** Upgrade a zone THEMATIC building (zones[].thematic). Per-zone quota. */
@@ -878,9 +882,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   /** Complete the MANUAL exploration: roll, apply (full rewards), log, toast.
    *  NPC discovery uses the counter-based system (one roll per completion).
-   *  After the NPC check, the SCAVENGE event may fire (stepped tiers): it
-   *  opens the interactive session — loot/damage are applied per searched
-   *  point by the modal while it stays open. */
+   *  SCAVENGE ya NO se tira aquí: el trigger vive en startExploration (el
+   *  evento aparece en el momento en que el jugador inicia la exploración),
+   *  así el cierre nunca vuelve a dispararlo (sin duplicados). */
   function completeExploration(s: GameState, zoneId: number, startedAt: number) {
     const run = s.explorationStates[zoneId];
     if (!run) return;
@@ -897,13 +901,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
       description: outcomeSummary(outcome),
       duration: 5000,
     });
-    // SCAVENGE event roll (manual completions only). Runs AFTER the
-    // exploration toast; the check logs its own tech line (contador /
-    // probabilidad / resultado) so the trigger curve stays auditable.
-    if (checkScavengeTrigger(s, zoneId, false)) {
-      const loc = scavengeLocationForZone(zoneId);
-      pushLog(s, { zona: `Z${String(zoneId).padStart(2, "0")}`, origen: "manual", category: "NPC_ACTION", subtype: "evento", fields: { minijuego: "SCAVENGE" }, mensaje: `[EXP #${expId}] EVENTO | ${loc.name} detectada · minijuego SCAVENGE` });
-    }
   }
 
   /** Complete one BACKGROUND auto-farm run for a specific zone: reduced EXP,
@@ -1125,6 +1122,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
           mensaje: `[EXP #${expId}] Z${String(zoneId).padStart(2, "0")} | INICIO | duración ${minutes * 60}s`,
         });
         narrExplorationStart(s, zoneId, getZone(zoneId).name);
+        // SCAVENGE event roll (manual starts): se resuelve AL TOCAR/INICIAR la
+        // exploración — mismo contador y tiers de probabilidad, resultado
+        // inmediato (el modal abre ahora, no al terminar). El check registra
+        // su línea técnica (contador / probabilidad / resultado) acá, así el
+        // log refleja el evento en el momento correcto y la curva sigue
+        // siendo auditable. La finalización ya no vuelve a tirar.
+        if (checkScavengeTrigger(s, zoneId, false)) {
+          const loc = scavengeLocationForZone(zoneId);
+          pushLog(s, { zona: `Z${String(zoneId).padStart(2, "0")}`, origen: "manual", category: "NPC_ACTION", subtype: "evento", fields: { minijuego: "SCAVENGE" }, mensaje: `[EXP #${expId}] EVENTO | ${loc.name} detectada · minijuego SCAVENGE` });
+        }
       });
     },
     [setAndSave],
@@ -1643,6 +1650,52 @@ export function GameProvider({ children }: { children: ReactNode }) {
     [setAndSave],
   );
 
+  /** Ignore a candidate survivor found while exploring: removes them from
+   *  the roster WITHOUT recruiting (no resource cost, no assignment). Only
+   *  candidates can be ignored; later finds and explorations keep working
+   *  and the same NPC may reappear in a future discovery. */
+  const ignoreNpc = useCallback(
+    (npcId: string) => {
+      setAndSave((s) => {
+        const idx = s.npcs.findIndex((n) => n.id === npcId);
+        if (idx === -1) return;
+        const npc = s.npcs[idx];
+        if ((npc.status ?? "active") === "active") return; // solo candidatos
+        s.npcs.splice(idx, 1);
+        delete s.npcCycles[npcId];
+        pushLog(s, { zona: undefined, origen: 'manual', category: 'NPC_ACTION', subtype: 'ignorado', fields: { npc: npc.id, nombre: npc.name }, mensaje: `Ignoraste a ${npc.name}` });
+        toast.info(`${npc.name} ignorado`, { description: "El superviviente se marcha. Podés encontrarlo en otra exploración." });
+      });
+    },
+    [setAndSave],
+  );
+
+  /** Activity badges ("visto"): entering a screen — or being on it when its
+   *  activity arrives — marks every log event up to the newest id as seen
+   *  for that screen. Persisted via GameState.activitySeen. */
+  const markScreenSeen = useCallback(
+    (screen: Screen) => {
+      setAndSave((s) => {
+        const seen = s.activitySeen ?? {};
+        const upTo = s.nextLogEventId;
+        if ((seen[screen] ?? 0) >= upTo) return; // nada nuevo que marcar
+        s.activitySeen = { ...seen, [screen]: upTo };
+      });
+    },
+    [setAndSave],
+  );
+
+  // ---- badge de actividad: limpiar al entrar / no encender en vivo ----
+  // Runs on boot, on every screen change, and whenever the newest log event
+  // id advances (a new event while viewing its screen never lights the dot:
+  // markScreenSeen covers up to the current id). For events of OTHER screens
+  // the call is a no-op and their dot stays on.
+  const latestActivityId = state?.log[0]?.event_id;
+  useEffect(() => {
+    if (!booted) return;
+    markScreenSeen(screen);
+  }, [booted, screen, latestActivityId, markScreenSeen]);
+
   /** Lets Landing navigate to /juego right after starting a new game. */
   const setNavigator = useCallback((fn: ((path: string) => void) | null) => {
     navigateRef.current = fn;
@@ -1670,6 +1723,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setCurrentZone,
       assignNpc,
       recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
       upgradeBaseBuilding,
       upgradeThematicBuilding,
       useMedicine,
@@ -1691,7 +1746,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       speedMultiplier,
       setSpeed,
     }),
-    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave,      cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, searchScavenge, finishScavengeEvent, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, useCraftedItemAction, assignCraftedItem, cancelCraftedAssignment, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, savedZonasScrollRef, speedMultiplier, setSpeed],
+    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave,      cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, searchScavenge, finishScavengeEvent, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, ignoreNpc, markScreenSeen, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, useCraftedItemAction, assignCraftedItem, cancelCraftedAssignment, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, savedZonasScrollRef, speedMultiplier, setSpeed],
   );
 
   return (

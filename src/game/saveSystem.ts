@@ -112,6 +112,7 @@ export function createInitialState(survivor: GameState["survivor"], now = Date.n
     npcCycles: {},
     log: [],
     nextLogEventId: 0,
+    activitySeen: {},
     pendingZoneUnlock: null,
     craftingQueue: [],
     craftedInventory: {},
@@ -531,6 +532,7 @@ function normalizeState(state: GameState): GameState {
   }
   if (!s.npcCycles) s.npcCycles = {};
   if (!s.log) s.log = [];
+  if (!s.activitySeen || typeof s.activitySeen !== "object") s.activitySeen = {};
   if (typeof s.foodMin !== "number") s.foodMin = BALANCE.startingFoodMin;
   if (typeof s.waterMin !== "number") s.waterMin = BALANCE.startingWaterMin;
   if (!s.autoFarms || typeof s.autoFarms !== "object") s.autoFarms = {};
