@@ -16,6 +16,7 @@ import { buildingUpgradeCost, CORE_BUILDING_GATE_ZONE } from "@/game/buildings";
 import { BALANCE } from "@/game/balance";
 import { getZone, ZONES, isZoneUnlocked } from "@/game/zones";
 import { cn } from "@/lib/utils";
+import { activityScreenFor } from "@/game/log";
 import type { BuildingKey, Screen } from "@/game/types";
 
 const TABS: { key: Screen; label: string; glyph: string }[] = [
@@ -120,6 +121,21 @@ export default function Game() {
     mercader: merchantAffordable,
   };
 
+  // ---- "actividad nueva" por pantalla ----
+  // Cualquier evento de log cuya categoría mapea a una pantalla (vía
+  // activityScreenFor) y cuyo event_id sigue sin ver en esa pantalla
+  // enciende su punto. GameProvider marca todo como visto al entrar a la
+  // pantalla (y si la actividad llega estando ya en ella), guardando el
+  // estado en state.activitySeen — persiste con el resto del save.
+  const activityUnseen: Partial<Record<Screen, boolean>> = {};
+  if (state) {
+    const seen = state.activitySeen ?? {};
+    for (const e of state.log) {
+      const scr = activityScreenFor(e.category, e.subtype);
+      if (scr && e.event_id >= (seen[scr] ?? 0)) activityUnseen[scr] = true;
+    }
+  }
+
   return (
     <div className="min-h-dvh bg-[#0b0d0e] text-zinc-200">
       <HUD />
@@ -167,7 +183,7 @@ export default function Game() {
                 screen === t.key ? "text-green-500" : "text-subtle hover:text-zinc-300",
               )}
             >
-              {TAB_ALERTS[t.key] && (
+              {(TAB_ALERTS[t.key] || activityUnseen[t.key]) && (
                 <span
                   aria-hidden
                   className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-green-400 shadow-[0_0_6px_1px_rgba(74,222,128,0.9)]"

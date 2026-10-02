@@ -4,10 +4,11 @@ import { ZONES, zoneImage } from "@/game/zones";
 import { THEMATIC_BY_KEY } from "@/game/buildings";
 import { vnow } from "@/game/virtualClock";
 import { currentEnergy } from "@/game/energySystem";
-import { NPC_TYPE_MODIFIERS, npcProductionMultiplier } from "@/game/npcTypes";
+import { NPC_TYPE_MODIFIERS, npcProductionMultiplier, zoneBonusBreakdown } from "@/game/npcTypes";
 import { BALANCE, BUILDING_SPECIALIZATION } from "@/game/balance";
 import { activeAssignments } from "@/game/crafting/craftedEffects";
 import { RECIPE_BY_ID } from "@/game/crafting/recipes";
+import { RESOURCE_META } from "@/game/resources";
 import type { BuildingKey, CraftedAssignment } from "@/game/types";
 import { cn } from "@/lib/utils";
 
@@ -148,6 +149,87 @@ function ZoneAssignBadges({ assignments, now }: { assignments: CraftedAssignment
           </span>
         );
       })}
+    </div>
+  );
+}
+
+/** Bloque colapsable de HUD por zona: especialización + bonus activos del
+ *  recurso foco desglosados por fuente (Construcciones, NPC asignado, Ítems
+ *  crafteados) y el total combinado. Todo se lee del estado REAL con
+ *  zoneBonusBreakdown, así que se actualiza en vivo al construir, asignar/
+ *  quitar NPC o activar/vencer un ítem (el re-render de 1 s ya refresca). */
+function ZoneBonusBlock({ zoneId, now }: { zoneId: number; now: number }) {
+  const { state } = useGame();
+  const [open, setOpen] = useState(false);
+  if (!state) return null;
+  const bd = zoneBonusBreakdown(state, zoneId, now);
+  const pct = (v: number) => `+${Math.round(v * 100)}%`;
+
+  return (
+    <div className="shrink-0 overflow-hidden rounded-md border border-zinc-800/70 bg-[#0d0f10]">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-1 px-2 py-1 text-left transition-colors hover:bg-zinc-900/60"
+      >
+        <span className="truncate text-[8px] font-bold uppercase tracking-widest text-subtle">
+          ⚡ Bonus de zona · {RESOURCE_META[bd.focus].label} {open ? "▾" : "▸"}
+        </span>
+        <span className="shrink-0 font-mono text-[9px] font-bold tabular-nums text-green-400">
+          {pct(bd.totalPct)}
+        </span>
+      </button>
+      {open && (
+        <div className="flex flex-col gap-0.5 border-t border-zinc-800/70 px-2 py-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-[9px] uppercase tracking-wider text-zinc-400">
+              Especialización
+            </span>
+            <span className="shrink-0 font-mono text-[9px] tabular-nums text-zinc-300">
+              {pct(bd.focusPct)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-[9px] uppercase tracking-wider text-zinc-400">
+              Construcciones
+            </span>
+            <span className="shrink-0 font-mono text-[9px] tabular-nums text-zinc-300">
+              {bd.constructionsPct > 0 ? pct(bd.constructionsPct) : "—"}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-[9px] uppercase tracking-wider text-zinc-400">
+              NPC asignado
+            </span>
+            <span className="shrink-0 font-mono text-[9px] tabular-nums text-zinc-300">
+              {bd.npcPct > 0 ? pct(bd.npcPct) : "—"}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-[9px] uppercase tracking-wider text-zinc-400">
+              Ítems crafteados
+            </span>
+            <span className="shrink-0 font-mono text-[9px] tabular-nums text-zinc-300">
+              {bd.items.length > 0 ? pct(bd.itemsPct) : "—"}
+            </span>
+          </div>
+          {bd.items.map((it) => (
+            <p key={it.recipeId} className="pl-1 text-[8px] leading-[11px] text-subtle">
+              · {RECIPE_BY_ID[it.recipeId]?.name ?? it.recipeId}
+              {it.onNpc ? " (NPC)" : ""} · {pct(it.pct)}
+            </p>
+          ))}
+          <div className="mt-0.5 flex items-center justify-between gap-2 border-t border-zinc-800/70 pt-1">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-300">
+              Total combinado
+            </span>
+            <span className="shrink-0 font-mono text-[10px] font-bold tabular-nums text-green-400">
+              {pct(bd.totalPct)}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -343,6 +425,8 @@ export function ZonasTab() {
                   </div>
                 </div>
               </button>
+
+              {unlocked && <ZoneBonusBlock zoneId={z.id} now={now} />}
 
               {unlocked ? (
                 <button
