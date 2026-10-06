@@ -1,6 +1,6 @@
 import { GAME_INFO, SAVE_VERSION } from "./gameConfig";
 import { BALANCE, migrationRefundFactor } from "./balance";
-import { formatTime } from "./log";
+import { normalizeSubtype, normalizeZona, pushLog } from "./log";
 import {
   BUILDINGS,
   BUILDING_BY_KEY,
@@ -264,26 +264,22 @@ function migrateV1ToV2(state: GameState): GameState {
   if (refundTotals.materiales > 0 || refundTotals.componentes > 0) {
     state.resources.materiales += refundTotals.materiales;
     state.resources.componentes += refundTotals.componentes;
-    state.log.unshift({
-      zona: undefined,
-      origen: "manual",
+    pushLog(state, {
+      zona: "global",
+      origen: "auto",
       category: "CONSTR",
       subtype: "completada",
-      fields: { acción: "reorganización" },
+      fields: { acción: "reorganización", materiales: refundTotals.materiales, componentes: refundTotals.componentes },
       mensaje: `Reorganización de la base: los edificios comunes pasan a ser globales · +${refundTotals.materiales} Materiales, +${refundTotals.componentes} Componentes reembolsados`,
-      hora: formatTime(Date.now()),
-      event_id: state.nextLogEventId++,
     });
   } else {
-    state.log.unshift({
-      zona: undefined,
-      origen: "manual",
+    pushLog(state, {
+      zona: "global",
+      origen: "auto",
       category: "CONSTR",
       subtype: "completada",
       fields: { acción: "reorganización" },
       mensaje: "Reorganización de la base: los edificios comunes pasan a ser globales (Instalaciones por zona aparte)",
-      hora: formatTime(Date.now()),
-      event_id: state.nextLogEventId++,
     });
   }
   return state;
@@ -365,15 +361,13 @@ export function migrateV2ToV3(state: GameState): GameState {
   if (refundTotals.materiales > 0 || refundTotals.componentes > 0) {
     state.resources.materiales += refundTotals.materiales;
     state.resources.componentes += refundTotals.componentes;
-    state.log.unshift({
-      zona: undefined,
-      origen: "manual",
+    pushLog(state, {
+      zona: "global",
+      origen: "auto",
       category: "CONSTR",
       subtype: "completada",
-      fields: { acción: "reembolso" },
+      fields: { acción: "reembolso", materiales: refundTotals.materiales, componentes: refundTotals.componentes },
       mensaje: `Ajuste de economía: obras en curso reembolsadas por la diferencia de precio (+${refundTotals.materiales} Materiales, +${refundTotals.componentes} Componentes)`,
-      hora: formatTime(Date.now()),
-      event_id: state.nextLogEventId++,
     });
   }
 
@@ -532,6 +526,23 @@ function normalizeState(state: GameState): GameState {
   }
   if (!s.npcCycles) s.npcCycles = {};
   if (!s.log) s.log = [];
+  // Log normalization: saves written before the log overhaul can carry events
+  // without event_id, without zona ("undefined") or with the category repeated
+  // as subtype. Repair them in place so the report never shows `[X] X` again.
+  let maxEventId = -1;
+  s.log = s.log.filter((e) => e && typeof e === "object" && typeof e.category === "string");
+  for (const e of s.log) {
+    if (typeof e.event_id !== "number" || !Number.isFinite(e.event_id)) e.event_id = 0;
+    if (typeof e.hora !== "string" || !/^\d{2}:\d{2}:\d{2}$/.test(e.hora)) e.hora = "--:--:--";
+    e.zona = normalizeZona(e.zona);
+    e.origen = e.origen === "auto" ? "auto" : "manual";
+    e.subtype = normalizeSubtype(e.category, e.subtype);
+    if (!e.fields || typeof e.fields !== "object") e.fields = {};
+    if (e.event_id > maxEventId) maxEventId = e.event_id;
+  }
+  if (typeof s.nextLogEventId !== "number" || s.nextLogEventId <= maxEventId) {
+    s.nextLogEventId = maxEventId + 1;
+  }
   if (!s.activitySeen || typeof s.activitySeen !== "object") s.activitySeen = {};
   if (typeof s.foodMin !== "number") s.foodMin = BALANCE.startingFoodMin;
   if (typeof s.waterMin !== "number") s.waterMin = BALANCE.startingWaterMin;

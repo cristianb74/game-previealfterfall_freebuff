@@ -4,11 +4,21 @@ import type {
   LogCategory,
   LogCommonFields,
   LogEvent,
-  LogFieldValue,
+  LogFieldInput,
+  LogFieldObject,
   LogFieldRecord,
+  LogFieldValue,
 } from "./log";
 
-export { LogCategory, LogCommonFields, LogEvent, LogFieldValue, LogFieldRecord };
+export {
+  LogCategory,
+  LogCommonFields,
+  LogEvent,
+  LogFieldInput,
+  LogFieldObject,
+  LogFieldRecord,
+  LogFieldValue,
+};
 
 export type StatKey =
   | "fuerza"

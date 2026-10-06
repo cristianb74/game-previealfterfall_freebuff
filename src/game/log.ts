@@ -1,21 +1,26 @@
 import type { GameState, Screen } from "./types";
-import { vnow } from "./virtualClock";
 
 /** Shared fields required on every log entry: zona and origen. */
 export interface LogCommonFields {
-  /** Zona afectada por el evento (Z01, Z02, ...), undefined si no aplica. */
-  zona?: string;
+  /** Zona afectada por el evento ("Z01", "Z02", ... o "global"). */
+  zona: string;
   /** ¿Dónde se produjo el evento: manual = acción del usuario, auto = ciclo automático. */
   origen: "manual" | "auto";
 }
 
+/** Scalar value a log line can carry. */
 export type LogFieldValue = string | number | boolean;
 
-export type LogFieldRecord = Readonly<Record<string, LogFieldValue>>;
+/** Structured value rendered as `{...}` in the line (e.g. recursos/materiales_usados). */
+export type LogFieldObject = Readonly<Record<string, string | number>>;
+
+export type LogFieldInput = LogFieldValue | LogFieldObject;
+
+export type LogFieldRecord = Readonly<Record<string, LogFieldInput>>;
 
 /**
  * Representa una línea de registro uniforme con el esquema:
- *   [HH:MM:SS] [CATEGORIA] subtipo | campo=valor | campo=valor | ...
+ *   [HH:MM:SS] [CATEGORIA #id] subtipo | zona=Z01 | origen=manual | campo=valor | ...
  */
 export type LogCategory =
   | "CLICK"
@@ -36,94 +41,207 @@ export type LogCategory =
 
 /**
  * Represents a single line of the game log, in the format:
- *   [HH:MM:SS] [CATEGORY] subtype | campo=valor | campo=valor | ...
- * Fields zona and origen are required whenever applicable and are carried
- * as top-level properties; the rest of the dynamic pairs live in `fields`.
- * Optional narrative text is preserved for the player-facing summary.
+ *   [HH:MM:SS] [CATEGORY #id] subtype | zona=Z01 | origen=manual | campo=valor | ...
+ * `zona` and `origen` are ALWAYS present (normalized by pushLog — "global"
+ * when the event does not belong to a zone). The remaining dynamic pairs live
+ * in `fields`. Optional narrative text is preserved for the player-facing summary.
  */
 export interface LogEvent extends LogCommonFields {
   /** Global correlative event id for the whole session, assigned by pushLog. */
   event_id: number;
-  /** Hora de ejecución del evento en el reloj virtual del juego. */
+  /** Hora de ejecución del evento en el reloj real del sistema (HH:MM:SS, 24h). */
   hora: string;
   /** Categoría de la línea de log (API pública permitida). */
   category: LogCategory;
-  /** Subtipo o tipo de evento dentro de la categoría. */
+  /** Subtipo o tipo de evento dentro de la categoría. Nunca repite la categoría. */
   subtype: string;
   /** Dynamic campo=valor pairs carried in the line. */
-  fields: Readonly<Record<string, LogFieldValue>>;
+  fields: LogFieldRecord;
   /** Player-facing narrative text (preserved when it exists). */
   mensaje?: string;
 }
 
-function formatField(value: LogFieldValue): string {
-  if (typeof value === "boolean") {
-    return value ? "1" : "0";
-  }
-  if (typeof value === "object" && value !== null) {
-    return JSON.stringify(value);
-  }
-  return String(value);
-}
+/** Evento tal como lo entrega el call-site (pushLog añade event_id y hora). */
+export type LogInput = Omit<LogEvent, "event_id" | "hora">;
 
-function formatFields(fields: Readonly<Record<string, LogFieldValue>>): string {
-  const entries = Object.entries(fields);
-  if (entries.length === 0) return "";
-  return entries.map(([key, value]) => `${key}=${formatField(value)}`).join(" | ");
-}
+/** Tope de entradas técnicas en state.log (el overflow se descarta). */
+export const MAX_LOG_ENTRIES = 60;
 
 /**
- * Generates the body of a log line in the required format.
+ * Subtipo por defecto de cada categoría. Existe para que una línea NUNCA
+ * pueda caer al placeholder `[CATEGORIA] CATEGORIA`: si el call-site no pasa
+ * subtipo, o pasa uno igual a la categoría, se usa este valor real.
  */
-function buildLine(event: LogEvent): string {
-  const fieldsPart = formatFields(event.fields);
-  const suffix = fieldsPart ? ` | ${fieldsPart}` : "";
-  return `[${event.hora}] [${event.category}] ${event.subtype}${suffix}`;
-}
-
-/**
- * Appends a log event to the state history and returns the created record.
- */
-export function pushLog(
-  state: GameState,
-  event: Omit<LogEvent, "event_id" | "hora">,
-): LogEvent {
-  const logEntry: LogEvent = {
-    ...event,
-    event_id: state.nextLogEventId++,
-    hora: formatTime(vnow()),
-  };
-  state.log.unshift(logEntry);
-  if (state.log.length > 60) {
-    state.log = state.log.slice(0, 60);
-  }
-  return logEntry;
-}
-
-/**
- * Converts a timestamp in milliseconds to HH:MM:SS according to the game's
- * virtual clock.
- */
-export function formatTime(timestamp: number): string {
-  const totalSeconds = Math.floor(timestamp / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
-}
+const DEFAULT_SUBTYPE: Record<LogCategory, string> = {
+  CLICK: "click",
+  AUTO_EXPLORER: "ciclo_iniciado",
+  NPC_ACTION: "hallazgo",
+  CRAFTEO: "inicio",
+  MERCADER: "operacion",
+  USO_ITEM: "usado",
+  SCAVENGE: "hallazgo",
+  EXP: "evento",
+  "NPC CHECK": "check",
+  "SCAVENGE CHECK": "check",
+  RECURSO: "hallazgo",
+  ENERGÍA: "cambio",
+  CONSTR: "completada",
+  ZONA: "cambio",
+  INICIO: "inicio_ciclo",
+};
 
 function pad(value: number): string {
   return value.toString().padStart(2, "0");
 }
 
 /**
+ * Convierte un timestamp epoch en milisegundos a HH:MM:SS del reloj real de
+ * 24 horas. Acepta también el caso legado de un "contador" en segundos o
+ * milisegundos relativos muy grandes (multiplicadores de velocidad): siempre
+ * se recorta a un rango horario válido (00–23) en vez de imprimir 6 dígitos.
+ */
+export function formatTime(timestamp: number): string {
+  const ms = Number.isFinite(timestamp) ? timestamp : Date.now();
+  const d = new Date(ms);
+  if (!Number.isNaN(d.getTime())) {
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+  // Fallback extremo: timestamp sin sentido → reduced modulo 24 h.
+  const totalSeconds = Math.floor(Math.abs(ms) / 1000);
+  const hours = Math.floor(totalSeconds / 3600) % 24;
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  return `${pad(hours)}:${pad(minutes)}:${pad(totalSeconds % 60)}`;
+}
+
+/**
+ * Normaliza la zona a "Z01"/"Z02"/... o "global". Acepta el id numérico
+ * suelto ("1"), la forma ya formateada ("z1"), la base global y vacío.
+ */
+export function normalizeZona(zona?: string | number | null): string {
+  const raw = zona == null ? "" : String(zona).trim();
+  if (!raw) return "global";
+  if (/^\d+$/.test(raw)) return `Z${raw.padStart(2, "0")}`;
+  if (/^z\d+$/i.test(raw)) return `Z${raw.slice(1).padStart(2, "0")}`;
+  if (/^base/i.test(raw)) return "global";
+  return raw;
+}
+
+/** Subtipo utilizable: nunca vacío y nunca igual a la categoría. */
+export function normalizeSubtype(category: LogCategory, subtype?: string | null): string {
+  const raw = (subtype ?? "").trim();
+  if (!raw) return DEFAULT_SUBTYPE[category] ?? "evento";
+  if (raw.toUpperCase() === category.toUpperCase()) {
+    return DEFAULT_SUBTYPE[category] ?? "evento";
+  }
+  return raw;
+}
+
+/** Formatea un valor de campo; los objetos se serializan como `{...}`. */
+export function formatField(value: LogFieldInput): string {
+  if (typeof value === "boolean") return value ? "1" : "0";
+  if (typeof value === "object" && value !== null) return JSON.stringify(value);
+  return String(value);
+}
+
+function formatFields(fields: LogFieldRecord): string {
+  return Object.entries(fields).map(([key, value]) => `${key}=${formatField(value)}`).join(" | ");
+}
+
+/** Descarta null/undefined y redondea floats "sucios" (54.68399999999999 → 54.684). */
+function sanitizeFields(fields: LogFieldRecord | undefined): Record<string, LogFieldInput> {
+  const out: Record<string, LogFieldInput> = {};
+  for (const [key, value] of Object.entries(fields ?? {})) {
+    if (value == null) continue;
+    out[key] = value;
+  }
+  return out;
+}
+
+/** Redondea a 3 decimales los números que arrastran error de coma flotante. */
+export function roundField(value: LogFieldInput): LogFieldInput {
+  if (typeof value !== "number") return value;
+  return Math.round(value * 1000) / 1000;
+}
+
+/**
+ * Construye el texto completo de la línea:
+ *   [HH:MM:SS] [CATEGORIA #id] subtipo | zona=Z01 | origen=manual | campo=valor | ...
+ * Es la MISMA función que usa el export .txt, así el reporte y la UI nunca
+ * divergen. Las líneas viejas (sin event_id) se reconstruyen igual.
+ */
+export function formatLogLine(event: LogEvent): string {
+  const id = Number.isFinite(event.event_id) ? event.event_id : 0;
+  const head = `[${event.hora ?? "--:--:--"}] [${event.category} #${id}] ${normalizeSubtype(
+    event.category,
+    event.subtype,
+  )}`;
+  const tail = [
+    `zona=${normalizeZona(event.zona)}`,
+    `origen=${event.origen === "auto" ? "auto" : "manual"}`,
+    formatFields(event.fields ?? {}),
+  ]
+    .filter((part) => part.length > 0)
+    .join(" | ");
+  return `${head} | ${tail}`;
+}
+
+/**
+ * ÚNICO punto de entrada de eventos al log. Normaliza event_id correlativo
+ * (uno global para toda la sesión), hora real, zona, origen y subtipo, de
+ * modo que ninguna línea pueda degradarse a `[X] X` ni `[X]` sin zona.
+ */
+export function pushLog(state: GameState, event: LogInput): LogEvent {
+  const entry: LogEvent = {
+    event_id: state.nextLogEventId++,
+    hora: formatTime(Date.now()),
+    category: event.category,
+    subtype: normalizeSubtype(event.category, event.subtype),
+    zona: normalizeZona(event.zona),
+    origen: event.origen === "auto" ? "auto" : "manual",
+    fields: sanitizeFields(event.fields),
+    ...(event.mensaje !== undefined ? { mensaje: event.mensaje } : {}),
+  };
+  state.log.unshift(entry);
+  if (state.log.length > MAX_LOG_ENTRIES) {
+    state.log.length = MAX_LOG_ENTRIES;
+  }
+  return entry;
+}
+
+/**
+ * Evento [CLICK]: toda interacción manual que dispara (o intenta disparar)
+ * lógica de juego, incluidos los clicks bloqueados/deshabilitados.
+ */
+export function pushClick(
+  state: GameState,
+  boton: string,
+  opts: {
+    zona?: string | number | null;
+    resultado?: "ejecutado" | "bloqueado";
+    motivo?: string;
+    extra?: LogFieldRecord;
+  } = {},
+): LogEvent {
+  return pushLog(state, {
+    zona: opts.zona ?? "global",
+    origen: "manual",
+    category: "CLICK",
+    subtype: opts.resultado === "bloqueado" ? "bloqueado" : "ejecutado",
+    fields: {
+      boton,
+      resultado: opts.resultado ?? "ejecutado",
+      ...(opts.motivo ? { motivo: opts.motivo } : {}),
+      ...(opts.extra ?? {}),
+    },
+  });
+}
+
+/**
  * Pantalla de la barra inferior a la que pertenece la actividad de un evento
  * de log (para el punto/badge de "actividad nueva"). Devuelve null para el
- * ruido que nunca debe encender el indicador: ticks de producción/regeneración,
- * checks de probabilidad y acciones iniciadas por el propio jugador en el
- * momento (CLICK/INICIO). Para NPC_ACTION solo el hallazgo (y el reinicio de
- * contador que lo acompaña) cuenta como actividad: los "find" de producción
- * y las acciones de gestión ocurren en pantalla o son rutina.
+ * ruido que nunca debe encender el indicador: clicks y acción propia del
+ * jugador en el momento, checks de probabilidad y producción rutinaria.
+ * Para NPC_ACTION el hallazgo de un NPC asignado sí cuenta (pantalla Equipo).
  */
 export function activityScreenFor(category: LogCategory, subtype?: string): Screen | null {
   switch (category) {

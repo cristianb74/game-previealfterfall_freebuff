@@ -14,8 +14,8 @@ import type {
   ScavengePointId,
   ScavengePointResult,
 } from "./types";
-import { formatTime } from "./log";
-import type { LogCategory } from "./log";
+import { pushLog } from "./log";
+import type { LogFieldRecord } from "./log";
 
 // ============================================================
 // AFTERFALL — SCAVENGE event (minijuego de recolección).
@@ -58,14 +58,34 @@ export function checkScavengeTrigger(state: GameState, zoneId: number, fromAuto:
   const fired = Math.random() < chance;
   if (!fired) {
     state.explorationsSinceLastScavenge = counter + 1;
-    pushLog(
-      state,
-      `[EXP] SCAVENGE CHECK | contador ${counter} | ${fromAuto ? "AUTO" : "MANUAL"} | probabilidad ${(chance * 100).toFixed(1)}% | resultado NO`,
-      "info",
-      vnow(),
-    );
+    pushLog(state, {
+      zona: zoneId,
+      origen: fromAuto ? "auto" : "manual",
+      category: "SCAVENGE CHECK",
+      subtype: "check",
+      fields: {
+        contador: counter,
+        via: fromAuto ? "AUTO" : "MANUAL",
+        probabilidad: `${(chance * 100).toFixed(1)}%`,
+        resultado: "no",
+      },
+      mensaje: `SCAVENGE CHECK | contador ${counter} | ${fromAuto ? "AUTO" : "MANUAL"} | probabilidad ${(chance * 100).toFixed(1)}% | resultado NO`,
+    });
     return false;
   }
+  pushLog(state, {
+    zona: zoneId,
+    origen: fromAuto ? "auto" : "manual",
+    category: "SCAVENGE CHECK",
+    subtype: "check",
+    fields: {
+      contador: counter,
+      via: fromAuto ? "AUTO" : "MANUAL",
+      probabilidad: `${(chance * 100).toFixed(1)}%`,
+      resultado: "si",
+    },
+    mensaje: `SCAVENGE CHECK | contador ${counter} | ${fromAuto ? "AUTO" : "MANUAL"} | probabilidad ${(chance * 100).toFixed(1)}% | resultado SI`,
+  });
   // Fired: reset the counter and open/resolve the event.
   state.explorationsSinceLastScavenge = 0;
   state.scavengeEvent = {
@@ -77,28 +97,24 @@ export function checkScavengeTrigger(state: GameState, zoneId: number, fromAuto:
 }
 
 /** Provider-style log push (kept local to avoid a circular import with
- *  GameProvider; mirrors the 60-entry cap used there). */
-function pushLog(state: GameState, msg: string, kind: string, t: number): void {
-  // Map legacy kind to a new LogCategory (subtype carries the original kind).
-  const KIND_CATEGORY: Record<string, LogCategory> = {
-    info: "INICIO",
-    check: "SCAVENGE CHECK",
-    daño: "ENERGÍA",
-    hallazgo: "SCAVENGE",
-    nada: "SCAVENGE",
-  };
-  const category = KIND_CATEGORY[kind] ?? "SCAVENGE";
-  state.log.unshift({
-    zona: undefined,
-    origen: "manual",
-    category,
-    subtype: category,
-    fields: {},
+ *  GameProvider). Delega en el pushLog central para que event_id, hora real,
+ *  zona, origen y subtipo queden normalizados igual que en el provider. */
+function pushScavengeLog(
+  state: GameState,
+  zoneId: number,
+  origen: "manual" | "auto",
+  subtype: string,
+  msg: string,
+  fields: LogFieldRecord = {},
+): void {
+  pushLog(state, {
+    zona: zoneId,
+    origen,
+    category: "SCAVENGE",
+    subtype,
+    fields,
     mensaje: msg,
-    hora: formatTime(t),
-    event_id: state.nextLogEventId++,
   });
-  if (state.log.length > 60) state.log.length = 60;
 }
 
 /** Pick a resource from a weighted loot table. */
@@ -290,11 +306,13 @@ export function settleScavengeOnBoot(state: GameState): void {
   const results = finishScavenge(state);
   const lootLines = results.filter((r) => r.kind === "loot" && r.loot);
   const damage = results.reduce((acc, r) => acc + (r.kind === "dano" ? r.damage ?? 0 : 0), 0);
-  pushLog(
+  pushScavengeLog(
     state,
+    event.zoneId,
+    "manual",
+    "cerrado_al_reabrir",
     `EVENTO | SCAVENGE cerrado al reabrir · ${loc.name} · hallazgos: ${lootLines.length}, daño: ${damage}`,
-    "resource",
-    vnow(),
+    { hallazgos: lootLines.length, salud_perdida: damage, ubicacion: loc.name },
   );
 }
 

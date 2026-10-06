@@ -7,8 +7,8 @@ import { consumptionFactor } from "./crafting/craftedEffects";
 import { BUILDING_BY_KEY, THEMATIC_BY_KEY } from "./buildings";
 import type { BuildingKey } from "./types";
 import { narrNpcFind, narrSurvivalWarn } from "./narrativeLog";
-import { formatTime } from "./log";
-import type { GameState, LogEvent, ResourceKey } from "./types";
+import { pushLog } from "./log";
+import type { GameState, ResourceKey } from "./types";
 
 // ============================================================
 // AFTERFALL — foreground tick. NPC production is computed from
@@ -19,11 +19,6 @@ export interface TickChanges {
   finds: { npcId: string; resource: ResourceKey; amount: number }[];
   buildingsCompleted: string[];
   energyGained: number;
-}
-
-function pushLog(log: LogEvent[], ev: LogEvent): void {
-  log.unshift(ev);
-  if (log.length > 60) log.length = 60;
 }
 
 /** Settle building upgrades whose finish timestamps have passed: the
@@ -125,11 +120,25 @@ export function tickNpcs(state: GameState, now: number): TickChanges {
   const hTier = hungerTier(state);
   const tTier = thirstTier(state);
   if (lastHungerTier !== null && hTier !== lastHungerTier) {
-    pushLog(state.log, { zona: undefined, origen: 'auto', category: 'ENERGÍA', subtype: 'tier', fields: {}, mensaje: `[SUPERVIVENCIA] Comida: ${TIER_META[hTier].label}`, hora: formatTime(now), event_id: state.nextLogEventId++ });
+    pushLog(state, {
+      zona: "global",
+      origen: "auto",
+      category: "ENERGÍA",
+      subtype: "tier",
+      fields: { medidor: "comida", nivel: TIER_META[hTier].label },
+      mensaje: `[SUPERVIVENCIA] Comida: ${TIER_META[hTier].label}`,
+    });
     if (hTier !== "ok") narrSurvivalWarn(state, "comida");
   }
   if (lastThirstTier !== null && tTier !== lastThirstTier) {
-    pushLog(state.log, { zona: undefined, origen: 'auto', category: 'ENERGÍA', subtype: 'tier', fields: {}, mensaje: `[SUPERVIVENCIA] Agua: ${TIER_META[tTier].label}`, hora: formatTime(now), event_id: state.nextLogEventId++ });
+    pushLog(state, {
+      zona: "global",
+      origen: "auto",
+      category: "ENERGÍA",
+      subtype: "tier",
+      fields: { medidor: "agua", nivel: TIER_META[tTier].label },
+      mensaje: `[SUPERVIVENCIA] Agua: ${TIER_META[tTier].label}`,
+    });
     if (tTier !== "ok") narrSurvivalWarn(state, "agua");
   }
   lastHungerTier = hTier;
@@ -137,20 +146,43 @@ export function tickNpcs(state: GameState, now: number): TickChanges {
   for (const f of finds.slice(0, 5)) {
     const isTime = f.resource === "comida" || f.resource === "agua";
     const npc = state.npcs.find((n) => n.id === f.npcId);
-    pushLog(state.log, {
-      zona: undefined,
-      origen: 'auto',
-      category: 'NPC_ACTION',
-      subtype: 'find',
-      fields: { res: f.resource, amount: f.amount },
+    // NPC ya ASIGNADO produciendo → TODO esto es NPC_ACTION/hallazgo con
+    // npc= obligatorio (nunca NPC CHECK, que es solo el chequeo de NPC NUEVO).
+    pushLog(state, {
+      zona: npc?.assignedZoneId ?? "global",
+      origen: "auto",
+      category: "NPC_ACTION",
+      subtype: "hallazgo",
+      fields: {
+        npc: f.npcId,
+        nombre: npc?.name ?? f.npcId,
+        resource: f.resource,
+        cantidad: f.amount,
+        unidad: isTime ? "min" : "unidad",
+      },
       mensaje: `${npc ? npcDisplayName(npc) : f.npcId} encontró ${isTime ? `+${f.amount} min` : `+${f.amount}`} ${f.resource === "dinero" ? "$" : f.resource}`,
-      hora: formatTime(now),
-      event_id: state.nextLogEventId++,
     });
-    if (npc) narrNpcFind(state, npc.name, f.resource, f.amount);
+    if (npc) narrNpcFind(state, npc.name, f.resource, f.amount, npc.assignedZoneId);
+  }
+  if (finds.length > 5) {
+    pushLog(state, {
+      zona: "global",
+      origen: "auto",
+      category: "NPC_ACTION",
+      subtype: "hallazgo",
+      fields: { npc: "equipo", hallazgos: finds.length, truncado: finds.length - 5 },
+      mensaje: `El equipo produjo ${finds.length} hallazgos en este ciclo`,
+    });
   }
   for (const b of buildingsCompleted) {
-    pushLog(state.log, { zona: undefined, origen: 'auto', category: 'CONSTR', subtype: 'completada', fields: {}, mensaje: `Construcción completada: ${b}`, hora: formatTime(now), event_id: state.nextLogEventId++ });
+    pushLog(state, {
+      zona: "global",
+      origen: "auto",
+      category: "CONSTR",
+      subtype: "completada",
+      fields: { construccion: b },
+      mensaje: `Construcción completada: ${b}`,
+    });
   }
 
   return { finds, buildingsCompleted, energyGained: 0 };

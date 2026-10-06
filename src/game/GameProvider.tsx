@@ -23,7 +23,7 @@ import type { OfflineSummary } from "@/game/offlineProgress";import { vnow,
   resetVirtualClock,
   type SpeedMultiplier,
 } from "@/game/virtualClock";
-import { pushLog, type LogEvent } from "./log";
+import { pushClick, pushLog, type LogEvent } from "./log";
 import { OfflineSummaryModal } from "@/components/game/OfflineSummaryModal";
 import { RECIPE_BY_ID } from "./crafting/recipes";
 import {
@@ -594,8 +594,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (b && b.upgradeFinishAt && now >= b.upgradeFinishAt) {
           b.level = Math.min(BALANCE.buildingMaxLevel, b.level + 1);
           b.upgradeFinishAt = null;
-          pushLog(s, { zona: "Base global", origen: "auto", category: "CONSTR", subtype: "completada", fields: { construcción: BUILDING_BY_KEY[key].name, nivel: b.level }, mensaje: `Construcción completada: ${BUILDING_BY_KEY[key].name} → N${b.level} (Base global)` });
-          narrBuildDone(s, BUILDING_BY_KEY[key].name, b.level);
+          pushLog(s, { zona: "global", origen: "auto", category: "CONSTR", subtype: "completada", fields: { construcción: BUILDING_BY_KEY[key].name, nivel: b.level, ambito: "base_global" }, mensaje: `Construcción completada: ${BUILDING_BY_KEY[key].name} → N${b.level} (Base global)` });
           narrBuildDone(s, BUILDING_BY_KEY[key].name, b.level);
           dirty = true;
         }
@@ -616,7 +615,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
               fields: { construcción: def?.name ?? key, nivel: b.level },
               mensaje: `Construcción completada: ${def?.name ?? key} → N${b.level} (Z${String(zid).padStart(2, "0")})`,
             });
-            if (def) narrBuildDone(s, def.name, b.level);
+            if (def) narrBuildDone(s, def.name, b.level, zid);
             dirty = true;
           }
         }
@@ -922,7 +921,33 @@ export function GameProvider({ children }: { children: ReactNode }) {
     // NPC check with reduced chance (autoNpcChanceFactor), same shared counter.
     npcCheck(s, zoneId, expId, startedAt, true);
     s.explorationsDone += 1;
+    const runSeconds = Math.max(0, Math.round((vnow() - startedAt) / 1000));
     s.autoFarms[zoneId] = null;
+    // AUTO_EXPLORER · ciclo_fin: duración real del ciclo, hallazgos y recursos.
+    {
+      const recursos: Record<string, number> = {};
+      let hallazgos = 0;
+      for (const f of outcome.findings) {
+        if (f.kind === "resource" && f.resource) {
+          const amount = f.amount ?? 0;
+          hallazgos += 1;
+          recursos[f.resource] = (recursos[f.resource] ?? 0) + amount;
+        }
+      }
+      pushLog(s, {
+        zona: zoneId,
+        origen: "auto",
+        category: "AUTO_EXPLORER",
+        subtype: "ciclo_fin",
+        fields: {
+          exp: expId,
+          duracion: runSeconds,
+          hallazgos,
+          recursos,
+        },
+        mensaje: `Auto-exploración: ciclo cerrado en Z${String(zoneId).padStart(2, "0")} · ${runSeconds}s · ${hallazgos} hallazgo(s)`,
+      });
+    }
     // SCAVENGE in auto: resolve all 8 points in chain, no interface.
     if (checkScavengeTrigger(s, zoneId, true)) {
       const loc = scavengeLocationForZone(zoneId);
@@ -960,6 +985,29 @@ export function GameProvider({ children }: { children: ReactNode }) {
       agilityFactor(s, zoneId) *
       npcZoneSpeedFactor(s, zoneId);
     s.autoFarms[zoneId] = { zoneId, startedAt: now, finishAt: now + minutes * 60000 };
+    // AUTO_EXPLORER · ciclo_iniciado: se registra UNA vez por zona al arrancar
+    // su run, con la lista completa de zonas en auto activo.
+    pushLog(s, {
+      zona: zoneId,
+      origen: "auto",
+      category: "AUTO_EXPLORER",
+      subtype: "ciclo_iniciado",
+      fields: {
+        zonas: activeAutoZones(s).join(",") || `Z${String(zoneId).padStart(2, "0")}`,
+        exp: s.nextExplorationId,
+        duracion: Math.round(minutes * 60),
+      },
+      mensaje: `Auto-exploración: ciclo iniciado en Z${String(zoneId).padStart(2, "0")}`,
+    });
+  }
+
+  /** Zonas con auto-exploración activa, como "Z01","Z03"... */
+  function activeAutoZones(s: GameState): string[] {
+    return Object.keys(s.autoExplored ?? {})
+      .map(Number)
+      .filter((zid) => s.autoExplored[zid])
+      .sort((a, b) => a - b)
+      .map((zid) => `Z${String(zid).padStart(2, "0")}`);
   }
 
   // ---- actions ----
@@ -1086,6 +1134,40 @@ export function GameProvider({ children }: { children: ReactNode }) {
     [setAndSave],
   );
 
+  /** Redondea a 3 decimales (mata el ruido de coma flotante tipo
+   *  54.68399999999999 en las líneas de duración). */
+  const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
+  /** Emite el evento de INICIO de un ciclo de exploración exactamente una
+   *  vez. Un doble toque / doble dispatch sobre el mismo ciclo se traducía en
+   *  dos líneas [INICIO] con la MISMA duración para la misma zona; aquí se
+   *  deduplica contra la línea ya escrita. */
+  function logExploreStartOnce(
+    s: GameState,
+    zoneId: number,
+    expId: number,
+    seconds: number,
+  ): void {
+    const head = s.log[0];
+    if (
+      head &&
+      head.category === "EXP" &&
+      head.subtype === "inicio" &&
+      Number(head.fields?.exp) === expId &&
+      Number(head.fields?.duracion) === seconds
+    ) {
+      return; // este ciclo ya tiene su línea de inicio
+    }
+    pushLog(s, {
+      zona: zoneId,
+      origen: "manual",
+      category: "EXP",
+      subtype: "inicio",
+      fields: { exp: expId, duracion: seconds },
+      mensaje: `[EXP #${expId}] Z${String(zoneId).padStart(2, "0")} | INICIO | duración ${seconds}s`,
+    });
+  }
+
   const startExploration = useCallback(
     (zoneId: number) => {
       setAndSave((s) => {
@@ -1113,14 +1195,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     s.currentZoneId = zoneId;
         const expId = s.nextExplorationId++;
         s.explorationStates[zoneId] = { zoneId, startedAt: now, finishAt: now + minutes * 60000, expId };
-        pushLog(s, {
-          zona: `Z${String(zoneId).padStart(2, "0")}`,
-          origen: "manual",
-          category: "EXP",
-          subtype: "inicio",
-          fields: { duración: minutes * 60 },
-          mensaje: `[EXP #${expId}] Z${String(zoneId).padStart(2, "0")} | INICIO | duración ${minutes * 60}s`,
-        });
+        // UN SOLO evento de inicio por ciclo (logExploreStartOnce deduplica).
+        logExploreStartOnce(s, zoneId, expId, round3(minutes * 60));
         narrExplorationStart(s, zoneId, getZone(zoneId).name);
         // SCAVENGE event roll (manual starts): se resuelve AL TOCAR/INICIAR la
         // exploración — mismo contador y tiers de probabilidad, resultado
@@ -1213,9 +1289,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     (zoneId: number) => {
       setAndSave((s) => {
         const was = s.autoExplored[zoneId] ?? false;
+        const zoneName = getZone(zoneId).name;
         if (!was) {
           const activeCount = Object.keys(s.autoExplored).filter((id) => s.autoExplored[Number(id)]).length;
           if (activeCount >= BALANCE.maxConcurrentAutoFarms) {
+            pushClick(s, "auto_explorar", { zona: zoneId, resultado: "bloqueado", motivo: "limite_zonas_auto" });
             toast.error("Máximo de zonas en auto-farm", {
               description: `Ya tenés ${activeCount} zonas activas (máximo ${BALANCE.maxConcurrentAutoFarms}). Desactivá alguna primero.`,
             });
@@ -1223,13 +1301,22 @@ export function GameProvider({ children }: { children: ReactNode }) {
           }
         }
         s.autoExplored[zoneId] = !was;
-        const zoneName = getZone(zoneId).name;
+        pushClick(s, "auto_explorar", {
+          zona: zoneId,
+          extra: { estado: !was ? "activada" : "desactivada" },
+        });
+        // AUTO_EXPLORER: el toggle refleja el ESTADO de la zona; el ciclo
+        // real (inicio/fin con duracion/hallazgos/recursos) se loguea en
+        // scheduleAutoFarm / completeAutoRun.
         pushLog(s, {
-          zona: `Z${String(zoneId).padStart(2, "0")}`,
+          zona: zoneId,
           origen: "manual",
           category: "AUTO_EXPLORER",
-          subtype: !was ? "ciclo_iniciado" : "ciclo_fin",
-          fields: { zonas: String(getZone(zoneId).id), estado: !was ? "activada" : "desactivada" },
+          subtype: !was ? "activado" : "desactivado",
+          fields: {
+            zonas: activeAutoZones(s).join(",") || `Z${String(zoneId).padStart(2, "0")}`,
+            estado: !was ? "activada" : "desactivada",
+          },
           mensaje: !was ? 'Auto-exploración activada en ' + zoneName : 'Auto-exploración desactivada en ' + zoneName,
         });
         if (!was) {
@@ -1274,11 +1361,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
             }
             z.assignedNpcId = npcId;
             s.npcCycles[npcId] = vnow();
-            pushLog(s, { zona: undefined, origen: 'manual', category: 'NPC_ACTION', subtype: 'asignado', fields: { npc: npc.id, zona_anterior: npc.assignedZoneId ?? 'sin_asignar', zona_nueva: String(getZone(zoneId).id) }, mensaje: `${npcDisplayName(npc)} asignado a ${getZone(zoneId).name}` });
+            pushClick(s, "asignar_npc", { zona: zoneId, extra: { npc: npc.id } });
+            pushLog(s, { zona: zoneId, origen: 'manual', category: 'NPC_ACTION', subtype: 'asignado', fields: { npc: npc.id, nombre: npc.name, zona_anterior: npc.assignedZoneId ?? 'sin_asignar', zona_nueva: String(getZone(zoneId).id) }, mensaje: `${npcDisplayName(npc)} asignado a ${getZone(zoneId).name}` });
           }
         } else if (npcWasAssigned) {
           const zonaAnterior: string = npc.assignedZoneId == null ? 'sin_asignar' : String(getZone(Number(npc.assignedZoneId)).id);
-          pushLog(s, { zona: undefined, origen: 'manual', category: 'NPC_ACTION', subtype: 'reasignado', fields: { npc: npc.id, zona_anterior: zonaAnterior, zona_nueva: zoneId == null ? 'sin_asignar' : String(getZone(zoneId).id) }, mensaje: `${npcDisplayName(npc)} sin asignación` });
+          pushClick(s, "reasignar_npc", { zona: npc.assignedZoneId ?? "global", extra: { npc: npc.id } });
+          pushLog(s, { zona: npc.assignedZoneId ?? "global", origen: 'manual', category: 'NPC_ACTION', subtype: 'reasignado', fields: { npc: npc.id, nombre: npc.name, zona_anterior: zonaAnterior, zona_nueva: zoneId == null ? 'sin_asignar' : String(getZone(zoneId).id) }, mensaje: `${npcDisplayName(npc)} sin asignación` });
         }
       });
     },
@@ -1355,10 +1444,28 @@ export function GameProvider({ children }: { children: ReactNode }) {
     (qty?: number) => {
       setAndSave((s) => {
         if (s.resources.medicamentos <= 0) {
+          pushClick(s, "usar_medicina", { resultado: "bloqueado", motivo: "sin_medicamentos" });
           toast.error("Sin medicamentos");
           return;
         }
         if (s.health >= BALANCE.maxHealth) {
+          // Intento BLOQUEADO: queda en el log con resultado/motivo, nunca
+          // como un USO_ITEM ejecutado (evita confundir el inventario).
+          pushClick(s, "usar_medicina", { resultado: "bloqueado", motivo: "salud_al_maximo" });
+          pushLog(s, {
+            zona: "global",
+            origen: 'manual',
+            category: "USO_ITEM",
+            subtype: "bloqueado",
+            fields: {
+              item: "medicamentos",
+              cantidad: qty == null ? 0 : Math.max(1, Math.floor(qty)),
+              efecto: "curacion",
+              resultado: "bloqueado",
+              motivo: "salud_al_maximo",
+            },
+            mensaje: "Medicina NO usada · salud al máximo",
+          });
           toast.info("Salud completa");
           return;
         }
@@ -1372,18 +1479,30 @@ export function GameProvider({ children }: { children: ReactNode }) {
           unitsForMissing,
           Math.floor(s.resources.medicamentos),
         );
-        if (units <= 0) return;
+        if (units <= 0) {
+          pushClick(s, "usar_medicina", { resultado: "bloqueado", motivo: "sin_unidades" });
+          return;
+        }
+        const saludAntes = s.health;
+        const stockAntes = Math.floor(s.resources.medicamentos);
         s.resources.medicamentos -= units;
         s.health = Math.min(
           BALANCE.maxHealth,
           s.health + units * BALANCE.medicineHealthPerUnit,
         );
+        pushClick(s, "usar_medicina", { extra: { cantidad: units } });
         pushLog(s, {
-          zona: undefined,
-          origen: 'auto',
+          zona: "global",
+          origen: 'manual',
           category: "USO_ITEM",
           subtype: "consumido",
-          fields: {},
+          fields: {
+            item: "medicamentos",
+            cantidad: units,
+            efecto: `+${units * BALANCE.medicineHealthPerUnit} salud`,
+            resultado_recurso: `salud ${Math.round(saludAntes)}→${Math.round(s.health)}`,
+            medicamentos_restantes: stockAntes - units,
+          },
           mensaje: units > 1
             ? `Medicina usada · +${units * BALANCE.medicineHealthPerUnit} Salud (${units} medicamentos)`
             : "Medicina usada · +1 Salud",
@@ -1401,12 +1520,36 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const recipe = RECIPE_BY_ID[recipeId];
       if (!recipe) return;
       setAndSave((s) => {
+        const stockAntes = s.craftedInventory[recipeId] ?? 0;
         const result = applyCraftedUse(s, recipeId);
         if (!result) {
+          pushClick(s, "usar_item", { resultado: "bloqueado", motivo: "no_aplicable", extra: { item: recipe.name } });
+          pushLog(s, {
+            zona: "global",
+            origen: "manual",
+            category: "USO_ITEM",
+            subtype: "bloqueado",
+            fields: { item: recipe.name, cantidad: stockAntes, efecto: recipe.effect, resultado: "bloqueado", motivo: "no_aplicable" },
+            mensaje: `Objeto NO usado · ${recipe.name}`,
+          });
           toast.error("No se puede usar", { description: recipe.name });
           return;
         }
-        pushLog(s, { zona: undefined, origen: 'auto', category: 'USO_ITEM', subtype: 'consumido', fields: {}, mensaje: `Objeto usado · ${result}` });
+        pushClick(s, "usar_item", { extra: { item: recipe.name } });
+        pushLog(s, {
+          zona: "global",
+          origen: "manual",
+          category: "USO_ITEM",
+          subtype: "consumido",
+          fields: {
+            item: recipe.name,
+            cantidad: 1,
+            efecto: recipe.effect,
+            resultado_recurso: result,
+            restantes: Math.max(0, stockAntes - 1),
+          },
+          mensaje: `Objeto usado · ${result}`,
+        });
         toast.success(recipe.name.toUpperCase(), { description: result });
       });
     },

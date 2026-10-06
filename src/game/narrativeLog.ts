@@ -10,9 +10,9 @@
 // repeating the last-used variant index per (event, biome) key.
 // ============================================================
 
-import type { GameState, ResourceKey } from "./types";
-import { formatTime } from "./log";
-import type { LogCategory, LogEvent } from "./log";
+import type { GameState, LogEvent, ResourceKey } from "./types";
+import { pushLog } from "./log";
+import type { LogCategory, LogFieldRecord } from "./log";
 
 /** ---------------------------------------------------------
  * TUNABLE — log size per channel.
@@ -246,20 +246,41 @@ const NARR_CATEGORY: Record<string, LogCategory> = {
   build: "CONSTR",
   surv: "ENERGÍA",
   npcfound: "NPC CHECK",
-  npcfound2: "NPC CHECK",
+  npcfound2: "NPC_ACTION",
 };
 
-function pushNarr(state: GameState, msg: string, kind: string, t: number = Date.now()): void {
+/** Subtipo REAL por tipo narrativo. Nunca cae a la categoría repetida. */
+const NARR_SUBTYPE: Record<string, string> = {
+  start: "inicio_ciclo",
+  info: "evento",
+  resource: "hallazgo",
+  damage: "daño",
+  exp: "evento",
+  npc: "npc_nuevo",
+  zone: "desbloqueada",
+  build: "completada",
+  surv: "tier",
+  npcfound: "npc_nuevo",
+  npcfound2: "hallazgo",
+};
+
+interface NarrOpts {
+  zona?: string | number | null;
+  origen?: "manual" | "auto";
+  fields?: LogFieldRecord;
+}
+
+/** Escribe una línea narrativa usando el pushLog central (event_id, hora real,
+ *  zona y origen normalizados; nunca `[CATEGORIA] CATEGORIA`). */
+function pushNarr(state: GameState, msg: string, kind: string, opts: NarrOpts = {}): void {
   const category = NARR_CATEGORY[kind] ?? "INICIO";
-  state.log.unshift({
-    zona: undefined,
-    origen: "manual",
+  pushLog(state, {
+    zona: opts.zona ?? "global",
+    origen: opts.origen ?? "manual",
     category,
-    subtype: category,
-    fields: {},
+    subtype: NARR_SUBTYPE[kind] ?? "evento",
+    fields: opts.fields ?? {},
     mensaje: msg,
-    hora: formatTime(t),
-    event_id: state.nextLogEventId++
   });
   // Trim narrative overflow only (keep tech log untouched).
   let narrCount = 0;
@@ -303,7 +324,10 @@ function amountLabel(r: ResourceKey, amount: number): string {
 
 /** Narrative line for starting an exploration in a zone. */
 export function narrExplorationStart(state: GameState, zoneId: number, zoneName: string): void {
-  pushNarr(state, fill(pick(START, biomeOf(zoneId), "start"), { zone: zoneName }), "info");
+  pushNarr(state, fill(pick(START, biomeOf(zoneId), "start"), { zone: zoneName }), "start", {
+    zona: zoneId,
+    fields: { ciclo: "inicio" },
+  });
 }
 
 /** Narrative line for a resource find. */
@@ -316,44 +340,74 @@ export function narrResourceFind(
 ): void {
   const vars = { res: resName(resource), amount: amountLabel(resource, amount) };
   const pool = rare ? RARE : FIND;
-  pushNarr(state, fill(pick(pool, biomeOf(zoneId), rare ? "rare" : "find"), vars), "resource");
+  pushNarr(state, fill(pick(pool, biomeOf(zoneId), rare ? "rare" : "find"), vars), "resource", {
+    zona: zoneId,
+    fields: { resource, cantidad: amount, rare: rare ? 1 : 0 },
+  });
 }
 
 /** Narrative line for an incident. */
 export function narrDamage(state: GameState, zoneId: number, cause: string, damage: number): void {
-  pushNarr(state, fill(pick(DAMAGE, biomeOf(zoneId), "damage"), { cause, damage }), "damage");
+  pushNarr(state, fill(pick(DAMAGE, biomeOf(zoneId), "damage"), { cause, damage }), "damage", {
+    zona: zoneId,
+    fields: { causa: cause, salud_perdida: damage },
+  });
 }
 
 /** Narrative line for a manual special event. */
-export function narrEvent(state: GameState, text: string): void {
-  pushNarr(state, text, "exp");
+export function narrEvent(state: GameState, text: string, zona?: number): void {
+  pushNarr(state, text, "exp", { zona: zona ?? "global", fields: { evento: text } });
 }
 
 /** Narrative line for finding an NPC survivor. */
-export function narrNpcFound(state: GameState, npcName: string, npcAlias: string): void {
-  pushNarr(state, fill(pick(NPC_FOUND, "urbano", "npcfound"), { npc: `${npcName} «${npcAlias}»` }), "npc");
+export function narrNpcFound(state: GameState, npcName: string, npcAlias: string, zona?: number): void {
+  pushNarr(state, fill(pick(NPC_FOUND, "urbano", "npcfound"), { npc: `${npcName} «${npcAlias}»` }), "npcfound", {
+    zona: zona ?? "global",
+    fields: { npc: npcName },
+  });
 }
 
 /** Narrative line for a zone unlock. */
 export function narrZoneUnlock(state: GameState, zoneName: string): void {
-  pushNarr(state, fill(pick(ZONE_UNLOCK, "urbano", "unlock"), { zone: zoneName }), "zone");
+  pushNarr(state, fill(pick(ZONE_UNLOCK, "urbano", "unlock"), { zone: zoneName }), "zone", {
+    zona: zoneName,
+    fields: { zona_nombre: zoneName },
+  });
 }
 
 /** Narrative line for a building completion. */
-export function narrBuildDone(state: GameState, buildingName: string, level: number): void {
-  pushNarr(state, fill(pick(BUILD_DONE, "urbano", "build"), { building: buildingName, level }), "build");
+export function narrBuildDone(state: GameState, buildingName: string, level: number, zona?: number): void {
+  pushNarr(state, fill(pick(BUILD_DONE, "urbano", "build"), { building: buildingName, level }), "build", {
+    zona: zona ?? "global",
+    fields: { construccion: buildingName, nivel: level },
+  });
 }
 
-/** Narrative line for an NPC production find. */
-export function narrNpcFind(state: GameState, npcName: string, resource: ResourceKey, amount: number): void {
+/** Narrative line for an NPC production find (NPC ya asignado → NPC_ACTION). */
+export function narrNpcFind(
+  state: GameState,
+  npcName: string,
+  resource: ResourceKey,
+  amount: number,
+  zona?: number | null,
+): void {
   pushNarr(
     state,
     fill(pick(NPC_FIND, "urbano", "npcfind2"), { npc: npcName, res: resName(resource), amount: amountLabel(resource, amount) }),
-    "npc",
+    "npcfound2",
+    {
+      zona: zona ?? "global",
+      origen: "auto",
+      fields: { npc: npcName, resource, cantidad: amount },
+    },
   );
 }
 
 /** Narrative warning when survival tier worsens. */
 export function narrSurvivalWarn(state: GameState, meter: "comida" | "agua"): void {
-  pushNarr(state, fill(pick(SURVIVAL_WARN, "urbano", "surv"), { meter }), "damage");
+  pushNarr(state, fill(pick(SURVIVAL_WARN, "urbano", "surv"), { meter }), "surv", {
+    zona: "global",
+    origen: "auto",
+    fields: { medidor: meter },
+  });
 }

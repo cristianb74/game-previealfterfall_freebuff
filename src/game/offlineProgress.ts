@@ -13,8 +13,8 @@ import {
 } from "./crafting/craftedEffects";
 import { BUILDING_BY_KEY, THEMATIC_BY_KEY } from "./buildings";
 import { RESOURCE_META } from "./resources";
-import { formatTime } from "./log";
-import type { BuildingKey, GameState, LogEvent, ResourceKey } from "./types";
+import { pushLog } from "./log";
+import type { BuildingKey, GameState, ResourceKey } from "./types";
 
 // ============================================================
 // AFTERFALL — offline progression.
@@ -79,11 +79,6 @@ function mulberry32(seed: number) {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-}
-
-function pushLog(log: LogEvent[], ev: LogEvent): void {
-  log.unshift(ev);
-  if (log.length > 60) log.length = 60;
 }
 
 /** Snapshot the meters we need to compute net deltas. */
@@ -154,15 +149,13 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
     const hoursAway = Math.floor(minutesAway / 60);
     const minsAway = Math.floor(minutesAway % 60);
     const timeLabel = hoursAway > 0 ? `${hoursAway} horas${minsAway > 0 ? ` ${minsAway} min` : ""}` : `${minsAway} minutos`;
-    pushLog(state.log, {
-      zona: undefined,
-      origen: "manual",
+    pushLog(state, {
+      zona: "global",
+      origen: "auto",
       category: "ENERGÍA",
       subtype: "regeneración",
       fields: { recovery: timeLabel, gained: energyRegen },
       mensaje: `[ENERGÍA] Recuperación offline · ${timeLabel} · +${energyRegen}`,
-      hora: formatTime(now),
-      event_id: state.nextLogEventId++,
     });
   }
 
@@ -342,15 +335,13 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
 
   // ---- Log ----
   if (explorationsCompleted > 0) {
-    pushLog(state.log, {
-      zona: undefined,
-      origen: "manual",
+    pushLog(state, {
+      zona: "global",
+      origen: "auto",
       category: "EXP",
-      subtype: "fin",
-      fields: { desc: "Exploración completada durante tu ausencia" },
+      subtype: "fin_offline",
+      fields: { exploraciones: explorationsCompleted, desc: "Exploración completada durante tu ausencia" },
       mensaje: "Exploración completada durante tu ausencia",
-      hora: formatTime(now),
-      event_id: state.nextLogEventId++,
     });
   }
   const findCount = npcFinds.length;
@@ -358,52 +349,52 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
     for (const f of npcFinds.slice(0, 5)) {
       const npc = state.npcs.find((n) => n.id === f.npcId);
       const isTime = f.resource === "comida" || f.resource === "agua";
-      pushLog(state.log, {
-        zona: undefined,
-        origen: "manual",
-        category: "NPC CHECK",
-        subtype: "find",
-        fields: { npc: npc ? npc.id : f.npcId, resource: f.resource, amount: f.amount, unidad: isTime ? "min" : "" },
+      // NPC ya asignado produciendo offline → NPC_ACTION/hallazgo con npc=.
+      pushLog(state, {
+        zona: npc?.assignedZoneId ?? "global",
+        origen: "auto",
+        category: "NPC_ACTION",
+        subtype: "hallazgo",
+        fields: {
+          npc: npc ? npc.id : f.npcId,
+          nombre: npc?.name ?? f.npcId,
+          resource: f.resource,
+          cantidad: f.amount,
+          unidad: isTime ? "min" : "unidad",
+          periodo: "offline",
+        },
         mensaje: `${npc ? npcDisplayName(npc) : f.npcId} encontró ${isTime ? `+${f.amount} min` : `+${f.amount}`} ${f.resource === "dinero" ? "$" : f.resource}`,
-        hora: formatTime(now),
-        event_id: state.nextLogEventId++,
       });
     }
     if (findCount > 5) {
-      pushLog(state.log, {
-        zona: undefined,
-        origen: "manual",
-        category: "NPC CHECK",
-        subtype: "encontró",
-        fields: { hallazgos: findCount },
+      pushLog(state, {
+        zona: "global",
+        origen: "auto",
+        category: "NPC_ACTION",
+        subtype: "hallazgo",
+        fields: { npc: "equipo", hallazgos: findCount, truncado: findCount - 5, periodo: "offline" },
         mensaje: `Tu equipo produjo ${findCount} hallazgos mientras no estabas`,
-        hora: formatTime(now),
-        event_id: state.nextLogEventId++,
       });
     }
   }
   if (buildingsCompleted.length > 0) {
-    pushLog(state.log, {
-      zona: undefined,
-      origen: "manual",
+    pushLog(state, {
+      zona: "global",
+      origen: "auto",
       category: "CONSTR",
       subtype: "completada",
       fields: { edificios: buildingsCompleted.join(", ") },
       mensaje: `Construcción completada: ${buildingsCompleted.join(", ")}`,
-      hora: formatTime(now),
-      event_id: state.nextLogEventId++,
     });
   }
   if (capped) {
-    pushLog(state.log, {
-      zona: undefined,
-      origen: "manual",
+    pushLog(state, {
+      zona: "global",
+      origen: "auto",
       category: "ENERGÍA",
       subtype: "regeneración",
       fields: { desc: `Progreso limitado a ${BALANCE.offlineCapHours} h` },
       mensaje: `[OFFLINE] Progreso limitado a ${BALANCE.offlineCapHours} h — el resto del tiempo no se contabilizó`,
-      hora: formatTime(now),
-      event_id: state.nextLogEventId++,
     });
   }
 
