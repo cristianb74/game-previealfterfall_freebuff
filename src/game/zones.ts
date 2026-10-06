@@ -167,7 +167,10 @@ export function getZone(id: number): ZoneDef {
 
 export function zoneImage(id: number): string {
   const n = String(getZone(id).id).padStart(2, "0");
-  return `/assets/stages/stage-${n}.svg`;
+  // Codecs: prefer PNG for the stage artwork (1440×900). The asset folder
+  // retains filenames per stage (stage-01, stage-02, ...) so the HREF stays
+  // static per zone and does not shift when one stage is swapped.
+  return `/assets/stages/stage-${n}.png`;
 }
 
 // image field kept out of ZoneDef data rows; provided by this helper
