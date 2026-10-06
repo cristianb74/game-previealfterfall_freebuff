@@ -61,8 +61,16 @@ export interface LogEvent extends LogCommonFields {
   mensaje?: string;
 }
 
-/** Evento tal como lo entrega el call-site (pushLog añade event_id y hora). */
-export type LogInput = Omit<LogEvent, "event_id" | "hora">;
+/** Evento tal como lo entrega el call-site (pushLog añade event_id y hora).
+ *  `zona` es intencionalmente flexible: acepta id numérico, "Z01", "Base", o
+ *  undefined (→ "global"); pushLog la normaliza SIEMPRE (nunca queda hueca
+ *  ni placeholder). `evento_id`/`hora` NO se pasan: los asigna pushLog. */
+export type LogInput = Omit<
+  LogEvent,
+  "event_id" | "hora" | "zona"
+> & {
+  zona?: string | number | null;
+};
 
 /** Tope de entradas técnicas en state.log (el overflow se descarta). */
 export const MAX_LOG_ENTRIES = 60;

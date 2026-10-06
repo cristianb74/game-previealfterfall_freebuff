@@ -23,7 +23,7 @@ import type { OfflineSummary } from "@/game/offlineProgress";import { vnow,
   resetVirtualClock,
   type SpeedMultiplier,
 } from "@/game/virtualClock";
-import { pushClick, pushLog, type LogEvent } from "./log";
+import { pushClick, pushLog } from "./log";
 import { OfflineSummaryModal } from "@/components/game/OfflineSummaryModal";
 import { RECIPE_BY_ID } from "./crafting/recipes";
 import {
@@ -869,6 +869,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     };
     s.npcs.push(npc);
     const via = fromAuto ? "AUTO-FARM" : "MANUAL";
+    pushLog(s, { zona: `Z${String(zoneId).padStart(2, "0")}`, origen: via === "AUTO-FARM" ? "auto" : "manual", category: "NPC CHECK", subtype: "check", fields: { contador: counter, vía: via, probabilidad: (chance * 100).toFixed(1), resultado: "sí" }, mensaje: `[EXP #${expId}] NPC CHECK | contador ${counter} | ${via} | probabilidad ${(chance * 100).toFixed(1)}% | resultado SÍ` });
     pushLog(s, { zona: `Z${String(zoneId).padStart(2, "0")}`, origen: via === "AUTO-FARM" ? "auto" : "manual", category: "NPC_ACTION", subtype: "hallazgo", fields: { npc: npc.id, nombre: npc.name, tipo: NPC_TYPE_MODIFIERS[npc.type].label }, mensaje: `[EXP #${expId}] NPC OBTENIDO (${via}) | ${npc.id} · ${npc.name} · ${NPC_TYPE_MODIFIERS[npc.type].label}` });
     narrNpcFound(s, npc.name, npc.alias);
     pushLog(s, { zona: `Z${String(zoneId).padStart(2, "0")}`, origen: "auto", category: "NPC_ACTION", subtype: "contador_reiniciado", fields: {}, mensaje: `[NPC] contador reiniciado a 0` });
@@ -1103,18 +1104,29 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (!recipe) return;
       setAndSave((s) => {
         if (!canAfford(s, recipe.costs)) {
+          pushClick(s, "fabricar", {
+            resultado: "bloqueado",
+            motivo: "recursos_insuficientes",
+            extra: { item: recipe.name },
+          });
           toast.error("Recursos insuficientes");
           return;
         }
         startCraft(s, recipe);
         pushLog(s, {
-        zona: String(getZone(s.currentZoneId).id),
-        origen: "manual",
-        category: "CRAFTEO",
-        subtype: "inicio",
-        fields: { item: recipe.name, duración: recipe.timeSeconds },
+          zona: s.currentZoneId,
+          origen: "manual",
+          category: "CRAFTEO",
+          subtype: "inicio",
+          fields: {
+            item: recipe.name,
+            receta: recipe.id,
+            materiales_usados: { ...recipe.costs },
+            duracion: recipe.timeSeconds,
+          },
           mensaje: `Crafteo iniciado: ${recipe.name}`,
         });
+        pushClick(s, "fabricar", { zona: s.currentZoneId, extra: { item: recipe.name } });
         setCraftingUiTick((t) => t + 1);
       });
     },
@@ -1127,7 +1139,29 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const cancelCrafting = useCallback(
     (uid: string) => {
       setAndSave((s) => {
+        const item = s.craftingQueue.find((q) => q.uid === uid);
+        pushClick(s, "cancelar_crafteo", {
+          zona: s.currentZoneId,
+          ...(item
+            ? {}
+            : { resultado: "bloqueado" as const, motivo: "crafteo_inexistente" }),
+          extra: { item: item?.name ?? uid },
+        });
         cancelCraft(s, uid);
+        if (item) {
+          pushLog(s, {
+            zona: s.currentZoneId,
+            origen: "manual",
+            category: "CRAFTEO",
+            subtype: "cancelado",
+            fields: {
+              item: item.name,
+              resultado: "cancelado",
+              materiales_devueltos: { ...item.costs },
+            },
+            mensaje: `Crafteo cancelado: ${item.name}`,
+          });
+        }
         setCraftingUiTick((t) => t + 1);
       });
     },
@@ -1666,6 +1700,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const q = Math.max(1, Math.floor(qty));
         const total = offer.price * q;
         if (s.resources.dinero < total) {
+          pushClick(s, "comprar_mercader", {
+            resultado: "bloqueado",
+            motivo: "dinero_insuficiente",
+            extra: { item: key, cantidad: q, precio: total },
+          });
           toast.error("Dinero insuficiente", { description: `Cuesta $${total}` });
           return;
         }
@@ -1674,6 +1713,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         else if (key === "agua") s.waterMin += offer.amount * q;
         else s.resources[key] += offer.amount * q;
         pushLog(s, { zona: undefined, origen: 'manual', category: 'MERCADER', subtype: 'compra', fields: { item: key, cantidad: offer.amount * q, precio: total }, mensaje: `Mercader: +${offer.amount * q}${key === 'comida' || key === 'agua' ? ' min' : ''} ${key} · -$${total}` });
+        pushClick(s, "comprar_mercader", { extra: { item: key, cantidad: q } });
       });
     },
     [setAndSave],
@@ -1687,10 +1727,20 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const q = Math.max(1, Math.floor(qty));
         const total = MERCHANT_BATTERY_OFFER.price * q;
         if (s.resources.dinero < total) {
+          pushClick(s, "comprar_bateria", {
+            resultado: "bloqueado",
+            motivo: "dinero_insuficiente",
+            extra: { item: "batería", cantidad: q, precio: total },
+          });
           toast.error("Dinero insuficiente", { description: `Cuesta $${total}` });
           return;
         }
         if (s.resources.energia + MERCHANT_BATTERY_OFFER.energy * q > BALANCE.maxEnergy) {
+          pushClick(s, "comprar_bateria", {
+            resultado: "bloqueado",
+            motivo: "sin_margen_energía",
+            extra: { item: "batería", medidor: `${s.resources.energia}/${BALANCE.maxEnergy}` },
+          });
           toast.error("Sin margen de energía", {
             description: `Tienes ${s.resources.energia}/${BALANCE.maxEnergy} · la batería da +${MERCHANT_BATTERY_OFFER.energy}`,
           });
@@ -1699,6 +1749,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         s.resources.dinero -= total;
         gainEnergy(s, MERCHANT_BATTERY_OFFER.energy * q, now);
         pushLog(s, { zona: undefined, origen: 'manual', category: 'MERCADER', subtype: 'compra', fields: { item: 'batería', cantidad: MERCHANT_BATTERY_OFFER.energy * q, precio: total }, mensaje: `Mercader: ${MERCHANT_BATTERY_OFFER.label} +${MERCHANT_BATTERY_OFFER.energy * q} Energía · -$${total}` });
+        pushClick(s, "comprar_bateria", { extra: { item: "batería", cantidad: q } });
         toast.success("Batería comprada", { description: `+${MERCHANT_BATTERY_OFFER.energy * q} Energía` });
       });
     },
@@ -1714,18 +1765,33 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const totalMoney = offer.price * qty;
         if (key === "comida") {
           if (s.foodMin < sellAmount) {
+            pushClick(s, "vender_mercader", {
+              resultado: "bloqueado",
+              motivo: "stock_insuficiente",
+              extra: { item: key, cantidad: sellAmount },
+            });
             toast.error("Comida insuficiente", { description: `Necesitas ${sellAmount} min de comida` });
             return;
           }
           s.foodMin -= sellAmount;
         } else if (key === "agua") {
           if (s.waterMin < sellAmount) {
+            pushClick(s, "vender_mercader", {
+              resultado: "bloqueado",
+              motivo: "stock_insuficiente",
+              extra: { item: key, cantidad: sellAmount },
+            });
             toast.error("Agua insuficiente", { description: `Necesitas ${sellAmount} min de agua` });
             return;
           }
           s.waterMin -= sellAmount;
         } else {
           if (s.resources[key] < sellAmount) {
+            pushClick(s, "vender_mercader", {
+              resultado: "bloqueado",
+              motivo: "stock_insuficiente",
+              extra: { item: key, cantidad: sellAmount },
+            });
             toast.error(`${RESOURCE_META[key].label} insuficiente`, { description: `Necesitas ${sellAmount}` });
             return;
           }
@@ -1733,6 +1799,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         }
         s.resources.dinero += totalMoney;
         pushLog(s, { zona: undefined, origen: 'manual', category: 'MERCADER', subtype: 'venta', fields: { item: key, cantidad: sellAmount, precio: totalMoney }, mensaje: `[MERCADER] Venta · -${sellAmount} ${key === 'comida' || key === 'agua' ? 'min ' + key : key} · +$${totalMoney}` });
+        pushClick(s, "vender_mercader", { extra: { item: key, cantidad: qty } });
         toast.success(`Venta realizada`, { description: `+ $${totalMoney}` });
       });
     },

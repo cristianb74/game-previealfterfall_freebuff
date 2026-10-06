@@ -162,7 +162,8 @@ export function tickNpcs(state: GameState, now: number): TickChanges {
       },
       mensaje: `${npc ? npcDisplayName(npc) : f.npcId} encontró ${isTime ? `+${f.amount} min` : `+${f.amount}`} ${f.resource === "dinero" ? "$" : f.resource}`,
     });
-    if (npc) narrNpcFind(state, npc.name, f.resource, f.amount, npc.assignedZoneId);
+    if (npc && npc.assignedZoneId != null)
+      narrNpcFind(state, npc.name, f.resource, f.amount, Number(npc.assignedZoneId));
   }
   if (finds.length > 5) {
     pushLog(state, {

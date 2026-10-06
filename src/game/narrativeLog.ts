@@ -10,7 +10,7 @@
 // repeating the last-used variant index per (event, biome) key.
 // ============================================================
 
-import type { GameState, LogEvent, ResourceKey } from "./types";
+import type { GameState, ResourceKey } from "./types";
 import { pushLog } from "./log";
 import type { LogCategory, LogFieldRecord } from "./log";
 
@@ -241,11 +241,14 @@ const NARR_CATEGORY: Record<string, LogCategory> = {
   resource: "RECURSO",
   damage: "ENERGÍA",
   exp: "EXP",
-  npc: "NPC CHECK",
+  // npc/npcfound: la NARRATIVA de un NPC nuevo es parte de la acción del NPC
+  // (NPC_ACTION/hallazgo). NPC CHECK queda reservado EXCLUSIVAMENTE para el
+  // chequeo de probabilidad de NPC nuevo (contador/vía/probabilidad/resultado).
+  npc: "NPC_ACTION",
   zone: "ZONA",
   build: "CONSTR",
   surv: "ENERGÍA",
-  npcfound: "NPC CHECK",
+  npcfound: "NPC_ACTION",
   npcfound2: "NPC_ACTION",
 };
 
@@ -260,7 +263,7 @@ const NARR_SUBTYPE: Record<string, string> = {
   zone: "desbloqueada",
   build: "completada",
   surv: "tier",
-  npcfound: "npc_nuevo",
+  npcfound: "hallazgo",
   npcfound2: "hallazgo",
 };
 

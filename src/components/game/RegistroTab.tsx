@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useGame } from "@/game/GameProvider";
+import { formatLogLine } from "@/game/log";
 import { getZone } from "@/game/zones";
 import { NPC_TYPE_MODIFIERS } from "@/game/npcTypes";
 import { vnow } from "@/game/virtualClock";
@@ -7,16 +8,11 @@ import { GAME_INFO } from "@/game/gameConfig";
 import { BALANCE } from "@/game/balance";
 import { BUILDING_BY_KEY, buildingBonus, THEMATIC_BY_KEY, thematicBonus } from "@/game/buildings";
 import { currentEnergy, nextEnergyRegenAt } from "@/game/energySystem";
-import type { BuildingKey, LogEvent } from "@/game/types";
+import type { BuildingKey } from "@/game/types";
 
 const BUILDING_ORDER: BuildingKey[] = ["cocina", "tanque", "almacen", "enfermeria", "taller", "generador"];
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-
-function fmtTs(t: number): string {
-  const d = new Date(t);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
-}
 
 function fmtDate(t: number): string {
   return new Date(t).toLocaleString("es-ES", {
@@ -82,17 +78,18 @@ export function RegistroTab() {
     const nextRegenMin = Math.ceil(nextRegenMs / 60000);
     // Última regeneración: derivada del último evento ENERGÍA (regeneración),
     // no del estado aparte lastEnergyRegenAt (que es solo la fuente de la barra).
-    let ultimaRegen: number | null = null;
-    let ultimaRegenMs = 0;
+    // log[0] es el más reciente (pushLog hace unshift): el primer evento
+    // ENERGÍA regeneración del array es la última regeneración. La hora es
+    // SIEMPRE string HH:MM:SS ("--:--:--" en entradas migradas sin hora).
+    let ultimaRegen: string | null = null;
     for (const e of state.log) {
-      if (e.category === "ENERGÍA" && e.subtype === "regeneración" && typeof e.hora === "number" && e.hora > ultimaRegenMs) {
-        ultimaRegenMs = e.hora;
+      if (e.category === "ENERGÍA" && e.subtype === "regeneración" && e.hora && e.hora !== "--:--:--") {
         ultimaRegen = e.hora;
+        break;
       }
     }
-    if (ultimaRegenMs > 0) {
-      const d = new Date(ultimaRegenMs);
-      lines.push(`Última regeneración de energía: ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`);
+    if (ultimaRegen) {
+      lines.push(`Última regeneración de energía: ${ultimaRegen}`);
     } else {
       lines.push(`Última regeneración de energía: ${fmtDate(state.lastEnergyRegenAt)}`);
     }
@@ -155,24 +152,18 @@ export function RegistroTab() {
     return lines.join("\n");
   }, [state]);
 
-  /** Full log text for clipboard / download — sorted ascending by timestamp. */
+  /** Full log text for clipboard / download — chronological (oldest first),
+   *  SAME formatter as the live view:
+   *  [HH:MM:SS] [CAT #id] subtipo | zona=.. | origen=.. | campo=valor | ... */
   const fullLog = useMemo(() => {
     if (!state) return "";
-    // Sort ascending (oldest first) for chronological reading
-    const sorted = [...state.log].sort((a, b) => a.hora.localeCompare(b.hora));
-    const logLines = sorted.map((e) => {
-      // New structured format: [HH:MM:SS] [CATEGORY] subtipo | campo=valor | ...
-      const line = [`[${e.hora ?? fmtTs(Date.now())}] [${e.category ?? "INFO"}] ${e.subtype ?? "evento"}`];
-      if (e.fields && Object.keys(e.fields).length > 0) {
-        const pairs = Object.entries(e.fields as Record<string, string | number | boolean>).map(([k, v]) => {
-          if (typeof v === "boolean") return `${k}=${v ? "1" : "0"}`;
-          if (typeof v === "object" && v !== null) return `${k}=${JSON.stringify(v)}`;
-          return `${k}=${v}`;
-        });
-        line.push(...pairs);
-      }
-      return line.join(" | ");
+    const sorted = [...state.log].sort((a, b) => {
+      const ia = Number.isFinite(a.event_id) ? a.event_id : 0;
+      const ib = Number.isFinite(b.event_id) ? b.event_id : 0;
+      if (ia !== ib) return ia - ib;
+      return a.hora.localeCompare(b.hora);
     });
+    const logLines = sorted.map(formatLogLine);
     return summary + "\n" + logLines.join("\n");
   }, [state, summary]);
 
@@ -406,17 +397,17 @@ export function RegistroTab() {
         <div className="max-h-[50vh] overflow-y-auto rounded-sm bg-black/40 p-2 font-mono text-[10px] leading-5">
           {(() => {
             const filtered = state.log.filter((e) => {
-              // New structured logs carry no per-entry channel; derive a display
-              // grouping from the category so the old tech/narr split stays.
-              const displayKind = String(e.category ?? "INFO");
+              // narr = eventos con mensaje para el jugador; tech = solo la
+              // línea técnica estructurada; both = todo.
               if (channelFilter === "both") return true;
-              return displayKind === channelFilter || displayKind === "INFO";
+              const narr = Boolean(e.mensaje);
+              return channelFilter === "narr" ? narr : !narr;
             });
             if (filtered.length === 0) {
               return <p className="text-subtle">Sin eventos en este canal</p>;
             }
             return filtered.map((e, i) => (
-              <div key={i} className="flex gap-2 border-b border-zinc-900 py-0.5">                  <span className="shrink-0 text-subtle">[{e.hora ?? fmtTs(Date.now())}]</span>
+              <div key={i} className="border-b border-zinc-900 py-0.5">
                 <span
                   className={
                     e.category === "ENERGÍA" || e.category === "RECURSO" || e.category === "CONSTR" || e.category === "ZONA" || e.category === "USO_ITEM" || e.category === "SCAVENGE" || e.category === "AUTO_EXPLORER" || e.category === "SCAVENGE CHECK"
@@ -424,8 +415,11 @@ export function RegistroTab() {
                       : "text-zinc-300"
                   }
                 >
-                  {e.subtype ?? "evento"} {e.mensaje ?? ""}
+                  {formatLogLine(e)}
                 </span>
+                {e.mensaje ? (
+                  <div className="pl-2 text-[10px] italic text-zinc-500">↳ {e.mensaje}</div>
+                ) : null}
               </div>
             ));
           })()}
