@@ -3,7 +3,7 @@ import { useGame } from "@/game/GameProvider";
 import { ZONES, zoneImage, zoneImageFallback } from "@/game/zones";
 import { THEMATIC_BY_KEY } from "@/game/buildings";
 import { vnow } from "@/game/virtualClock";
-import { currentEnergy } from "@/game/energySystem";
+import { currentEnergy, nextEnergyRegenAt } from "@/game/energySystem";
 import { NPC_TYPE_MODIFIERS, npcProductionMultiplier, zoneBonusBreakdown } from "@/game/npcTypes";
 import { BALANCE, BUILDING_SPECIALIZATION } from "@/game/balance";
 import { activeAssignments } from "@/game/crafting/craftedEffects";
@@ -282,6 +282,9 @@ export function ZonasTab() {
 
           const activeBuildings = getActiveBuildings(state.zones[z.id]?.thematic);
           const now = vnow();
+          // Pista de energía en la tarjeta (no se puede tocar sin energía).
+          const energyNow = currentEnergy(state, now);
+          const sinEnergia = unlocked && !isExploring && energyNow < 1;
           const zoneAssignments = zoneAssignmentsNow.filter(
             (a) => a.targetType === "zone" && a.targetId === String(z.id),
           );
@@ -305,10 +308,11 @@ export function ZonasTab() {
                   _lastTap.set(z.id, now);
                   if (now - prev < 300) return;
                   setCurrentZone(z.id);
-                  // Start exploration if not already exploring and has energy
+                  // Start exploration if not already exploring. El GUARD de
+                  // energía/salud vive en el provider y allí explica el
+                  // motivo con un aviso (nada de clicks mudos).
                   const zExploring = state.explorationStates[z.id] != null;
-                  const energy = currentEnergy(state, now);
-                  if (!zExploring && energy >= 1 && state.health > 0) {
+                  if (!zExploring) {
                     startExploration(z.id);
                   }
                 }}
@@ -384,6 +388,11 @@ export function ZonasTab() {
                         ? "Alcanza la siguiente zona ›"
                         : `🔒 ${z.unlockExp.toLocaleString("es")} EXP`}
                   </p>
+                  {sinEnergia && (
+                    <p className="truncate text-[9px] font-bold uppercase leading-[12px] tracking-wider text-amber-400">
+                      ⚡ Sin energía · +1 en {fmtCountdown(nextEnergyRegenAt(state) - now)}
+                    </p>
+                  )}
 
                   {/* Construction status slot: always reserves the same
                       space (44px + margin) so the presence or absence of

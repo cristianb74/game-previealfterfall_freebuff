@@ -42,7 +42,7 @@ import {
 } from "./crafting/craftedEffects";
 import type { CraftedAssignment } from "./types";
 import { tickNpcs } from "@/game/onlineTick";
-import { applyEnergyRegen, currentEnergy, gainEnergy, spendEnergy, nextEnergyRegenAt } from "@/game/energySystem";
+import { applyEnergyRegen, currentEnergy, energyShortfallInfo, gainEnergy, spendEnergy, nextEnergyRegenAt } from "@/game/energySystem";
 import { explorationMinutesWithAgility } from "@/game/statEffects";
 import {
   narrExplorationStart,
@@ -57,6 +57,7 @@ import {
   searchScavengePoint,
   resolveScavengeAuto,
   finishScavenge,
+  ignoreScavenge,
   settleScavengeOnBoot,
 } from "@/game/scavenge";
 import { scavengeLocationForZone } from "@/game/scavengeLocations";
@@ -135,6 +136,9 @@ export interface GameContextValue {
    *  clear the session and log the haul. Loot was already granted at
    *  search time — quitting keeps everything found (per design). */
   finishScavengeEvent: () => void;
+  /** IGNORAR el evento: el scavenger se va sin que revises nada — sin botín,
+   *  sin daño y sin consumos; queda la línea en el log de actividades. */
+  ignoreScavengeEvent: () => void;
   /** Toggle the background auto-exploration farm for a specific zone. */
   toggleAutoExplore: (zoneId: number) => void;
   /** Highest zone id reachable with the player's total EXP. */
@@ -1185,7 +1189,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
         // Per-zone: only prevent if THIS zone is already exploring
         if (s.explorationStates[zoneId]) return;
         if (currentEnergy(s, now) < 1) {
-          toast.error("Sin energía", { description: "Espera a que se regenere." });
+          // Aviso claro: cuánta falta, cuánta hay, cuándo vuelve y cómo
+          // acelerarla (Batería en el Mercader). El botón deshabilitado ya
+          // muestra la pista corta; este toast da el detalle completo.
+          toast.error("Sin energía para explorar", {
+            description: energyShortfallInfo(s, 1, now).mensaje,
+          });
           return;
         }
         if (s.health <= 0) {
@@ -1263,38 +1272,63 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   /** Close the scavenge minigame: settle unsearched points as "nada",
    *  log the session total and clear the event. Loot/damage were applied
-   *  at search time; this only finalizes the session. */
+   *  at search time; this only finalizes the session.
+   *  `fin` = tablero completo (saquear todo); `parcial` = se cerró antes de
+   *  revisar los N puntos (saquear parcial / retirarse con lo obtenido). */
   const finishScavengeEvent = useCallback(() => {
     setAndSave((s) => {
       if (!s.scavengeEvent) return;
+      const board = s.scavengeEvent.board;
+      const buscados = board.filter((c) => c.result).length;
+      const total = board.length;
+      const completo = buscados >= total;
+      const puntos = `${buscados}/${total}`;
+      const subtype = completo ? "fin" : "parcial";
       const results = finishScavenge(s);
       const lootLines = results.filter((r) => r.kind === "loot" && r.loot);
+      const saludPerdida = results.reduce(
+        (acc, r) => acc + (r.kind === "dano" ? r.damage ?? 0 : 0),
+        0,
+      );
       if (lootLines.length > 0) {
         const summary = lootLines
           .map((r) => `+${r.loot!.amount}${r.loot!.resource === "comida" || r.loot!.resource === "agua" ? " min" : ""} ${r.loot!.resource === "dinero" ? "$" : r.loot!.resource}`)
           .join(" · ");
-        toast.success("SAQUEO COMPLETADO", { description: summary });
+        toast.success(completo ? "SAQUEO COMPLETADO" : "SAQUEO PARCIAL COBRADO", {
+          description: summary,
+        });
         pushLog(s, {
           zona: `Z${String(s.currentZoneId).padStart(2, "0")}`,
           origen: "manual",
           category: "SCAVENGE",
-          subtype: "fin",
-          fields: { hallazgos: summary },
-          mensaje: `EVENTO | SCAVENGE cerrado · ${summary}`,
+          subtype,
+          fields: { puntos, completo, hallazgos: summary, salud_perdida: saludPerdida },
+          mensaje: `EVENTO | SCAVENGE ${completo ? "cerrado" : "parcial"} · ${puntos} puntos · ${summary}`,
         });
       } else {
         pushLog(s, {
           zona: `Z${String(s.currentZoneId).padStart(2, "0")}`,
           origen: "manual",
           category: "SCAVENGE",
-          subtype: "fin",
-          fields: {},
-          mensaje: "EVENTO | SCAVENGE cerrado sin hallazgos",
+          subtype,
+          fields: { puntos, completo, salud_perdida: saludPerdida },
+          mensaje: `EVENTO | SCAVENGE ${completo ? "cerrado" : "parcial"} sin hallazgos · ${puntos} puntos`,
         });
         toast.info("Saqueo terminado", {
           description: "No encontraste nada aprovechable esta vez.",
         });
       }
+    });
+  }, [setAndSave]);
+
+  /** IGNORAR el evento: no se revisa ningún punto → sin botín, sin daño y
+   *  sin consumos. El scavenger se va y el log registra el descarte. */
+  const ignoreScavengeEvent = useCallback(() => {
+    setAndSave((s) => {
+      if (!ignoreScavenge(s)) return;
+      toast.info("Ubicación ignorada", {
+        description: "No saqueaste nada: ni botín ni riesgo. El scavenger se retira.",
+      });
     });
   }, [setAndSave]);
 
@@ -1912,6 +1946,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       startExploration,
       searchScavenge,
       finishScavengeEvent,
+      ignoreScavengeEvent,
       toggleAutoExplore,
       maxUnlockedZoneId: state ? computeZoneUnlocks(state) : 1,
       setCurrentZone,
@@ -1940,7 +1975,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       speedMultiplier,
       setSpeed,
     }),
-    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave,      cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, searchScavenge, finishScavengeEvent, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, ignoreNpc, markScreenSeen, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, useCraftedItemAction, assignCraftedItem, cancelCraftedAssignment, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, savedZonasScrollRef, speedMultiplier, setSpeed],
+    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave,      cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud,      startExploration, searchScavenge, finishScavengeEvent, ignoreScavengeEvent, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, ignoreNpc, markScreenSeen, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, useCraftedItemAction, assignCraftedItem, cancelCraftedAssignment, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, savedZonasScrollRef, speedMultiplier, setSpeed],
   );
 
   return (

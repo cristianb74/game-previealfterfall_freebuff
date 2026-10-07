@@ -1,4 +1,4 @@
-import { BALANCE } from "./balance";
+import { BALANCE, MERCHANT_BATTERY_OFFER } from "./balance";
 import { survivalRegenPenalty } from "./survivalSystem";
 import type { GameState } from "./types";
 
@@ -71,6 +71,41 @@ export function currentEnergy(state: GameState, now = Date.now()): number {
 
 export function canExplore(state: GameState, now = Date.now()): boolean {
   return currentEnergy(state, now) >= 1;
+}
+
+/** Detalle de por qué NO alcanza la energía (y cómo recuperarla): lo usan
+ *  el aviso de "sin energía" del provider y el botón de explorar para
+ *  explicar el bloqueo en vez de dejar el botón mudo. */
+export interface EnergyShortfall {
+  /** Puntos requeridos (1 por exploración). */
+  required: number;
+  /** Puntos disponibles ahora mismo. */
+  actual: number;
+  /** Cuántos puntos faltan. */
+  falta: number;
+  /** ms hasta el próximo punto de energía (0 si ya está por vencer). */
+  msToNextPoint: number;
+  /** Mensaje listo para el toast/modal. */
+  mensaje: string;
+}
+
+export function energyShortfallInfo(
+  state: GameState,
+  required = 1,
+  now = Date.now(),
+): EnergyShortfall {
+  const actual = currentEnergy(state, now);
+  const falta = Math.max(0, required - actual);
+  const msToNextPoint = Math.max(0, nextEnergyRegenAt(state) - now);
+  const totalSec = Math.floor(msToNextPoint / 1000);
+  const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
+  const ss = String(totalSec % 60).padStart(2, "0");
+  const mensaje =
+    `No tenés energía suficiente para explorar. Necesitás ${required} y tenés ${actual}. ` +
+    `Recuperás energía en ${mm}:${ss} min (cada +1 cada ${BALANCE.energyRegenMinutesPerPoint} min) ` +
+    `o comprá una ${MERCHANT_BATTERY_OFFER.label} (+${MERCHANT_BATTERY_OFFER.energy} energía) ` +
+    `en el Mercader por ${MERCHANT_BATTERY_OFFER.price} $.`;
+  return { required, actual, falta, msToNextPoint, mensaje };
 }
 
 /**

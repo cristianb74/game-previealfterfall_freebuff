@@ -4,6 +4,7 @@ import type {
   ResourceKey,
   StatKey,
 } from "./types";
+import type { Biome } from "./narrativeLog";
 
 // ============================================================
 // AFTERFALL — single source of truth for tunable balance values.
@@ -43,11 +44,49 @@ export const BALANCE = {
    *  (cache, safe shelter, supply stash...). Auto-farm can never
    *  trigger these events. */
   manualSpecialEventChance: 0.08,
-  /** Chance (0–1) of a survival incident (only when no resource found). */
-  explorationIncidentChance: 0.3,
+  /** Chance (0–1) of a survival incident (only when no resource found).
+   *  La mitigan Voluntad (incidentChanceFactor) y la Protección asignada. */
+  explorationIncidentChance: 0.5,
+  /** Incidentes de supervivencia: causa y rango de daño CRUDO (voluntad +
+   *  resistencia lo Mitigan, la Protección asignada lo baja otro 15 %).
+   *  ANTES vivía hardcodeado en explorationEngine.ts — este bloque es el
+   *  ÚNICO lugar para ajustar el riesgo de la exploración. */
+  incidentDamage: [
+    { cause: "Vidrio roto", damage: [4, 10] },
+    { cause: "Escombro caído", damage: [6, 14] },
+    { cause: "Estructura colapsada", damage: [9, 18] },
+    { cause: "Corte con metal oxidado", damage: [4, 9] },
+    { cause: "Infección", damage: [6, 12] },
+    { cause: "Animal herido", damage: [4, 11] },
+    { cause: "Caída de altura", damage: [8, 16] },
+    { cause: "Suelo inestable", damage: [6, 13] },
+  ] as const,
+  /** El daño escala con el NIVEL de zona: factor = 1 + (zona − 1) × perZone
+   *  (tope incidentDamageZoneMaxFactor). Z01 ×1.00 … Z20 ×1.95. */
+  incidentDamageZonePerLevel: 0.05,
+  incidentDamageZoneMaxFactor: 2,
+  /** …y con el TIPO (biome) de zona. */
+  incidentDamageBiomeFactor: {
+    urbano: 1,
+    comercial: 1.05,
+    medico: 1.05,
+    industrial: 1.1,
+    infraestructura: 1.15,
+    militar: 1.2,
+  } as Record<Biome, number>,
   /** Resource find: min/max units for unit-type resources. */
   findUnitsMin: 1,
   findUnitsMax: 3,
+  /** Tope de unidades POR RECURSO dentro de un hallazgo (si el recurso no
+   *  está, manda la regla general de arriba con el bonus de Fuerza).
+   *  Medicamentos: antes llegaba a 8 unidades por hallazgo (×3 si era raro
+   *  = 24 medicamentos ≈ 144 $ de un solo golpe). */
+  findUnitsMaxByResource: { medicamentos: 3 } as Partial<Record<ResourceKey, number>>,
+  /** Peso RELATIVO del recurso al elegir QUÉ encontrar en la zona
+   *  (pickWeightedResource: peso = 1 + stat × statEffectFactor, luego este
+   *  multiplicador). 1 = igual que el resto; medicamentos 0.6 → −40 % de
+   *  probabilidad relativa por exploración. */
+  resourceFindWeights: { medicamentos: 0.6 } as Partial<Record<ResourceKey, number>>,
   /** Resource find: min/max added survival time (minutes) for Comida/Agua. */
   findTimeMin: 10,
   findTimeMax: 30,
@@ -115,6 +154,9 @@ export const BALANCE = {
   /** Loot per search point: unit resources roll 1–3 units, money is flat
    *  5–20, and Comida/Agua roll simple units converted to survival MINUTES
    *  with scavengeFoodWaterMinutes (1 unit = 20 min) on grant. */
+  /** Saqueo PARCIAL: presets de % de puntos que ofrece la UI (25 = 2 de 8
+   *  puntos… 100 = saquear todo, el comportamiento original). */
+  scavengePartialPresets: [25, 50, 75, 100] as const,
   scavengeLootUnitsMin: 1,
   scavengeLootUnitsMax: 3,
   scavengeMoneyMin: 5,

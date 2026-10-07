@@ -4,9 +4,10 @@ import { Progress } from "@/components/ui/progress";
 import { HUD } from "@/components/game/HUD";
 import { useGame } from "@/game/GameProvider";
 import { getZone, zoneImage, zoneImageFallback } from "@/game/zones";
-import { currentEnergy } from "@/game/energySystem";
+import { currentEnergy, energyShortfallInfo, nextEnergyRegenAt } from "@/game/energySystem";
 import { vnow } from "@/game/virtualClock";
 import { BALANCE } from "@/game/balance";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 function fmtCountdown(ms: number): string {
@@ -56,10 +57,9 @@ export function ExplorarTab() {
   const energy = currentEnergy(state, now);
   // Can explore if this zone is not already exploring, has energy, and has health
   const canExplore = !isCurrentExploring && energy >= 1 && state.health > 0;
-  // Energy regen countdown (ms until next +1)
-  const msSinceLastRegen = Math.max(0, now - state.lastEnergyRegenAt);
-  const msPerPoint = BALANCE.energyRegenMinutesPerPoint * 60000;
-  const msUntilNext = energy < 1 ? Math.max(0, msPerPoint - msSinceLastRegen) : 0;
+  // Energy regen countdown (ms until next +1) — usa el ciclo REAL del
+  // sistema (incluye el penalizador de hambre/sed, si lo hay).
+  const msUntilNext = energy < 1 ? Math.max(0, nextEnergyRegenAt(state) - now) : 0;
   const nextRegenMMSS = `${String(Math.floor(msUntilNext / 60000)).padStart(2, "0")}:${String(Math.floor((msUntilNext % 60000) / 1000)).padStart(2, "0")}`;
 
   const log = state.log.slice(0, 3);
@@ -126,18 +126,53 @@ export function ExplorarTab() {
               </p>
             </div>
           ) : (
-            <Button
-              size="lg"
-              disabled={!canExplore}
-              onClick={() => startExploration(zone.id)}
-              className="h-12 border border-green-500/40 bg-green-600/90 text-base font-bold uppercase tracking-widest text-black hover:bg-green-500"
-            >
-              {state.health <= 0
-                ? "Sin salud"
-                : energy < 1
-                  ? `Sin energía · próxima carga en ${nextRegenMMSS}`
-                  : "Explorar"}
-            </Button>
+            <div className="flex flex-col gap-1.5">
+              <Button
+                size="lg"
+                // Sin `disabled` nativo: se VE deshabilitado (aria-disabled +
+                // estilos), pero el toque responde con el motivo completo en
+                // vez de no hacer nada (así no parece roto).
+                aria-disabled={!canExplore}
+                onClick={() => {
+                  if (state.health <= 0) {
+                    toast.error("Sin salud para explorar", {
+                      description: "Usá medicina antes de salir.",
+                    });
+                    return;
+                  }
+                  if (energy < 1) {
+                    toast.error("Sin energía para explorar", {
+                      description: energyShortfallInfo(state, 1, now).mensaje,
+                    });
+                    return;
+                  }
+                  if (isCurrentExploring) return;
+                  startExploration(zone.id);
+                }}
+                className={cn(
+                  "h-12 border border-green-500/40 bg-green-600/90 text-base font-bold uppercase tracking-widest text-black hover:bg-green-500",
+                  !canExplore &&
+                    "cursor-not-allowed opacity-50 grayscale hover:bg-green-600/90",
+                )}
+              >
+                {state.health <= 0
+                  ? "Sin salud"
+                  : energy < 1
+                    ? `Sin energía · próxima carga en ${nextRegenMMSS}`
+                    : "Explorar"}
+              </Button>
+              {/* Pista corta del motivo (el toast al tocar da el detalle). */}
+              {energy < 1 && state.health > 0 && (
+                <p className="text-center text-[11px] font-semibold text-amber-400">
+                  ⚡ Necesitás 1 energía y tenés {energy} · +1 en {nextRegenMMSS}
+                </p>
+              )}
+              {state.health <= 0 && (
+                <p className="text-center text-[11px] font-semibold text-red-400">
+                  ☢ Salud crítica · usá medicina antes de explorar
+                </p>
+              )}
+            </div>
           )}
 
           {/* Show all active manual explorations across zones */}

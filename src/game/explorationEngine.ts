@@ -10,6 +10,7 @@ import {
   rareFindChance,
 } from "./statEffects";
 import { survivalEfficiency } from "./survivalSystem";
+import { biomeOf } from "./narrativeLog";
 import {
   agilityFactor,
   damageTakenFactor,
@@ -161,7 +162,11 @@ export function buildingMultiplierFor(
 function pickWeightedResource(stats: Stats, candidates: ResourceKey[]): ResourceKey {
   const weights = candidates.map((r) => {
     const stat = stats[RESOURCE_STAT[r]] ?? 1;
-    return 1 + stat * BALANCE.statEffectFactor;
+    // Peso por recurso (BALANCE.resourceFindWeights): permite bajar la
+    // probabilidad de un recurso concreto (p.ej. Medicamentos 0.6) sin tocar
+    // la fórmula general de estadística.
+    const byResource = BALANCE.resourceFindWeights[r] ?? 1;
+    return (1 + stat * BALANCE.statEffectFactor) * byResource;
   });
   const total = weights.reduce((a, b) => a + b, 0);
   let roll = Math.random() * total;
@@ -248,7 +253,17 @@ export function rollExploration(
             rareFindChance(effectiveExplorationStat(state, "percepcion", zoneId, now));
         let amount = isTime(picked)
           ? BALANCE.findTimeMin + Math.floor(Math.random() * (BALANCE.findTimeMax - BALANCE.findTimeMin + 1))
-          : BALANCE.findUnitsMin + Math.floor(Math.random() * (maxUnitsPerFind(state.survivor.stats.fuerza) - BALANCE.findUnitsMin + 1));
+          : BALANCE.findUnitsMin +
+            Math.floor(
+              Math.random() *
+                (Math.min(
+                  // Tope por recurso (p.ej. Medicamentos ≤ 3) si está en config.
+                  maxUnitsPerFind(state.survivor.stats.fuerza),
+                  BALANCE.findUnitsMaxByResource[picked] ?? Number.POSITIVE_INFINITY,
+                ) -
+                  BALANCE.findUnitsMin +
+                  1),
+            );
         if (rare) amount *= 3;
         // ASIGNACIONES zone capacity: mochila recolección +10% materiales,
         // kit técnico +10% componentes (solo su zona asignada).
@@ -259,9 +274,9 @@ export function rollExploration(
   }
 
   // Survival incident (no battle) — only when no resource was found.
-  // Chance scaled DOWN by Voluntad; severity reduced by Voluntad + Resistencia
-  // and by the zone-assigned guantes (−10% risk) — same multiplicative
-  // pattern as voluntad.
+  // Chance scaled DOWN by Voluntad; severity reduced by Voluntad + Resistencia,
+  // by the zone-assigned guantes (−10% risk) and protección (−15% damage),
+  // and SCALED UP by the zone's level/type factor (riesgo creciente).
   const hasResource = findings.some((f) => f.kind === "resource");
   if (
     !hasResource &&
@@ -277,7 +292,8 @@ export function rollExploration(
         1,
         Math.round(
           mitigatedDamage(incident.damage, state.survivor.stats.voluntad, state.survivor.stats.resistencia) *
-            damageTakenFactor(state, zoneId, now),
+            damageTakenFactor(state, zoneId, now) *
+            incidentDamageZoneFactor(zoneId),
         ),
       ),
       cause: incident.cause,
@@ -296,19 +312,26 @@ export function rollExploration(
   return { zoneId, exp, findings };
 }
 
-const INCIDENTS: { cause: string; damage: [number, number] }[] = [
-  { cause: "Vidrio roto", damage: [2, 6] },
-  { cause: "Escombro caído", damage: [3, 8] },
-  { cause: "Estructura colapsada", damage: [5, 12] },
-  { cause: "Corte con metal oxidado", damage: [2, 5] },
-  { cause: "Infección", damage: [3, 7] },
-  { cause: "Animal herido", damage: [2, 6] },
-  { cause: "Caída de altura", damage: [4, 10] },
-  { cause: "Suelo inestable", damage: [3, 8] },
-];
+// La tabla de incidentes (causa + rango de daño) vive en
+// BALANCE.incidentDamage — único lugar para ajustarla.
 
+/** Factor de daño por NIVEL y TIPO de zona (1.0 en Z01/urbano; sube con el
+ *  id de zona según BALANCE.incidentDamageZonePerLevel y con el biome según
+ *  BALANCE.incidentDamageBiomeFactor). El riesgo de una exploración manual
+ *  escala así con la dificultad de la zona. */
+function incidentDamageZoneFactor(zoneId: number): number {
+  const byLevel = Math.min(
+    BALANCE.incidentDamageZoneMaxFactor,
+    1 + (zoneId - 1) * BALANCE.incidentDamageZonePerLevel,
+  );
+  return byLevel * (BALANCE.incidentDamageBiomeFactor[biomeOf(zoneId)] ?? 1);
+}
+
+/** Sorteoa un incidente de la tabla CONFIGURADA en BALANCE.incidentDamage
+ *  (causa + rango de daño crudo). */
 function randomIncident(): { cause: string; damage: number } {
-  const inc = INCIDENTS[Math.floor(Math.random() * INCIDENTS.length)];
+  const table = BALANCE.incidentDamage;
+  const inc = table[Math.floor(Math.random() * table.length)];
   const [min, max] = inc.damage;
   return { cause: inc.cause, damage: min + Math.floor(Math.random() * (max - min + 1)) };
 }

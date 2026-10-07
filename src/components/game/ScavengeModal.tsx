@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useGame } from "@/game/GameProvider";
+import { scavengePreview, scavengeTargetPoints } from "@/game/scavenge";
 import { SCAVENGE_PINS, scavengeLocationForZone } from "@/game/scavengeLocations";
 import { BALANCE } from "@/game/balance";
 import type { ResourceKey } from "@/game/types";
@@ -28,11 +29,13 @@ function lootLabel(r: ResourceKey, amount: number): string {
 }
 
 export function ScavengeModal() {
-  const { state, searchScavenge, finishScavengeEvent } = useGame();
+  const { state, searchScavenge, finishScavengeEvent, ignoreScavengeEvent } = useGame();
   const event = state?.scavengeEvent ?? null;
   const open = event != null;
 
   const [phase, setPhase] = useState<Phase>("announce");
+  /** % de saqueo elegido (100 = comportamiento original: saquear todo). */
+  const [pct, setPct] = useState<number>(100);
   /** Board index of the last searched point — the result itself is read
    *  from the (provider-updated) event board on the next render, so the
    *  feedback line always shows the fresh roll without stale closures. */
@@ -45,6 +48,7 @@ export function ScavengeModal() {
     setLastKey(eventKey);
     setPhase("announce");
     setLastIndex(null);
+    setPct(100);
   }
 
   if (!event) return null;
@@ -53,6 +57,12 @@ export function ScavengeModal() {
   const health = state?.health ?? 0;
   const searched = event.board.filter((c) => c.result).length;
   const cleared = searched >= event.board.length;
+  /** Saqueo parcial: cuántos puntos cubre el % elegido y qué se arriesga/gana
+   *  (preview con los MISMOS pesos que usará el roll — se muestra antes de
+   *  tocar cada punto). */
+  const target = scavengeTargetPoints(event, pct);
+  const preview = state ? scavengePreview(state, event, pct) : null;
+  const objetivoAlcanzado = !cleared && searched >= target;
   const lastResult =
     lastIndex != null ? event.board[lastIndex]?.result ?? null : null;
 
@@ -96,6 +106,15 @@ export function ScavengeModal() {
                 className="mt-1 h-10 w-full border border-green-500/40 bg-green-600/90 font-bold uppercase tracking-widest text-black hover:bg-green-500"
               >
                 Registrar ubicación
+              </Button>
+              {/* Opción 1 — Ignorar: el scavenger se va, nada se busca,
+                  nada se consume (queda en el log de actividades). */}
+              <Button
+                onClick={ignoreScavengeEvent}
+                variant="outline"
+                className="h-8 w-full border-zinc-700 text-[11px] font-bold uppercase tracking-widest text-zinc-400 hover:border-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"
+              >
+                Ignorar · no saquear nada
               </Button>
             </motion.div>
           )}
@@ -187,17 +206,94 @@ export function ScavengeModal() {
                 )}
               </div>
 
+              {/* Saqueo PARCIAL: elegí cuánto saquear. Menos puntos = menos
+                  botín esperado Y menos riesgo (preview antes de confirmar).
+                  Solo mientras queden puntos por revisar. */}
+              {!cleared && (
+                <>
+              <div className="flex items-center gap-1.5">
+                <span className="shrink-0 text-[9px] font-bold uppercase tracking-widest text-subtle">
+                  Saquear
+                </span>
+                <div className="flex flex-1 gap-1">
+                  {BALANCE.scavengePartialPresets.map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setPct(p)}
+                      className={cn(
+                        "flex-1 rounded-md border py-1 text-[10px] font-black tabular-nums transition-colors",
+                        pct === p
+                          ? "border-green-500/70 bg-green-950/60 text-green-300"
+                          : "border-zinc-700 bg-black/40 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200",
+                      )}
+                    >
+                      {p}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-md border border-white/5 bg-black/40 px-3 py-2 text-center text-[11px] leading-4">
+                <span className="text-zinc-300">
+                  Objetivo{" "}
+                  <span className="font-bold text-green-400">
+                    {Math.min(target, event.board.length)}/{event.board.length} puntos
+                  </span>
+                </span>
+                <span className="text-subtle"> · riesgo ≈ </span>
+                <span
+                  className={cn(
+                    "font-bold tabular-nums",
+                    (preview?.riesgoSalud ?? 0) > 0 ? "text-red-400" : "text-zinc-500",
+                  )}
+                >
+                  −{preview?.riesgoSalud ?? 0} salud
+                </span>
+                <span className="text-subtle"> · botín ≈ </span>
+                <span className="font-bold text-emerald-300">
+                  {preview?.hallazgos ?? 0} hallazgo{(preview?.hallazgos ?? 0) === 1 ? "" : "s"}
+                </span>
+                {objetivoAlcanzado && (
+                  <span className="ml-1 font-bold uppercase tracking-wider text-green-400">
+                    · objetivo logrado, cobrá
+                  </span>
+                )}
+              </div>
+                </>
+              )}
+
               <p className="text-center text-[10px] text-subtle">
-                El daño es real: baja tu SALUD (nunca letal dentro del evento). Lo
-                encontrado queda asegurado al instante — podés retirarte cuando quieras.
+                El daño es real: baja tu SALUD (nunca letal dentro del evento). Menos
+                puntos = menos botín y menos riesgo. Lo encontrado queda asegurado al
+                instante — podés retirarte cuando quieras.
               </p>
+
+              {searched === 0 && (
+                <Button
+                  onClick={ignoreScavengeEvent}
+                  variant="outline"
+                  className="h-8 w-full border-zinc-700 text-[11px] font-bold uppercase tracking-widest text-zinc-400 hover:border-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"
+                >
+                  Ignorar · el scavenger se va
+                </Button>
+              )}
 
               <Button
                 onClick={finishScavengeEvent}
                 variant="outline"
-                className="h-9 w-full border-zinc-700 font-bold uppercase tracking-widest text-zinc-300 hover:border-zinc-500 hover:bg-zinc-900"
+                className={cn(
+                  "h-9 w-full border-zinc-700 font-bold uppercase tracking-widest hover:border-zinc-500 hover:bg-zinc-900",
+                  objetivoAlcanzado
+                    ? "border-green-500/50 bg-green-950/40 text-green-300 hover:bg-green-950/70"
+                    : "text-zinc-300",
+                )}
               >
-                {cleared ? "Terminar saqueo" : "Retirarse con lo encontrado"}
+                {cleared
+                  ? "Terminar saqueo"
+                  : objetivoAlcanzado
+                    ? "Cobrar saqueo parcial"
+                    : "Retirarse con lo encontrado"}
               </Button>
             </motion.div>
           )}

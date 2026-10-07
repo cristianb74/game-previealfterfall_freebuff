@@ -273,6 +273,76 @@ export function pendingScavengePoints(event: NonNullable<GameState["scavengeEven
   return pending;
 }
 
+/** Saqueo PARCIAL: cuántos puntos del tablero cubre un % de la UI.
+ *  Mínimo 1 punto (un 0 % no tiene sentido: para no saquear nada está
+ *  `ignoreScavenge`). */
+export function scavengeTargetPoints(
+  event: NonNullable<GameState["scavengeEvent"]>,
+  percent: number,
+): number {
+  const total = event.board.length;
+  const pct = Math.min(100, Math.max(1, percent));
+  return Math.max(1, Math.round((total * pct) / 100));
+}
+
+/** Preview de RIESGO y BOTÍN para los próximos N puntos sin revisar, con
+ *  los MISMOS pesos y factores reales que usará el rollPoint (guantes,
+ *  protección, daño medio de la zona). La UI lo muestra ANTES de confirmar:
+ *  menos puntos = menos botín esperado y menos riesgo esperado. */
+export function scavengePreview(
+  state: GameState,
+  event: NonNullable<GameState["scavengeEvent"]>,
+  percent: number,
+): { puntos: number; riesgoSalud: number; hallazgos: number } {
+  const loc = scavengeLocationForZone(event.zoneId);
+  const now = Date.now();
+  const target = scavengeTargetPoints(event, percent);
+  const pending = pendingScavengePoints(event).slice(0, target);
+  const danoPorGolpe =
+    ((BALANCE.scavengeDamageMin + BALANCE.scavengeDamageMax) / 2) *
+    damageTakenFactor(state, event.zoneId, now);
+  let probDano = 0;
+  let probLoot = 0;
+  for (const i of pending) {
+    const def = loc.points[event.board[i].id as keyof typeof loc.points];
+    if (!def) continue;
+    const { loot, nada, dano } = def.weights;
+    const danoWeight = Math.max(0, dano * injuryRiskFactor(state, event.zoneId, now));
+    const total = loot + nada + danoWeight;
+    probDano += danoWeight / total;
+    probLoot += loot / total;
+  }
+  return {
+    puntos: pending.length,
+    riesgoSalud: Math.round(probDano * danoPorGolpe),
+    hallazgos: Math.round(probLoot),
+  };
+}
+
+/** IGNORAR el evento: el scavenger se va. NO se revisa ningún punto, así que
+ *  no se aplica botín, ni daño, ni se consume nada — sólo queda la línea en
+ *  el log de actividades. Devuelve false si no había evento activo. */
+export function ignoreScavenge(state: GameState): boolean {
+  const event = state.scavengeEvent;
+  if (!event) return false;
+  const loc = scavengeLocationForZone(event.zoneId);
+  state.scavengeEvent = null;
+  pushScavengeLog(
+    state,
+    event.zoneId,
+    "manual",
+    "ignorado",
+    `EVENTO | SCAVENGE ignorado · ${loc.name} · el lugar queda intacto (sin saqueo, sin daño)`,
+    {
+      ubicacion: loc.name,
+      puntos_revisados: 0,
+      recursos_consumidos: 0,
+      salud_perdida: 0,
+    },
+  );
+  return true;
+}
+
 /** Close the event: settle any unsearched points as "nada" and clear it.
  *  Loot/damage already applied at search time — quitting keeps everything
  *  found so far (per design). Returns the results of the session for the
