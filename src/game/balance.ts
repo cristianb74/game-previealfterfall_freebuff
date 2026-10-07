@@ -298,39 +298,6 @@ export const BALANCE = {
 // offlineProgress y la UI (Mochila/Equipo), así ninguna ruta puede divergir.
 // ============================================================
 
-export type ConsumingNpc = {
-  status?: "candidate" | "active";
-  consumptionMultiplier?: number;
-};
-
-/** Cada NPC reclutado: player rate × factor × su multiplicador propio. */
-export function npcUpkeepPerHour(
-  npc: ConsumingNpc,
-  which: "food" | "water",
-): number {
-  if ((npc.status ?? "active") !== "active") return 0;
-  const rate = which === "food" ? BALANCE.FOOD_PER_HOUR_PLAYER : BALANCE.WATER_PER_HOUR_PLAYER;
-  const mult = typeof npc.consumptionMultiplier === "number" ? npc.consumptionMultiplier : 1;
-  return rate * BALANCE.NPC_CONSUMPTION_FACTOR * mult;
-}
-
-/** Consumo por hora (min) de UN NPC reclutado: comida/agua =
- *  FOOD/WATER_PER_HOUR_PLAYER × NPC_CONSUMPTION_FACTOR × mult. */
-export function npcFoodUpkeepPerHour(npc: ConsumingNpc): number {
-  return npcUpkeepPerHour(npc, "food");
-}
-export function npcWaterUpkeepPerHour(npc: ConsumingNpc): number {
-  return npcUpkeepPerHour(npc, "water");
-}
-
-/** Consumo total por hora del equipo (SIN el jugador). */
-export function teamFoodUpkeepPerHour(npcs: ConsumingNpc[]): number {
-  return npcs.reduce((acc, n) => acc + npcFoodUpkeepPerHour(n), 0);
-}
-export function teamWaterUpkeepPerHour(npcs: ConsumingNpc[]): number {
-  return npcs.reduce((acc, n) => acc + npcWaterUpkeepPerHour(n), 0);
-}
-
 // ============================================================
 // TIPOS DE EDIFICIO (rebalanceo v3): cada edificio pertenece a un tier
 // (básico / intermedio / avanzado) que multiplica su costo base.
@@ -502,17 +469,17 @@ export function npcWaterUpkeepPerHour(npc: { status?: string; consumptionMultipl
 export function teamFoodUpkeepPerHour(npcs: { status?: string; consumptionMultiplier?: number }[]): number {
   return npcs.reduce((acc, n) => acc + npcFoodUpkeepPerHour(n), 0);
 }
-export function teamWaterUpkeepPerHour(npcs: { status?: string; consumptionMultiplier?: number }[]): number {
-  return npcs.reduce((acc, n) => acc + npcWaterUpkeepPerHour(n), 0);
-}
-  return BUILDING_TIER[key] ?? "intermedio";
+export function teamWaterUpkeepPerHour(npcs: { status?: string; consumptionMultiplier?: number }[]): number {  return npcs.reduce((acc, n) => acc + npcWaterUpkeepPerHour(n), 0);
 }
 
 /** AUTO-farm diminishing-returns helpers. Shared by the online tick
  *  (completeAutoRun) and the offline simulation (offlineProgress) so the
  *  two paths can never drift apart. */
 
-/** Factor for a 0-based active-zone rank (ascending zone id order). */
+export function buildingTierFor(key: string): BuildingTierKey {
+  return BUILDING_TIER[key] ?? "intermedio";
+}
+
 export function autoFarmFactorForActiveIndex(rank: number): number {
   let factor = 1;
   for (const tier of BALANCE.autoFarmConcurrentTiers) {
@@ -520,6 +487,9 @@ export function autoFarmFactorForActiveIndex(rank: number): number {
   }
   return factor;
 }
+
+/** Factor for a 0-based active-zone rank (ascending zone id order). */
+export function buildingTierFor(key: string): BuildingTierKey {
 
 /** ONE offline/auto-farm cycle's EXP for zone n (shared by the online
  *  tick's completeAutoRun and the offline simulation — the two paths can
@@ -619,3 +589,4 @@ export const migrationRefundFactor = 1.0;
  *  gainEnergy() to respect the regen system invariants (see energySystem.ts).
  *  Blocked when energy + amount would exceed maxEnergy (no partial waste). */
 export const MERCHANT_BATTERY_OFFER = { label: "Batería", price: 100, energy: 10 } as const;
+}
