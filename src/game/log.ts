@@ -151,8 +151,19 @@ export function formatField(value: LogFieldInput): string {
   return String(value);
 }
 
+/**
+ * Campos RESERVADOS: siempre los escribe la base del evento (zona/origen) o
+ * el propio pushLog (event_id/hora/category/subtype). Si llegan duplicados
+ * dentro de `fields` se descartan para que CADA CAMPO APAREZCA UNA SOLA VEZ
+ * por línea (p.ej. el viejo `[EXP] auto_fin | zona=Z02 | ... | zona=Z02`).
+ */
+const RESERVED_FIELDS = new Set(["zona", "origen", "event_id", "hora", "category", "subtype"]);
+
 function formatFields(fields: LogFieldRecord): string {
-  return Object.entries(fields).map(([key, value]) => `${key}=${formatField(value)}`).join(" | ");
+  return Object.entries(fields)
+    .filter(([key]) => !RESERVED_FIELDS.has(key))
+    .map(([key, value]) => `${key}=${formatField(value)}`)
+    .join(" | ");
 }
 
 /** Descarta null/undefined y redondea floats "sucios" (54.68399999999999 → 54.684). */
@@ -160,6 +171,7 @@ function sanitizeFields(fields: LogFieldRecord | undefined): Record<string, LogF
   const out: Record<string, LogFieldInput> = {};
   for (const [key, value] of Object.entries(fields ?? {})) {
     if (value == null) continue;
+    if (RESERVED_FIELDS.has(key)) continue; // zona/origen ya van en la base
     out[key] = value;
   }
   return out;
@@ -228,6 +240,8 @@ export function pushClick(
     resultado?: "ejecutado" | "bloqueado";
     motivo?: string;
     extra?: LogFieldRecord;
+    /** Texto narrativo opcional (si no se pasa, Registro muestra el subtipo). */
+    mensaje?: string;
   } = {},
 ): LogEvent {
   return pushLog(state, {
@@ -241,6 +255,7 @@ export function pushClick(
       ...(opts.motivo ? { motivo: opts.motivo } : {}),
       ...(opts.extra ?? {}),
     },
+    ...(opts.mensaje !== undefined ? { mensaje: opts.mensaje } : {}),
   });
 }
 

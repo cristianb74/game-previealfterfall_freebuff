@@ -1,7 +1,6 @@
 import { BALANCE } from "./balance";
 import { rollNpcCycle } from "./npcTypes";
 import { getZone } from "./zones";
-import { npcDisplayName } from "./npcData";
 import { applySurvivalDrain, hungerTier, thirstTier, TIER_META } from "./survivalSystem";
 import { consumptionFactor } from "./crafting/craftedEffects";
 import { BUILDING_BY_KEY, THEMATIC_BY_KEY } from "./buildings";
@@ -126,9 +125,10 @@ export function tickNpcs(state: GameState, now: number): TickChanges {
       category: "ENERGÍA",
       subtype: "tier",
       fields: { medidor: "comida", nivel: TIER_META[hTier].label },
-      mensaje: `[SUPERVIVENCIA] Comida: ${TIER_META[hTier].label}`,
+      // Un solo emisor por cambio de tier: la etiqueta técnica + la frase
+      // narrativa (si el tier ya no es OK) van en la MISMA línea.
+      mensaje: `[SUPERVIVENCIA] Comida: ${TIER_META[hTier].label}${hTier !== "ok" ? ` — ${narrSurvivalWarn("comida")}` : ""}`,
     });
-    if (hTier !== "ok") narrSurvivalWarn(state, "comida");
   }
   if (lastThirstTier !== null && tTier !== lastThirstTier) {
     pushLog(state, {
@@ -137,9 +137,8 @@ export function tickNpcs(state: GameState, now: number): TickChanges {
       category: "ENERGÍA",
       subtype: "tier",
       fields: { medidor: "agua", nivel: TIER_META[tTier].label },
-      mensaje: `[SUPERVIVENCIA] Agua: ${TIER_META[tTier].label}`,
+      mensaje: `[SUPERVIVENCIA] Agua: ${TIER_META[tTier].label}${tTier !== "ok" ? ` — ${narrSurvivalWarn("agua")}` : ""}`,
     });
-    if (tTier !== "ok") narrSurvivalWarn(state, "agua");
   }
   lastHungerTier = hTier;
   lastThirstTier = tTier;
@@ -154,16 +153,15 @@ export function tickNpcs(state: GameState, now: number): TickChanges {
       category: "NPC_ACTION",
       subtype: "hallazgo",
       fields: {
-        npc: f.npcId,
-        nombre: npc?.name ?? f.npcId,
+        // Campo obligatorio: npc=<id>·<nombre> de TODO hallazgo de un NPC
+        // ya asignado (categoría [NPC_ACTION], nunca NPC CHECK).
+        npc: `${f.npcId}·${npc?.name ?? f.npcId}`,
         resource: f.resource,
         cantidad: f.amount,
         unidad: isTime ? "min" : "unidad",
       },
-      mensaje: `${npc ? npcDisplayName(npc) : f.npcId} encontró ${isTime ? `+${f.amount} min` : `+${f.amount}`} ${f.resource === "dinero" ? "$" : f.resource}`,
+      mensaje: narrNpcFind(npc?.name ?? f.npcId, f.resource, f.amount),
     });
-    if (npc && npc.assignedZoneId != null)
-      narrNpcFind(state, npc.name, f.resource, f.amount, Number(npc.assignedZoneId));
   }
   if (finds.length > 5) {
     pushLog(state, {

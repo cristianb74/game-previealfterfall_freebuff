@@ -356,8 +356,8 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
         category: "NPC_ACTION",
         subtype: "hallazgo",
         fields: {
-          npc: npc ? npc.id : f.npcId,
-          nombre: npc?.name ?? f.npcId,
+          // Campo obligatorio: npc=<id>·<nombre> (hallazgo de NPC asignado).
+          npc: `${npc ? npc.id : f.npcId}·${npc?.name ?? f.npcId}`,
           resource: f.resource,
           cantidad: f.amount,
           unidad: isTime ? "min" : "unidad",

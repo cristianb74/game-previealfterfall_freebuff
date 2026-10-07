@@ -48,8 +48,6 @@ import {
   narrExplorationStart,
   narrResourceFind,
   narrDamage,
-  narrEvent,
-  narrNpcFound,
   narrZoneUnlock,
   narrBuildDone,
 } from "@/game/narrativeLog";
@@ -594,8 +592,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (b && b.upgradeFinishAt && now >= b.upgradeFinishAt) {
           b.level = Math.min(BALANCE.buildingMaxLevel, b.level + 1);
           b.upgradeFinishAt = null;
-          pushLog(s, { zona: "global", origen: "auto", category: "CONSTR", subtype: "completada", fields: { construcción: BUILDING_BY_KEY[key].name, nivel: b.level, ambito: "base_global" }, mensaje: `Construcción completada: ${BUILDING_BY_KEY[key].name} → N${b.level} (Base global)` });
-          narrBuildDone(s, BUILDING_BY_KEY[key].name, b.level);
+          pushLog(s, { zona: "global", origen: "auto", category: "CONSTR", subtype: "completada", fields: { construcción: BUILDING_BY_KEY[key].name, nivel: b.level, ambito: "base_global" },          mensaje: `Construcción completada: ${BUILDING_BY_KEY[key].name} → N${b.level} (Base global) — ${narrBuildDone(BUILDING_BY_KEY[key].name, b.level)}` });
           dirty = true;
         }
       }
@@ -613,9 +610,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
               category: "CONSTR",
               subtype: "completada",
               fields: { construcción: def?.name ?? key, nivel: b.level },
-              mensaje: `Construcción completada: ${def?.name ?? key} → N${b.level} (Z${String(zid).padStart(2, "0")})`,
+              mensaje: `Construcción completada: ${def?.name ?? key} → N${b.level} (Z${String(zid).padStart(2, "0")})${def ? ` — ${narrBuildDone(def.name, b.level)}` : ""}`,
             });
-            if (def) narrBuildDone(s, def.name, b.level, zid);
             dirty = true;
           }
         }
@@ -752,27 +748,26 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (f.resource === "comida") s.foodMin += amount;
         else if (f.resource === "agua") s.waterMin += amount;
         else s.resources[f.resource] += amount;
-        const isTime = f.resource === "comida" || f.resource === "agua";
-        pushLog(s, {
-          zona: `Z${String(outcome.zoneId).padStart(2, "0")}`,
+        // UN SOLO emisor de [RECURSO] por hallazgo real: narrResourceFind
+        // fusiona la línea técnica y la narrativa (antes eran DOS líneas con
+        // event_id distinto y origen= inconsistente). El inventario solo se
+        // sumó UNA vez, arriba → era bug de log, no de economía.
+        narrResourceFind(s, outcome.zoneId, f.resource, amount, !!f.rare, {
           origen: opts.auto ? "auto" : "manual",
-          category: "RECURSO",
-          subtype: "hallazgo",
-          fields: { resource: f.resource, cantidad: amount, unidad: isTime ? "min" : "unidad", valor: isTime ? `+${amount} min` : `+${amount}` },
-          mensaje: expTag + (isTime ? ' +' + amount + ' min ' + f.resource : ' +' + amount + ' ' + (f.resource === 'dinero' ? '$' : f.resource)),
+          expTag,
         });
-        narrResourceFind(s, outcome.zoneId, f.resource, amount, !!f.rare);
       } else if (f.kind === "damage") {
         s.health = Math.max(0, s.health - (f.damage ?? 0));
+        // UN solo emisor de [ENERGÍA]/daño: la frase narrativa (incluye causa
+        // y salud perdida) ES el mensaje de la única línea del golpe.
         pushLog(s, {
           zona: `Z${String(outcome.zoneId).padStart(2, "0")}`,
           origen: opts.auto ? "auto" : "manual",
           category: "ENERGÍA",
           subtype: "daño",
           fields: { causa: f.cause ?? "Accidente", salud_perdida: f.damage ?? 0 },
-          mensaje: `${expTag}DAÑO | ${f.cause} · -${f.damage} Salud`,
+          mensaje: expTag + narrDamage(outcome.zoneId, f.cause ?? "Accidente", f.damage ?? 0),
         });
-        narrDamage(s, outcome.zoneId, f.cause ?? "Accidente", f.damage ?? 0);
       } else if (f.kind === "event" && f.event) {
         // Manual-only special event: apply its real rewards.
         const ev = f.event;
@@ -798,12 +793,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
           fields: { evento: ev.text, recompensas: parts.join(" · ") },
           mensaje: expTag + 'EVENTO | ' + ev.text + (parts.length > 0 ? ' (' + parts.join(' · ') + ')' : ''),
         });
-        narrEvent(s, ev.text);
+        // (narrEvent se eliminó: repetía exactamente este mismo texto como
+        // SEGUNDA línea [EXP]/evento para un único evento real.)
       }
     }    if (outcome.findings.length === 0) {
       pushLog(s, { zona: `Z${String(outcome.zoneId).padStart(2, "0")}`, origen: opts.auto ? "auto" : "manual", category: "EXP", subtype: "sin_hallazgos", fields: {}, mensaje: `${expTag}Sin hallazgos` });
     }
-    pushLog(s, { zona: `Z${String(outcome.zoneId).padStart(2, "0")}`, origen: opts.auto ? "auto" : "manual", category: "EXP", subtype: opts.auto ? "auto_fin" : "fin", fields: { zona: `Z${String(outcome.zoneId).padStart(2, "0")}`, exp: outcome.exp }, mensaje: `${expTag}${opts.auto ? "Auto" : "FIN"} | Z${String(outcome.zoneId).padStart(2, "0")} · ${zone.name} completada · +${outcome.exp} EXP` });
+    pushLog(s, { zona: `Z${String(outcome.zoneId).padStart(2, "0")}`, origen: opts.auto ? "auto" : "manual", category: "EXP", subtype: opts.auto ? "auto_fin" : "fin", fields: { exp: outcome.exp }, mensaje: `${expTag}${opts.auto ? "Auto" : "FIN"} | Z${String(outcome.zoneId).padStart(2, "0")} · ${zone.name} completada · +${outcome.exp} EXP` });
 
     // Only MANUAL explorations advance the frontier. Auto farm runs in
     // conquered zones can never unlock anything (zone < frontier anyway).
@@ -811,8 +807,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const maxUnlocked = computeZoneUnlocks(s);
       if (maxUnlocked > frontierZoneId(s)) {
         s.pendingZoneUnlock = maxUnlocked;
-        pushLog(s, { zona: undefined, origen: 'manual', category: 'ZONA', subtype: 'desbloqueada', fields: { zona: getZone(maxUnlocked).id }, mensaje: `Nueva zona desbloqueada: ${getZone(maxUnlocked).name}` });
-        narrZoneUnlock(s, getZone(maxUnlocked).name);
+        pushLog(s, { zona: getZone(maxUnlocked).id, origen: 'manual', category: 'ZONA', subtype: 'desbloqueada', fields: { zona_nombre: getZone(maxUnlocked).name }, mensaje: narrZoneUnlock(getZone(maxUnlocked).name) });
         toast.success("☢ NUEVA ZONA DESBLOQUEADA", {
           description: `${getZone(maxUnlocked).name} · la anterior sigue farmeándose sola`,
           duration: 6000,
@@ -870,8 +865,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     s.npcs.push(npc);
     const via = fromAuto ? "AUTO-FARM" : "MANUAL";
     pushLog(s, { zona: `Z${String(zoneId).padStart(2, "0")}`, origen: via === "AUTO-FARM" ? "auto" : "manual", category: "NPC CHECK", subtype: "check", fields: { contador: counter, vía: via, probabilidad: (chance * 100).toFixed(1), resultado: "sí" }, mensaje: `[EXP #${expId}] NPC CHECK | contador ${counter} | ${via} | probabilidad ${(chance * 100).toFixed(1)}% | resultado SÍ` });
-    pushLog(s, { zona: `Z${String(zoneId).padStart(2, "0")}`, origen: via === "AUTO-FARM" ? "auto" : "manual", category: "NPC_ACTION", subtype: "hallazgo", fields: { npc: npc.id, nombre: npc.name, tipo: NPC_TYPE_MODIFIERS[npc.type].label }, mensaje: `[EXP #${expId}] NPC OBTENIDO (${via}) | ${npc.id} · ${npc.name} · ${NPC_TYPE_MODIFIERS[npc.type].label}` });
-    narrNpcFound(s, npc.name, npc.alias);
+    pushLog(s, { zona: `Z${String(zoneId).padStart(2, "0")}`, origen: via === "AUTO-FARM" ? "auto" : "manual", category: "NPC_ACTION", subtype: "hallazgo", fields: { npc: `${npc.id}·${npc.name}`, tipo: NPC_TYPE_MODIFIERS[npc.type].label }, mensaje: `[EXP #${expId}] NPC OBTENIDO (${via}) | ${npc.id} · ${npc.name} · ${NPC_TYPE_MODIFIERS[npc.type].label}` });
+    // (narrNpcFound se eliminó: generaba una SEGUNDA línea [NPC_ACTION]
+    //  /hallazgo para el mismo descubrimiento, sin el campo npc=<id>·<nombre>.)
     pushLog(s, { zona: `Z${String(zoneId).padStart(2, "0")}`, origen: "auto", category: "NPC_ACTION", subtype: "contador_reiniciado", fields: {}, mensaje: `[NPC] contador reiniciado a 0` });
     s.explorationsSinceLastNPC = 0;
     toast.info(fromAuto ? "SUPERVIVIENTE ENCONTRADO (AUTO)" : "SUPERVIVIENTE ENCONTRADO", {
@@ -941,7 +937,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
         category: "AUTO_EXPLORER",
         subtype: "ciclo_fin",
         fields: {
-          exp: expId,
+          // exploration_id = id interno de la exploración (NO son XP: las XP
+          // reales las reporta [EXP] con su campo exp=).
+          exploration_id: expId,
           duracion: runSeconds,
           hallazgos,
           recursos,
@@ -952,7 +950,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     // SCAVENGE in auto: resolve all 8 points in chain, no interface.
     if (checkScavengeTrigger(s, zoneId, true)) {
       const loc = scavengeLocationForZone(zoneId);
-      pushLog(s, { zona: `Z${String(zoneId).padStart(2, "0")}`, origen: "auto", category: "NPC_ACTION", subtype: "evento", fields: { minijuego: "SCAVENGE" }, mensaje: `[EXP #${expId}] EVENTO | ${loc.name} detectada · minijuego SCAVENGE (auto)` });
+      // Disparador del minijuego: NO es acción de NPC → categoría SCAVENGE
+      // (es el inicio del bloque [SCAVENGE] que sigue; en manual es [CLICK]).
+      pushLog(s, { zona: `Z${String(zoneId).padStart(2, "0")}`, origen: "auto", category: "SCAVENGE", subtype: "inicio", fields: { minijuego: "SCAVENGE", localizacion: loc.name, exploration_id: expId }, mensaje: `[EXP #${expId}] EVENTO | ${loc.name} detectada · minijuego SCAVENGE (auto)` });
       const results = resolveScavengeAuto(s, zoneId);
       for (const r of results) {
         const line =
@@ -995,7 +995,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       subtype: "ciclo_iniciado",
       fields: {
         zonas: activeAutoZones(s).join(",") || `Z${String(zoneId).padStart(2, "0")}`,
-        exp: s.nextExplorationId,
+        // exploration_id = id interno de la exploración, NO puntos de EXP.
+        exploration_id: s.nextExplorationId,
         duracion: Math.round(minutes * 60),
       },
       mensaje: `Auto-exploración: ciclo iniciado en Z${String(zoneId).padStart(2, "0")}`,
@@ -1172,35 +1173,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
    *  54.68399999999999 en las líneas de duración). */
   const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
-  /** Emite el evento de INICIO de un ciclo de exploración exactamente una
-   *  vez. Un doble toque / doble dispatch sobre el mismo ciclo se traducía en
-   *  dos líneas [INICIO] con la MISMA duración para la misma zona; aquí se
-   *  deduplica contra la línea ya escrita. */
-  function logExploreStartOnce(
-    s: GameState,
-    zoneId: number,
-    expId: number,
-    seconds: number,
-  ): void {
-    const head = s.log[0];
-    if (
-      head &&
-      head.category === "EXP" &&
-      head.subtype === "inicio" &&
-      Number(head.fields?.exp) === expId &&
-      Number(head.fields?.duracion) === seconds
-    ) {
-      return; // este ciclo ya tiene su línea de inicio
-    }
-    pushLog(s, {
-      zona: zoneId,
-      origen: "manual",
-      category: "EXP",
-      subtype: "inicio",
-      fields: { exp: expId, duracion: seconds },
-      mensaje: `[EXP #${expId}] Z${String(zoneId).padStart(2, "0")} | INICIO | duración ${seconds}s`,
-    });
-  }
+  // [EXP] ya NO registra el INICIO de un ciclo (opción 1 del fix #4): el
+  // arranque pertenece en exclusiva a [INICIO] (narrExplorationStart), que
+  // ahora arrastra duracion= y exploration_id=. Así un mismo hecho nunca se
+  // loguea dos veces bajo dos categorías distintas.
 
   const startExploration = useCallback(
     (zoneId: number) => {
@@ -1229,9 +1205,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     s.currentZoneId = zoneId;
         const expId = s.nextExplorationId++;
         s.explorationStates[zoneId] = { zoneId, startedAt: now, finishAt: now + minutes * 60000, expId };
-        // UN SOLO evento de inicio por ciclo (logExploreStartOnce deduplica).
-        logExploreStartOnce(s, zoneId, expId, round3(minutes * 60));
-        narrExplorationStart(s, zoneId, getZone(zoneId).name);
+        // UN SOLO evento de inicio por ciclo: [INICIO] es la única fuente.
+        narrExplorationStart(s, zoneId, getZone(zoneId).name, {
+          duracion: round3(minutes * 60),
+          exploration_id: expId,
+        });
         // SCAVENGE event roll (manual starts): se resuelve AL TOCAR/INICIAR la
         // exploración — mismo contador y tiers de probabilidad, resultado
         // inmediato (el modal abre ahora, no al terminar). El check registra
@@ -1240,7 +1218,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
         // siendo auditable. La finalización ya no vuelve a tirar.
         if (checkScavengeTrigger(s, zoneId, false)) {
           const loc = scavengeLocationForZone(zoneId);
-          pushLog(s, { zona: `Z${String(zoneId).padStart(2, "0")}`, origen: "manual", category: "NPC_ACTION", subtype: "evento", fields: { minijuego: "SCAVENGE" }, mensaje: `[EXP #${expId}] EVENTO | ${loc.name} detectada · minijuego SCAVENGE` });
+          // Disparador del minijuego: NO es acción de NPC → click del jugador
+          // que arranca el evento (abre el bloque [SCAVENGE] posterior).
+          pushClick(s, "iniciar_scavenge", {
+            zona: `Z${String(zoneId).padStart(2, "0")}`,
+            extra: { minijuego: "SCAVENGE", localizacion: loc.name, exploration_id: expId },
+            mensaje: `[EXP #${expId}] EVENTO | ${loc.name} detectada · minijuego SCAVENGE`,
+          });
         }
       });
     },

@@ -190,15 +190,6 @@ const RARE: Pool = {
   ],
 };
 
-const NPC_FOUND: Pool = {
-  all: [
-    "Una figura te observaba desde la escalera. {npc} levanta las manos: quiere hablar.",
-    "Te siguieron tres manzanas. Al final, {npc} pidió unirse.",
-    "{npc} salió de un escondite con las manos vacías y la mirada alerta.",
-    "Un disparo al aire, luego silencio. {npc} apareció con las palmas abiertas.",
-  ],
-};
-
 const ZONE_UNLOCK: Pool = {
   all: [
     "Los mapas vuelven a crecer: {zone} es accesible.",
@@ -325,92 +316,106 @@ function amountLabel(r: ResourceKey, amount: number): string {
 
 // ---------------- Public API ----------------
 
-/** Narrative line for starting an exploration in a zone. */
-export function narrExplorationStart(state: GameState, zoneId: number, zoneName: string): void {
+/**
+ * Narrative line for starting an exploration in a zone.
+ *
+ * ES la única fuente de verdad del INICIO de un ciclo (categoría [INICIO]).
+ * [EXP] ya NO emite subtipo "inicio": solo registra el RESULTADO del ciclo
+ * (fin / auto_fin), así un mismo hecho nunca se loguea dos veces bajo dos
+ * categorías. `extra` conserva la duración planeada y el id de exploración
+ * que antes vivían en la línea [EXP] duplicada.
+ */
+export function narrExplorationStart(
+  state: GameState,
+  zoneId: number,
+  zoneName: string,
+  extra: { duracion?: number; exploration_id?: number } = {},
+): void {
   pushNarr(state, fill(pick(START, biomeOf(zoneId), "start"), { zone: zoneName }), "start", {
     zona: zoneId,
-    fields: { ciclo: "inicio" },
+    fields: { ciclo: "inicio", ...extra },
   });
 }
 
-/** Narrative line for a resource find. */
+/**
+ * Narrative line for a resource find — Y ÚNICO emisor de [RECURSO].
+ *
+ * Antes cada hallazgo generaba DOS líneas con event_id distinto: la técnica
+ * de `applyOutcome` (resource/cantidad/unidad/valor) más ésta narrativa
+ * (resource/cantidad/rare), con origen= inconsistente entre ambas. Ambas
+ * describían UN ÚNICO sumatorio al inventario → eran un bug de log, no de
+ * economía. Aquí se fusionan en UNA sola línea: campos técnicos completos +
+ * mensaje narrativo. El recurso se suma al inventario una única vez, en
+ * applyOutcome, ANTES de esta llamada.
+ */
 export function narrResourceFind(
   state: GameState,
   zoneId: number,
   resource: ResourceKey,
   amount: number,
   rare: boolean,
+  opts: { origen?: "manual" | "auto"; expTag?: string } = {},
 ): void {
   const vars = { res: resName(resource), amount: amountLabel(resource, amount) };
   const pool = rare ? RARE : FIND;
-  pushNarr(state, fill(pick(pool, biomeOf(zoneId), rare ? "rare" : "find"), vars), "resource", {
+  const texto = fill(pick(pool, biomeOf(zoneId), rare ? "rare" : "find"), vars);
+  const isTime = resource === "comida" || resource === "agua";
+  pushNarr(state, (opts.expTag ?? "") + texto, "resource", {
     zona: zoneId,
-    fields: { resource, cantidad: amount, rare: rare ? 1 : 0 },
+    origen: opts.origen ?? "manual",
+    fields: {
+      resource,
+      cantidad: amount,
+      unidad: isTime ? "min" : "unidad",
+      valor: isTime ? `+${amount} min` : `+${amount}`,
+      rare: rare ? 1 : 0,
+    },
   });
 }
 
-/** Narrative line for an incident. */
-export function narrDamage(state: GameState, zoneId: number, cause: string, damage: number): void {
-  pushNarr(state, fill(pick(DAMAGE, biomeOf(zoneId), "damage"), { cause, damage }), "damage", {
-    zona: zoneId,
-    fields: { causa: cause, salud_perdida: damage },
-  });
+/** Texto narrativo de un incidente (GENERADOR PURO: NO escribe en el log).
+ *  El emisor único de la línea [ENERGÍA]/daño es applyOutcome, que usa esta
+ *  frase como `mensaje` — ya incluye causa y cantidad de salud perdida.
+ *  Antes se emitían DOS líneas (técnica + narrativa) para el mismo golpe. */
+export function narrDamage(zoneId: number, cause: string, damage: number): string {
+  return fill(pick(DAMAGE, biomeOf(zoneId), "damage"), { cause, damage });
 }
 
-/** Narrative line for a manual special event. */
-export function narrEvent(state: GameState, text: string, zona?: number): void {
-  pushNarr(state, text, "exp", { zona: zona ?? "global", fields: { evento: text } });
+// NOTA: narrEvent se eliminó — su texto era IDÉNTICO al de la línea técnica
+// [EXP]/evento de applyOutcome (duplicado puro, sin mensaje narrativo propio).
+
+/** Texto narrativo de un desbloqueo de zona (GENERADOR PURO). Emisor único:
+ *  la línea [ZONA]/desbloqueada de applyOutcome. */
+export function narrZoneUnlock(zoneName: string): string {
+  return fill(pick(ZONE_UNLOCK, "urbano", "unlock"), { zone: zoneName });
 }
 
-/** Narrative line for finding an NPC survivor. */
-export function narrNpcFound(state: GameState, npcName: string, npcAlias: string, zona?: number): void {
-  pushNarr(state, fill(pick(NPC_FOUND, "urbano", "npcfound"), { npc: `${npcName} «${npcAlias}»` }), "npcfound", {
-    zona: zona ?? "global",
-    fields: { npc: npcName },
-  });
+/** Texto narrativo de una obra terminada (GENERADOR PURO). Emisor único:
+ *  la línea [CONSTR]/completada, que conserva además su mensaje técnico
+ *  (ambito/nivel) y ancla éste con la frase narrativa. */
+export function narrBuildDone(buildingName: string, level: number): string {
+  return fill(pick(BUILD_DONE, "urbano", "build"), { building: buildingName, level });
 }
 
-/** Narrative line for a zone unlock. */
-export function narrZoneUnlock(state: GameState, zoneName: string): void {
-  pushNarr(state, fill(pick(ZONE_UNLOCK, "urbano", "unlock"), { zone: zoneName }), "zone", {
-    zona: zoneName,
-    fields: { zona_nombre: zoneName },
-  });
+/** Texto narrativo de un empeoramiento de supervivencia (GENERADOR PURO).
+ *  Emisor único: la línea [ENERGÍA]/tier del tick online, que conserva su
+ *  etiqueta técnica (nivel) y añade ésta como cierre del mensaje. */
+export function narrSurvivalWarn(meter: "comida" | "agua"): string {
+  return fill(pick(SURVIVAL_WARN, "urbano", "surv"), { meter });
 }
 
-/** Narrative line for a building completion. */
-export function narrBuildDone(state: GameState, buildingName: string, level: number, zona?: number): void {
-  pushNarr(state, fill(pick(BUILD_DONE, "urbano", "build"), { building: buildingName, level }), "build", {
-    zona: zona ?? "global",
-    fields: { construccion: buildingName, nivel: level },
-  });
-}
-
-/** Narrative line for an NPC production find (NPC ya asignado → NPC_ACTION). */
+/** Texto narrativo de un hallazgo de producción de un NPC asignado.
+ *
+ *  ES UN GENERADOR PURO: no escribe en el log. ElÚnico emisor de la línea
+ *  [NPC_ACTION]/hallazgo es el técnico (onlineTick / offlineProgress), que
+ *  usa este texto como `mensaje`; así cada hallazgo real produce UNA sola
+ *  línea en lugar del par técnico+narrativo que se generaba antes. */
 export function narrNpcFind(
-  state: GameState,
   npcName: string,
   resource: ResourceKey,
   amount: number,
-  zona?: number | null,
-): void {
-  pushNarr(
-    state,
-    fill(pick(NPC_FIND, "urbano", "npcfind2"), { npc: npcName, res: resName(resource), amount: amountLabel(resource, amount) }),
-    "npcfound2",
-    {
-      zona: zona ?? "global",
-      origen: "auto",
-      fields: { npc: npcName, resource, cantidad: amount },
-    },
-  );
+): string {
+  const vars = { npc: npcName, res: resName(resource), amount: amountLabel(resource, amount) };
+  return fill(pick(NPC_FIND, "urbano", "npcfind2"), vars);
 }
 
-/** Narrative warning when survival tier worsens. */
-export function narrSurvivalWarn(state: GameState, meter: "comida" | "agua"): void {
-  pushNarr(state, fill(pick(SURVIVAL_WARN, "urbano", "surv"), { meter }), "surv", {
-    zona: "global",
-    origen: "auto",
-    fields: { medidor: meter },
-  });
-}
