@@ -4,7 +4,7 @@ import type { BuildingKey, ResourceKey } from "./types";
 // ============================================================
 // AFTERFALL — world zones. Exactly 20, unlocked progressively by EXP.
 // Names, images, descriptions and rewards are editable here.
-// Zone images: /assets/stages/stage-XX.svg (rendered with object-fit: cover).
+// Zone images: /assets/stages/stage-XX.png (rendered with object-fit: cover).
 //
 // REBALANCEO v3 — los umbrales de desbloqueo ya NO son números sueltos:
 // se derivan de la curva expZona(n) = round(B × r^(n−1)) definida en
@@ -141,8 +141,7 @@ export const ZONES: ZoneDef[] = ZONE_ROWS.map((row) => ({ ...row, unlockExp: 0 }
 }
 
 /** Zone focus bonus by depth band (tunable here, applied in explorationEngine
- *  and npcProductionMultiplier). Z1–5 +15 % · Z6–10 +20 % · Z11–15 +25 % ·
- *  Z16–20 +30 %. */
+ *  and npcProductionMultiplier). Z1–5 +15 % · Z6–10 +20 % · Z11–15 +25 % ·\n *  Z16–20 +30 %. */
 export function zoneFocusBonus(zoneId: number): number {
   if (zoneId <= 5) return 0.15;
   if (zoneId <= 10) return 0.2;
@@ -160,16 +159,12 @@ const ZONE_BUILDINGS: Partial<Record<number, BuildingKey>> = {
   10: "generador",
 };
 
-
 export function getZone(id: number): ZoneDef {
   return ZONES[Math.min(Math.max(id, 1), ZONES.length) - 1];
 }
 
 export function zoneImage(id: number): string {
   const n = String(getZone(id).id).padStart(2, "0");
-  // Codecs: prefer PNG for the stage artwork (1440×900). The asset folder
-  // retains filenames per stage (stage-01, stage-02, ...) so the HREF stays
-  // static per zone and does not shift when one stage is swapped.
   return `/assets/stages/stage-${n}.png`;
 }
 
