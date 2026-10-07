@@ -42,6 +42,7 @@ import {
 } from "./crafting/craftedEffects";
 import type { CraftedAssignment } from "./types";
 import { tickNpcs } from "@/game/onlineTick";
+import { purgeExpiredCandidates } from "@/game/npcStandby";
 import { applyEnergyRegen, currentEnergy, energyShortfallInfo, gainEnergy, spendEnergy, nextEnergyRegenAt } from "@/game/energySystem";
 import { explorationMinutesWithAgility } from "@/game/statEffects";
 import {
@@ -371,6 +372,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
         resetVirtualClock(); // cloud timeline is real time
         const next = migrateStateToCurrent(result.state); // cloud saves may predate current
         next.lastTickAt = Date.now();
+        // STAND-BY: la restauración llega por otra vía (no es loadGame del
+        // boot) → purgar candidatos vencidos de ese estado entrante.
+        purgeExpiredCandidates(next, Date.now());
         stateRef.current = next;
         setState(next);
         toast.success("PROGRESO RESTAURADO", {
@@ -399,6 +403,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const offline = applyOfflineProgress(migrateStateToCurrent(result.state), Date.now());
         const next = offline.state;
         next.lastTickAt = Date.now();
+        // STAND-BY: misma razón que syncNow — purgar el estado entrante.
+        purgeExpiredCandidates(next, Date.now());
         stateRef.current = next;
         setState(next);
         setHasSaveFile(true);
@@ -442,6 +448,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
         // points keep their loot/damage, unsearched settle as "nada") and
         // narrate the closure in the log instead.
         settleScavengeOnBoot(s);
+        // STAND-BY: al abrir la app, los candidatos cuya ventana de 4 hs
+        // venció con la app cerrada se van del refugio (con su log).
+        // (El repair del save ya alineó foundAt/expiresAt en loadGame.)
+        purgeExpiredCandidates(s, Date.now());
         // CRAFTING catch-up: resolve everything that finished while the app
         // was closed (in order, idempotent) before the first render.
         catchUpCrafting(s);
@@ -558,6 +568,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
       wasEnergyZeroRef.current = isZeroNow;
       tickNpcs(s, now);
       s.lastTickAt = now;
+      // STAND-BY: cada tick elimina los candidatos vencidos (los que
+      // expiraron con la app cerrada ya los purga el boot).
+      purgeExpiredCandidates(s, now);
       let dirty = false;
 
       // PER-ZONE exploration completion (each zone independent).
@@ -864,6 +877,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
       // before they can be assigned to a zone.
       status: "candidate",
       discoveredAt: vnow(),
+      // STAND-BY: ventana de reclutamiento (timestamps reales — el
+      // vencimiento corre también con la app cerrada; el purge vive en el
+      // tick y en el boot).
+      foundAt: vnow(),
+      expiresAt: vnow() + BALANCE.npcStandbyMs,
       productionTotals: { materiales: 0, agua: 0, comida: 0, medicamentos: 0, componentes: 0, energia: 0, dinero: 0 },
     };
     s.npcs.push(npc);
@@ -1063,6 +1081,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const result = applyOfflineProgress(envelope.state, now);
       const s = result.state;
       s.lastTickAt = now;
+      // STAND-BY: continueGame vuelve a leer el save del disco (el purge
+      // del boot corrió sobre OTRO state) — purgar aquí el estado que
+      // realmente entra en juego.
+      purgeExpiredCandidates(s, now);
       setState(s);
       stateRef.current = s;
       setHasSaveFile(true);

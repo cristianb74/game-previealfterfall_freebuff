@@ -1,4 +1,5 @@
-import { BALANCE, autoFarmConcurrentFactorFor, farmExpForZone } from "./balance";
+import { BALANCE, autoFarmConcurrentFactorFor, farmExpForZone, teamFoodUpkeepPerHour, teamWaterUpkeepPerHour } from "./balance";
+import { settleConsumption } from "./npcConsumption";
 import { getZone, frontierZoneId, ZONES, nextZoneExpRequirement } from "./zones";
 import { rollNpcCycle, npcZoneSpeedFactor } from "./npcTypes";
 import { applyEnergyRegen } from "./energySystem";
@@ -263,19 +264,28 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
         state.npcCycles[npc.id] = now;
       }
     }
-    // NPC survival consumption (25 % factor of survivor upkeep, per hour),
-    // applied to every owned NPC whether producing or not. The provision
-    // buff only protects the minutes before it expires (prorated).
+    // NPC survival consumption (NPC_CONSUMPTION_FACTOR of the player
+    // rates, per NPC with its own consumptionMultiplier), applied to every
+    // RECLUTADO NPC whether producing or not. The provision buff only
+    // protects the minutes before it expires (prorated) — same math as
+    // before, but now through the shared settleConsumption ledger
+    // (lastConsumptionAt + tope de 24 hs del jugador fuera de la ventana).
     const hours = secondsForNpc / 3600;
     const consumption = consumptionFactor(state, now);
-    const buffedNpcHours = Math.min(hours, buffRemainingMs(state, "consumo_comida_agua", now) / 60000 / 60);
-    const upkeep =
-      BALANCE.survivorUpkeepPerHour *
-      BALANCE.npcConsumptionFactor *
-      state.npcs.length *
-      (buffedNpcHours * consumption + (hours - buffedNpcHours));
-    state.foodMin = Math.max(0, state.foodMin - upkeep);
-    state.waterMin = Math.max(0, state.waterMin - upkeep);
+    const buffMs = buffRemainingMs(state, "consumo_comida_agua", now);
+    const buffedNpcHours = Math.min(hours, buffMs / 60000 / 60);
+    const rawTeamFoodH = teamFoodUpkeepPerHour(state.npcs);
+    const rawTeamWaterH = teamWaterUpkeepPerHour(state.npcs);
+    settleConsumption(state, now, {
+      playerFoodPerHour: 0,
+      playerWaterPerHour: 0,
+      teamFoodPerHour:
+        rawTeamFoodH * (consumption * (buffedNpcHours / hours) + (hours - buffedNpcHours) / hours),
+      teamWaterPerHour:
+        rawTeamWaterH * (consumption * (buffedNpcHours / hours) + (hours - buffedNpcHours) / hours),
+      maxChargeMs: secondsForNpc * 1000,
+      ledgerTo: now,
+    });
     // Progressive hunger/thirst health drain while away (tier-based).
     healthLost += applySurvivalDrain(state, hours);
   }
@@ -292,6 +302,12 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
   state.waterMin = Math.max(0, state.waterMin - playerUpkeep);
   if (state.foodMin <= 0) summary.hungerStruck = before.foodMin > 0;
   if (state.waterMin <= 0) summary.thirstStruck = before.waterMin > 0;
+  // LEDGER de consumo: salta a `now` SIEMPRE al cerrar el settle offline —
+  // el excedente fuera de la ventana (cap 8 hs) queda perdonado, exacto
+  // a lo que ya hacía el cap (lastTickAt = now al volver). Sin esto, el
+  // tick online volvería a cobrar la ventana offline (doble cobro) en
+  // los casos donde el bloque NPC no corrió (sin NPC o ausencia < 5 s).
+  state.lastConsumptionAt = now;
   // Additional drain for the remaining (uncapped) hours does NOT apply —
   // the cap exists so the player isn't punished for long absences.
 

@@ -3,6 +3,8 @@ import { rollNpcCycle } from "./npcTypes";
 import { getZone } from "./zones";
 import { applySurvivalDrain, hungerTier, thirstTier, TIER_META } from "./survivalSystem";
 import { consumptionFactor } from "./crafting/craftedEffects";
+import { settleConsumption } from "./npcConsumption";
+import { purgeExpiredCandidates } from "./npcStandby";
 import { BUILDING_BY_KEY, THEMATIC_BY_KEY } from "./buildings";
 import type { BuildingKey } from "./types";
 import { narrNpcFind, narrSurvivalWarn } from "./narrativeLog";
@@ -58,21 +60,24 @@ export function tickNpcs(state: GameState, now: number): TickChanges {
   const buildingsCompleted: string[] = [];
   const dtMs = Math.max(0, now - state.lastTickAt);
 
-  // survival consumption for the player (and NPCs at 25 % factor)
+  // Consumo de supervivencia (jugador + equipo) en UNA pasada, cobrado
+  // por tiempo transcurrido desde lastConsumptionAt (timestamps: funciona
+  // con la app cerrada; online no toca el tope, la ventana ya es corta).
   // Kit de provisiones buff: −10% Comida/Agua consumption while active.
   const hours = dtMs / 3600000;
   if (hours > 0) {
     const consumption = consumptionFactor(state, now);
-    state.foodMin = Math.max(0, state.foodMin - BALANCE.survivorUpkeepPerHour * hours * consumption);
-    state.waterMin = Math.max(0, state.waterMin - BALANCE.survivorUpkeepPerHour * hours * consumption);
-    const npcHours = hours * BALANCE.npcConsumptionFactor;
-    if (state.npcs.length > 0) {
-      state.foodMin = Math.max(0, state.foodMin - BALANCE.survivorUpkeepPerHour * npcHours * state.npcs.length * consumption);
-      state.waterMin = Math.max(0, state.waterMin - BALANCE.survivorUpkeepPerHour * npcHours * state.npcs.length * consumption);
-    }
+    settleConsumption(state, now, {
+      playerFoodPerHour: BALANCE.FOOD_PER_HOUR_PLAYER * consumption,
+      playerWaterPerHour: BALANCE.WATER_PER_HOUR_PLAYER * consumption,
+    });
     // Progressive health drain from hunger/thirst tiers (0 when OK).
     applySurvivalDrain(state, hours);
   }
+
+  // STAND-BY: los candidatos vencidos se van del refugio (timestamps:
+  // cuenta también con la app cerrada — al abrir aplica el boot purge).
+  purgeExpiredCandidates(state, now);
 
   const canProduce =
     state.foodMin > BALANCE.npcMinimumFoodWaterMin &&

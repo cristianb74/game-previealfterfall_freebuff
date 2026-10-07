@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useGame } from "@/game/GameProvider";
 import { RESOURCE_META } from "@/game/resources";
-import { BALANCE } from "@/game/balance";
+import { BALANCE, teamFoodUpkeepPerHour, teamWaterUpkeepPerHour } from "@/game/balance";
 import { getZone, ZONES } from "@/game/zones";
 import { RECIPE_BY_ID } from "@/game/crafting/recipes";
 import {
@@ -24,9 +24,10 @@ function fmtDuration(minutes: number): string {
   return `${rem}m`;
 }
 
-/** Consumption per hour: survivor + assigned NPCs at 25 % factor. */
-function upkeepPerHour(npcCount: number): number {
-  return BALANCE.survivorUpkeepPerHour * (1 + npcCount * BALANCE.npcConsumptionFactor);
+/** Consumption per hour: survivor + recruited NPCs at NPC_CONSUMPTION_FACTOR
+ *  (con sus consumptionMultiplier — los candidatos no consumen). */
+function upkeepPerHour(npcRates: { food: number; water: number }): number {
+  return npcRates.food + npcRates.water;
 }
 
 const UNIT_KEYS: ResourceKey[] = ["materiales", "medicamentos", "componentes", "dinero"];
@@ -67,7 +68,10 @@ export function MochilaTab() {
   const [assignMode, setAssignMode] = useState<"zone" | "npc">("zone");
 
   if (!state) return null;
-  const upkeep = upkeepPerHour(state.npcs.length);
+  const upkeep = upkeepPerHour({
+    food: BALANCE.FOOD_PER_HOUR_PLAYER + teamFoodUpkeepPerHour(state.npcs),
+    water: BALANCE.WATER_PER_HOUR_PLAYER + teamWaterUpkeepPerHour(state.npcs),
+  });
   const now = Date.now();
 
   const npcName = (id: string) => {
@@ -108,7 +112,7 @@ export function MochilaTab() {
                     <p className={cn("text-[10px]", danger ? "text-red-400" : "text-subtle")}>
                       −{Math.round(upkeep)} min/h · {state.npcs.length} bocas
                     </p>
-                    <p className="text-[10px] text-subtle">+{BALANCE.survivorUpkeepPerHour} min/h por superviviente · NPC ×{BALANCE.npcConsumptionFactor}</p>
+                    <p className="text-[10px] text-subtle">+{BALANCE.FOOD_PER_HOUR_PLAYER} min/h por superviviente · NPC ×{BALANCE.NPC_CONSUMPTION_FACTOR}</p>
                   </div>
                 </div>
                 <div className="text-right">

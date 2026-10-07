@@ -11,6 +11,7 @@ import {
   type ThematicDef,
 } from "./buildings";
 import { getZone, isZoneUnlocked, legacyUnlockFloorV2 } from "./zones";
+import { ensureStandby } from "./npcStandby";
 import { RECIPE_BY_ID } from "./crafting/recipes";
 import type {
   BuildingKey,
@@ -118,6 +119,7 @@ export function createInitialState(survivor: GameState["survivor"], now = Date.n
     craftedInventory: {},
     activeBuffs: [],
     assignments: [],
+    lastConsumptionAt: now,
   };
 }
 
@@ -610,6 +612,23 @@ function normalizeState(state: GameState): GameState {
   // existed are grandfathered as "active" (already part of the shelter).
   for (const npc of s.npcs ?? []) {
     if (!npc.status) npc.status = "active";
+  }
+  // STAND-BY (migración): los candidatos guardados sin foundAt reciben
+  // foundAt = ahora y expiresAt = ahora + npcStandbyMs (4 hs completas de
+  // ventanilla — la migración es generosa). Recorre TODOS los npc (los
+  // activos quedan intactos); NO emite log (el repair del log corre antes
+  // en esta misma función, y el purge real lo hace el tick/al abrir).
+  {
+    const now = Date.now();
+    for (const npc of s.npcs ?? []) {
+      ensureStandby(npc, now);
+    }
+  }
+  // CONSUMO (migración): el consumo siempre se venía cobrando del delta
+  // lastTickAt; los saves previos arrancan con lastConsumptionAt =
+  // lastTickAt para no cobrar doble ni regalar tiempo.
+  if (typeof s.lastConsumptionAt !== "number" || !Number.isFinite(s.lastConsumptionAt)) {
+    s.lastConsumptionAt = s.lastTickAt;
   }
   return s;
 }

@@ -90,6 +90,18 @@ export interface NpcSurvivor {
    *  from the Equipo tab before they can be assigned to a zone.
    *  Absent in pre-migration saves → treated as "active". */
   status?: "candidate" | "active";
+  /** STAND-BY: cuándo entró a la lista de espera (ms, timeline real).
+   *  Solo culto en candidates; saves viejos sin foundAt reciben now al
+   *  cargar (normalizeState en saveSystem.ts). */
+  foundAt?: number;
+  /** Momento en que se va del refugio si nadie lo recluta:
+   *  foundAt + BALANCE.npcStandbyMs (derivado al crear; se recalcula en
+   *  migración si falta). */
+  expiresAt?: number;
+  /** Multiplicador de consumo propio (default 1.0): comida/h = agua/h =
+   *  *_PER_HOUR_PLAYER × NPC_CONSUMPTION_FACTOR × consumptionMultiplier.
+   *  Opcional por NPC para balancear «bocas grandes»/«bocas chicas». */
+  consumptionMultiplier?: number;
 }
 
 export interface BuildingState {
@@ -130,6 +142,12 @@ export interface GameState {
   version: number;
   createdAt: number;
   lastTickAt: number;
+  /** Última vez que se cobró el consumo de comida/agua (ms, timeline
+   *  real). El consumo (jugador + NPC reclutados) se cobra desde este
+   *  timestamp con tope BALANCE.npcConsumptionOfflineCapMs (24 hs); al
+   *  aplicar el consumo se adelanta a la marca horaria procesada.
+   *  Saves previos: normalizeState las gene con lastTickAt. */
+  lastConsumptionAt?: number;
   survivor: Survivor;
   exp: number;
   expTotal: number;
@@ -198,6 +216,13 @@ export interface GameState {
    *  or NPCs. Expired entries are pruned on load and by the tick (same
    *  catch-up pattern as the crafting queue). Backfilled on load. */
   assignments: CraftedAssignment[];
+  /** Aviso de consumo: true mientras falta (min/0) comida/agua y los NPC
+   *  reclutados están SIN su bonus de especialidad. Campos opcionales —
+   *  saves previos nunca los tuvieron (undefined = false). El flag se
+   *  usa SOLO para loguear la transición (se acabó / volvió), la regla
+   *  real siempre se recalcula desde foodMin/waterMin. */
+  npcBonusLostFood?: boolean;
+  npcBonusLostWater?: boolean;
 }
 
 /** One timed effect of a crafted consumable. Expired entries are pruned

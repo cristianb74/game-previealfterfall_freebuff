@@ -179,12 +179,29 @@ export const BALANCE = {
   npcProductionTimeMin: 4, // minutes of Comida/Agua per find
   npcProductionTimeMax: 10,
 
-  /** NPC survival cost: consume food/water each cycle at this factor… */
-  npcConsumptionFactor: 0.25,
-  /** …of a full survivor's upkeep (minutes of food/water per hour). */
-  survivorUpkeepPerHour: 20, // ≈ 24 h of food from start fades in ~3 days
-  /** Minimum food/water (minutes) to run NPC cycles; below this, NPCs pause. */
+  // --- CONSUMO COMIDA/AGUA (bloque único de tuning) ---
+  // FOOD_PER_HOUR_PLAYER / WATER_PER_HOUR_PLAYER es el consumo por hora del
+  // jugador (el valor que ya cobraba survivorUpkeepPerHour: comida y agua
+  // usaban el MISMO rate — 20 min/h c/u). Se separan en dos constantes para
+  // poder balancearlas por separado: hoy ambas valen 20.
+  FOOD_PER_HOUR_PLAYER: 20, // minutos de comida por hora
+  WATER_PER_HOUR_PLAYER: 20, // minutos de agua por hora
+  /** NPC_CONSUMPTION_FACTOR: cada NPC reclutado consume el 50 % del jugador.
+   *  Por NPC y hora: FOOD_PER_HOUR_PLAYER × NPC_CONSUMPTION_FACTOR
+   *  × npc.consumptionMultiplier (default 1.0). */
+  NPC_CONSUMPTION_FACTOR: 0.5,
+  /** STAND-BY: cuánto permanece un superviviente en la lista de espera
+   *  ("Por reclutar") antes de irse del refugio (timestamp-based: funciona
+   *  con la app cerrada). */
+  npcStandbyMs: 4 * 60 * 60 * 1000, // 4 hs
+  /** Aviso de urgencia en la ficha del candidato en espera. */
+  npcStandbyWarningMs: 30 * 60 * 1000, // 30 min
+  /** Minimum food/water (minutes) to run NPC cycles; below this, NPCs pause
+   *  y PIERDEN su bonus de especialidad hasta que haya recursos. */
   npcMinimumFoodWaterMin: 20,
+  /** Tope de consumo offline (jugador + NPC) cobrado de una sola vez al
+   *  volver a abrir la app: nunca se descuenta más de 24 hs de un tirón. */
+  npcConsumptionOfflineCapMs: 24 * 60 * 60 * 1000,
   /** Recruitment: cost (Materiales) to recruit a candidate NPC into the shelter.
    *  0 = free recruitment. Tunable. */
   npcRecruitCostMateriales: 5,
@@ -270,9 +287,49 @@ export const BALANCE = {
    *  zona que puede aportar (junto con la ya reducida npcExpReward/12/h). */
   offlineNpcTrickleShareOfNextZone: 0.05,
 
-  /** Unlock thresholds are derived from zone definitions (see zones.ts). */
+  /**Unlock thresholds are derived from zone definitions (see zones.ts). */
   zoneUnlockToastLabel: "NUEVA ZONA DESBLOQUEADA",
 } as const;
+
+// ============================================================
+// CONSUMO DEL EQUIPO (helpers compartidos). Suma lo que consume el
+// JUGADOR por hora + la suma de TODOS los NPC RECLUTADOS (status «active»);
+// los candidatos en lista de espera NO consumen. Se usan en onlineTick,
+// offlineProgress y la UI (Mochila/Equipo), así ninguna ruta puede divergir.
+// ============================================================
+
+export type ConsumingNpc = {
+  status?: "candidate" | "active";
+  consumptionMultiplier?: number;
+};
+
+/** Cada NPC reclutado: player rate × factor × su multiplicador propio. */
+export function npcUpkeepPerHour(
+  npc: ConsumingNpc,
+  which: "food" | "water",
+): number {
+  if ((npc.status ?? "active") !== "active") return 0;
+  const rate = which === "food" ? BALANCE.FOOD_PER_HOUR_PLAYER : BALANCE.WATER_PER_HOUR_PLAYER;
+  const mult = typeof npc.consumptionMultiplier === "number" ? npc.consumptionMultiplier : 1;
+  return rate * BALANCE.NPC_CONSUMPTION_FACTOR * mult;
+}
+
+/** Consumo por hora (min) de UN NPC reclutado: comida/agua =
+ *  FOOD/WATER_PER_HOUR_PLAYER × NPC_CONSUMPTION_FACTOR × mult. */
+export function npcFoodUpkeepPerHour(npc: ConsumingNpc): number {
+  return npcUpkeepPerHour(npc, "food");
+}
+export function npcWaterUpkeepPerHour(npc: ConsumingNpc): number {
+  return npcUpkeepPerHour(npc, "water");
+}
+
+/** Consumo total por hora del equipo (SIN el jugador). */
+export function teamFoodUpkeepPerHour(npcs: ConsumingNpc[]): number {
+  return npcs.reduce((acc, n) => acc + npcFoodUpkeepPerHour(n), 0);
+}
+export function teamWaterUpkeepPerHour(npcs: ConsumingNpc[]): number {
+  return npcs.reduce((acc, n) => acc + npcWaterUpkeepPerHour(n), 0);
+}
 
 // ============================================================
 // TIPOS DE EDIFICIO (rebalanceo v3): cada edificio pertenece a un tier
@@ -421,9 +478,33 @@ export const BUILDING_TIER: Record<string, BuildingTierKey> = {
   taller_cuarTEL: "avanzado",
 };
 
-/** Tier de un edificio (los temáticos que no estén listados cuentan como
- *  intermedios — nunca debe ocurrir, pero evita costos rotos). */
-export function buildingTierFor(key: string): BuildingTierKey {
+// ============================================================
+// CONSUMO DEL EQUIPO (helpers compartidos). Suma lo que consume el
+// JUGADOR por hora + la suma de TODOS los NPC RECLUTADOS (status «active»);
+// los candidatos en lista de espera NO consumen. Se usan en onlineTick,
+// offlineProgress y la UI (Mochila/Equipo), así ninguna ruta puede divergir.
+// ============================================================
+
+/** Consumo por hora (min) de UN NPC reclutado: comida/agua =
+ *  *_PER_HOUR_PLAYER × NPC_CONSUMPTION_FACTOR × consumptionMultiplier. */
+export function npcFoodUpkeepPerHour(npc: { status?: string; consumptionMultiplier?: number }): number {
+  if ((npc.status ?? "active") !== "active") return 0;
+  const mult = typeof npc.consumptionMultiplier === "number" ? npc.consumptionMultiplier : 1;
+  return BALANCE.FOOD_PER_HOUR_PLAYER * BALANCE.NPC_CONSUMPTION_FACTOR * mult;
+}
+export function npcWaterUpkeepPerHour(npc: { status?: string; consumptionMultiplier?: number }): number {
+  if ((npc.status ?? "active") !== "active") return 0;
+  const mult = typeof npc.consumptionMultiplier === "number" ? npc.consumptionMultiplier : 1;
+  return BALANCE.WATER_PER_HOUR_PLAYER * BALANCE.NPC_CONSUMPTION_FACTOR * mult;
+}
+
+/** Consumo total por hora del equipo (SIN el jugador). */
+export function teamFoodUpkeepPerHour(npcs: { status?: string; consumptionMultiplier?: number }[]): number {
+  return npcs.reduce((acc, n) => acc + npcFoodUpkeepPerHour(n), 0);
+}
+export function teamWaterUpkeepPerHour(npcs: { status?: string; consumptionMultiplier?: number }[]): number {
+  return npcs.reduce((acc, n) => acc + npcWaterUpkeepPerHour(n), 0);
+}
   return BUILDING_TIER[key] ?? "intermedio";
 }
 

@@ -6,7 +6,16 @@ import { HUD } from "@/components/game/HUD";
 import { StatsGrid } from "@/components/game/StatsGrid";
 import { useGame } from "@/game/GameProvider";
 import { NPC_TYPE_MODIFIERS, npcCycleChance } from "@/game/npcTypes";
-import { BALANCE } from "@/game/balance";
+import {
+  BALANCE,
+  npcFoodUpkeepPerHour,
+  npcWaterUpkeepPerHour,
+  teamFoodUpkeepPerHour,
+  teamWaterUpkeepPerHour,
+} from "@/game/balance";
+import { formatStandbyRemaining, standbyRemainingMs } from "@/game/npcStandby";
+import { bonusLostMessage, stockHoursFor } from "@/game/npcConsumption";
+import { vnow } from "@/game/virtualClock";
 import { BUILDING_BY_KEY } from "@/game/buildings";
 import { ZONES, isZoneUnlocked } from "@/game/zones";
 import { RESOURCE_META } from "@/game/resources";
@@ -49,6 +58,68 @@ const NPC_SPEC_RESOURCE = {
   generador: "energia",
 } as const;
 
+// ============================================================
+// CHIP DE ESPECIALIDAD — lo más visible de la ficha después del nombre.
+// Un chip por especialidad: icono + recurso + bonus, con COLOR PROPIO por
+// recurso. Mobile-safe: flex-wrap + max-w-full, sin scroll horizontal.
+// ============================================================
+const SPEC_CHIP_THEME: Record<BuildingKey, { icon: string; chip: string; pct: string }> = {
+  cocina: { icon: "🍲", chip: "border-amber-500/40 bg-amber-500/10", pct: "text-amber-300" },
+  tanque: { icon: "💧", chip: "border-sky-500/40 bg-sky-500/10", pct: "text-sky-300" },
+  almacen: { icon: "📦", chip: "border-orange-500/40 bg-orange-500/10", pct: "text-orange-300" },
+  enfermeria: { icon: "🩹", chip: "border-rose-500/40 bg-rose-500/10", pct: "text-rose-300" },
+  taller: { icon: "🔧", chip: "border-emerald-500/40 bg-emerald-500/10", pct: "text-emerald-300" },
+  generador: { icon: "⚡", chip: "border-yellow-500/40 bg-yellow-500/10", pct: "text-yellow-300" },
+};
+
+function SpecialtyChip({
+  buildingKey,
+  bonusPct,
+  size = "lg",
+}: {
+  buildingKey: BuildingKey;
+  /** Bonus relativo del tipo de NPC (el mismo que aplican los ciclos de
+   *  producción). 0.08 → "+8%". */
+  bonusPct: number;
+  size?: "lg" | "sm";
+}) {
+  const resource = NPC_SPEC_RESOURCE[buildingKey];
+  const meta = RESOURCE_META[resource];
+  const theme = SPEC_CHIP_THEME[buildingKey];
+  return (
+    <span
+      className={cn(
+        "inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 font-bold",
+        size === "lg" ? "text-[12px]" : "text-[10px]",
+        theme.chip,
+        "text-zinc-100",
+      )}
+    >
+      <span aria-hidden className="shrink-0">{theme.icon}</span>
+      <span className="truncate">{meta.label}</span>
+      <span className={cn("shrink-0 tabular-nums", theme.pct)}>
+        +{Math.round(bonusPct * 100)}%
+      </span>
+    </span>
+  );
+}
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/** "6h 12m" / "45m" / "2d 3h" — duración del stock con el consumo actual. */
+function formatHours(h: number): string {
+  if (!Number.isFinite(h)) return "sin consumo";
+  if (h <= 0) return "0m";
+  const totalMin = Math.ceil(h * 60);
+  const d = Math.floor(totalMin / 1440);
+  const rest = totalMin % 1440;
+  const hh = Math.floor(rest / 60);
+  const mm = rest % 60;
+  if (d > 0) return `${d}d ${hh}h`;
+  if (hh > 0) return `${hh}h ${mm}m`;
+  return `${mm}m`;
+}
+
 export function EquipoTab() {
   const { state, assignNpc, recruitNpc, ignoreNpc, expelNpc } = useGame();
   const [detail, setDetail] = useState<string | null>(null);
@@ -70,6 +141,13 @@ export function EquipoTab() {
   const matCost = BALANCE.npcRecruitCostMateriales;
   const foodCost = BALANCE.npcRecruitCostComidaMin;
   const npc = detail != null ? state.npcs.find((n) => n.id === detail) : null;
+  // STAND-BY: timestamps REALES (el tick actualiza el state cada segundo,
+  // así el countdown corre sin timers extra). Menos de 30 min → alerta.
+  const now = vnow();
+  // CONSUMO del equipo (solo NPC reclutados) con la duración del stock.
+  const stock = stockHoursFor(state);
+  const lowStock = (h: number) => h < 1; // menos de 1 h de stock
+  const nutrition = bonusLostMessage(state);
 
   /** Apply filters then sort (ordered is a fresh array — safe to mutate). */
   const rosterList = ordered.filter((n) => {
@@ -129,6 +207,39 @@ export function EquipoTab() {
       <p className="px-1 text-[10px] uppercase tracking-[0.25em] text-subtle">
         EQUIPO · {active.length} · {assigned.length} asignados
       </p>
+
+      {/* CONSUMO del equipo por hora + cuánto alcanza el stock actual. */}
+      <section className="rounded-lg border border-zinc-800 bg-[#101213] p-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-300">
+            Consumo del equipo
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {(
+              [
+                { label: RESOURCE_META.comida.label, hours: stock.foodHours },
+                { label: RESOURCE_META.agua.label, hours: stock.waterHours },
+              ] as const
+            ).map(({ label, hours }) => (
+              <span
+                key={label}
+                className={cn(
+                  "whitespace-nowrap rounded-sm border px-2 py-0.5 text-[10px] font-bold tabular-nums",
+                  lowStock(hours)
+                    ? "border-red-500/60 bg-red-500/10 text-red-300"
+                    : "border-zinc-700 bg-black/40 text-zinc-300",
+                )}
+              >
+                {label} para {formatHours(hours)}
+              </span>
+            ))}
+          </div>
+        </div>
+        <p className="mt-1 text-[10px] text-subtle">
+          ▣ {round1(teamFoodUpkeepPerHour(state.npcs))} min/h · ◍ {round1(teamWaterUpkeepPerHour(state.npcs))} min/h (solo NPC reclutados)
+        </p>
+        {nutrition && <p className="mt-1 text-[10px] font-bold text-red-400">⚠ {nutrition}</p>}
+      </section>
 
       {/* Filter/sort controls (sticky-feel header row above the roster) */}
       <section className="rounded-lg border border-zinc-800 bg-[#101213] p-2.5">
@@ -223,10 +334,17 @@ export function EquipoTab() {
               const info = NPC_TYPE_MODIFIERS[n.type];
               const canAfford =
                 state.resources.materiales >= matCost && state.foodMin >= foodCost;
+              // STAND-BY: countdown desde timestamps REALES (funciona con la
+              // app cerrada); menos de 30 min → resaltado de alerta.
+              const remainMs = standbyRemainingMs(n, now);
+              const urgent = remainMs > 0 && remainMs < BALANCE.npcStandbyWarningMs;
               return (
                 <div
                   key={n.id}
-                  className="flex items-center gap-3 rounded-md border border-amber-900/40 bg-black/40 p-2.5"
+                  className={cn(
+                    "flex items-center gap-3 rounded-md border bg-black/40 p-2.5",
+                    urgent ? "border-red-500/60" : "border-amber-900/40",
+                  )}
                 >
                   <div className="relative shrink-0">
                     <img
@@ -243,18 +361,30 @@ export function EquipoTab() {
                     </span>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold text-zinc-100">
-                      {n.name} «{n.alias}»
-                    </p>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="min-w-0 truncate text-sm font-bold text-zinc-100">
+                        {n.name} «{n.alias}»
+                      </p>
+                      <span
+                        className={cn(
+                          "shrink-0 whitespace-nowrap rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider tabular-nums",
+                          urgent
+                            ? "border-red-500/60 bg-red-500/10 text-red-300"
+                            : "border-zinc-700 bg-black/40 text-zinc-400",
+                        )}
+                      >
+                        Se va en {formatStandbyRemaining(remainMs)}
+                      </span>
+                    </div>
                     <p className="truncate text-[10px] text-subtle">
                       {n.profession} · {n.id}
                     </p>
-                    {/* Especialidad + bonus ANTES de decidir: mismos datos que
-                        la vista del NPC ya reclutado (diálogo de detalle). */}
-                    <p className="mt-0.5 truncate text-[10px] text-zinc-300">
-                      Especialidad: {BUILDING_BY_KEY[n.specialization].name} ({RESOURCE_META[NPC_SPEC_RESOURCE[n.specialization]].label}) — +{Math.round(info.bonus * 100)}%
-                    </p>
-                    <p className="mt-0.5 text-[9px] text-subtle">
+                    {/* ESPECIALIDAD = lo más visible después del nombre:
+                        chip grande con icono + recurso + bonus. */}
+                    <div className="mt-1.5">
+                      <SpecialtyChip buildingKey={n.specialization} bonusPct={info.bonus} />
+                    </div>
+                    <p className="mt-1 text-[9px] text-subtle">
                       Costo: {matCost} ⚒ · {foodCost} min ▣
                     </p>
                   </div>
@@ -329,11 +459,28 @@ export function EquipoTab() {
                     <span className="shrink-0 text-[10px] font-bold text-subtle">{n.id}</span>
                   </div>
                   <p className="truncate text-[11px] text-zinc-400">{n.profession}</p>
+                  {/* Mismo estilo de chip que los candidatos (consistencia). */}
+                  <div className="mt-1">
+                    <SpecialtyChip buildingKey={n.specialization} bonusPct={info.bonus} size="sm" />
+                  </div>
+                  {(() => {
+                    const foodH = npcFoodUpkeepPerHour(n);
+                    const waterH = npcWaterUpkeepPerHour(n);
+                    if (foodH <= 0) return null;
+                    const mult = typeof n.consumptionMultiplier === "number" ? n.consumptionMultiplier : 1;
+                    return (
+                      <p className="mt-1 truncate text-[10px] text-subtle">
+                        Consume ▣ {round1(foodH)} min/h · ◍ {round1(waterH)} min/h{mult !== 1 ? ` (×${mult})` : ""}
+                      </p>
+                    );
+                  })()}
                   <p className="truncate text-[10px] uppercase tracking-wider text-subtle">
                     {n.assignedZoneId
-                      ? working
-                        ? `● ${zoneName}`
-                        : `◌ ${zoneName} · sin suministros`
+                      ? nutrition
+                        ? `◌ ${zoneName} · bonus perdido`
+                        : working
+                          ? `● ${zoneName}`
+                          : `◌ ${zoneName} · sin suministros`
                       : "○ Sin asignar"}
                   </p>
                   <StatsGrid stats={n.stats} className="mt-1.5" />
@@ -364,37 +511,39 @@ export function EquipoTab() {
                 </DialogDescription>
               </DialogHeader>
               <StatsGrid stats={npc.stats} />
-              <p className="text-xs text-faint">
-                Especialización:{" "}
-                <span className="text-zinc-300">
-                  {BUILDING_BY_KEY[npc.specialization].name} ({RESOURCE_META[
-                    (
-                      {
-                        cocina: "comida",
-                        tanque: "agua",
-                        almacen: "materiales",
-                        enfermeria: "medicamentos",
-                        taller: "componentes",
-                        generador: "energia",
-                      } as const
-                    )[npc.specialization]
-                  ].label}
-                  )
-                </span>
-              </p>
+              <div>
+                <p className="mb-1 text-[9px] font-bold uppercase tracking-widest text-subtle">
+                  Especialidad
+                </p>
+                <SpecialtyChip buildingKey={npc.specialization} bonusPct={NPC_TYPE_MODIFIERS[npc.type].bonus} />
+              </div>
               <div className="rounded-md border border-white/5 bg-black/40 p-2 text-[11px] text-subtle">
                 <p className="mb-1 font-bold uppercase tracking-wider text-zinc-400">Producción acumulada</p>
                 <p>{totalsLabel(npc)}</p>
               </div>
               {/* Candidates cannot be assigned until recruited. */}
               {(npc.status ?? "active") === "candidate" ? (
-                <div className="rounded-md border border-amber-900/40 bg-amber-950/20 p-3 text-center">
-                  <p className="text-xs font-bold uppercase tracking-widest text-amber-400">
-                    Sin reclutar
+                <div
+                  className={cn(
+                    "rounded-md border p-3 text-center",
+                    standbyRemainingMs(npc, now) < BALANCE.npcStandbyWarningMs
+                      ? "border-red-500/60 bg-red-950/20"
+                      : "border-amber-900/40 bg-amber-950/20",
+                  )}
+                >
+                  <p
+                    className={cn(
+                      "text-xs font-bold uppercase tracking-widest",
+                      standbyRemainingMs(npc, now) < BALANCE.npcStandbyWarningMs
+                        ? "text-red-400"
+                        : "text-amber-400",
+                    )}
+                  >
+                    Se va en {formatStandbyRemaining(standbyRemainingMs(npc, now))}
                   </p>
                   <p className="mt-1 text-[10px] text-subtle">
                     Recluta a este superviviente desde la lista "Por reclutar" para
-                    poder asignarlo a una zona.
+                    poder asignarlo a una zona. Si vence el plazo, se irá del refugio.
                   </p>
                 </div>
               ) : (

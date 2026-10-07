@@ -85,6 +85,8 @@ function shiftStateTimestamps(state: GameState, leadMs: number): void {
   state.createdAt -= leadMs;
   state.lastTickAt -= leadMs;
   state.lastEnergyRegenAt -= leadMs;
+  // Consumo del equipo: misma línea temporal absoluta que lastTickAt.
+  if (typeof state.lastConsumptionAt === "number") state.lastConsumptionAt -= leadMs;
   for (const key of Object.keys(state.explorationStates)) {
     const run = state.explorationStates[Number(key)];
     if (run) {
@@ -115,6 +117,10 @@ function shiftStateTimestamps(state: GameState, leadMs: number): void {
   }
   for (const npc of state.npcs) {
     npc.discoveredAt -= leadMs;
+    // STAND-BY: el vencimiento de la lista de espera vive en la misma
+    // línea temporal absoluta (el rebase uniforme conserva el countdown).
+    if (typeof npc.foundAt === "number") npc.foundAt -= leadMs;
+    if (typeof npc.expiresAt === "number") npc.expiresAt -= leadMs;
   }
   for (const npcId of Object.keys(state.npcCycles)) {
     state.npcCycles[npcId] -= leadMs;
