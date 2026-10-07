@@ -469,7 +469,8 @@ export function npcWaterUpkeepPerHour(npc: { status?: string; consumptionMultipl
 export function teamFoodUpkeepPerHour(npcs: { status?: string; consumptionMultiplier?: number }[]): number {
   return npcs.reduce((acc, n) => acc + npcFoodUpkeepPerHour(n), 0);
 }
-export function teamWaterUpkeepPerHour(npcs: { status?: string; consumptionMultiplier?: number }[]): number {  return npcs.reduce((acc, n) => acc + npcWaterUpkeepPerHour(n), 0);
+export function teamWaterUpkeepPerHour(npcs: { status?: string; consumptionMultiplier?: number }[]): number {
+  return npcs.reduce((acc, n) => acc + npcWaterUpkeepPerHour(n), 0);
 }
 
 /** AUTO-farm diminishing-returns helpers. Shared by the online tick
@@ -488,13 +489,6 @@ export function autoFarmFactorForActiveIndex(rank: number): number {
   return factor;
 }
 
-/** Factor for a 0-based active-zone rank (ascending zone id order). */
-export function buildingTierFor(key: string): BuildingTierKey {
-
-/** ONE offline/auto-farm cycle's EXP for zone n (shared by the online
- *  tick's completeAutoRun and the offline simulation — the two paths can
- *  never drift apart). Target: 8 h offline ≈ 3–5 % of the next zone's EXP
- *  requirement (see BALANCE.offlineFarming for the tuning block). */
 export function farmExpForZone(zoneId: number): number {
   const n = Math.max(1, zoneId);
   const f = BALANCE.offlineFarming;
@@ -589,4 +583,4 @@ export const migrationRefundFactor = 1.0;
  *  gainEnergy() to respect the regen system invariants (see energySystem.ts).
  *  Blocked when energy + amount would exceed maxEnergy (no partial waste). */
 export const MERCHANT_BATTERY_OFFER = { label: "Batería", price: 100, energy: 10 } as const;
-}
+

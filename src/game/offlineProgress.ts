@@ -297,7 +297,7 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
   const playerConsumption = consumptionFactor(state, now);
   const buffedHours = Math.min(hoursAway, buffRemainingMs(state, "consumo_comida_agua", now) / 60000 / 60);
   const playerUpkeep =
-    BALANCE.survivorUpkeepPerHour * (buffedHours * playerConsumption + (hoursAway - buffedHours));
+    BALANCE.FOOD_PER_HOUR_PLAYER * (buffedHours * playerConsumption + (hoursAway - buffedHours));
   state.foodMin = Math.max(0, state.foodMin - playerUpkeep);
   state.waterMin = Math.max(0, state.waterMin - playerUpkeep);
   if (state.foodMin <= 0) summary.hungerStruck = before.foodMin > 0;
