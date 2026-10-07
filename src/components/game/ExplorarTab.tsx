@@ -79,7 +79,7 @@ export function ExplorarTab() {
             style={{ objectFit: "cover" }}
             onError={(e) => {
               const t = e.currentTarget as HTMLImageElement;
-              if (t.src && t.src.includes(".svg")) {
+              if (t.src && t.src.includes(".webp")) {
                 t.src = zoneImageFallback(zone.id);
               }
             }}

@@ -95,7 +95,7 @@ export function InstalacionesTab({
             loading="lazy"
             onError={(e) => {
               const t = e.currentTarget as HTMLImageElement;
-              if (t.src && t.src.includes(".svg")) {
+              if (t.src && t.src.includes(".webp")) {
                 t.src = zoneImageFallback(zoneId);
               }
             }}
