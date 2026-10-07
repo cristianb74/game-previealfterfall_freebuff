@@ -15,7 +15,7 @@ import {
 import { BALANCE } from "@/game/balance";
 import { vnow } from "@/game/virtualClock";
 import { RESOURCE_META } from "@/game/resources";
-import { getZone, zoneFocusBonus, zoneImage } from "@/game/zones";
+import { getZone, zoneFocusBonus, zoneImage, zoneImageFallback } from "@/game/zones";
 import type { ResourceKey, Screen } from "@/game/types";
 import { cn } from "@/lib/utils";
 
@@ -93,6 +93,12 @@ export function InstalacionesTab({
             alt={zoneDef.name}
             className="size-12 shrink-0 rounded-md border border-amber-900/40 object-cover"
             loading="lazy"
+            onError={(e) => {
+              const t = e.currentTarget as HTMLImageElement;
+              if (t.src && t.src.includes(".svg")) {
+                t.src = zoneImageFallback(zoneId);
+              }
+            }}
           />
           <div className="min-w-0">
             <div className="flex items-baseline gap-2">

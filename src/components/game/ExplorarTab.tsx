@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { HUD } from "@/components/game/HUD";
 import { useGame } from "@/game/GameProvider";
-import { getZone, zoneImage } from "@/game/zones";
+import { getZone, zoneImage, zoneImageFallback } from "@/game/zones";
 import { currentEnergy } from "@/game/energySystem";
 import { vnow } from "@/game/virtualClock";
 import { BALANCE } from "@/game/balance";
@@ -71,12 +71,18 @@ export function ExplorarTab() {
   return (
     <div className="flex flex-col gap-3">
       <section className="overflow-hidden rounded-lg border border-zinc-800 bg-[#101213]">
-        <div className="relative h-44 sm:h-56">
+        <div className="relative h-44 sm:h-56 bg-[#0a0c0d]">
           <img
             src={zoneImage(zone.id)}
             alt={zone.name}
             className="absolute inset-0 size-full object-cover"
             style={{ objectFit: "cover" }}
+            onError={(e) => {
+              const t = e.currentTarget as HTMLImageElement;
+              if (t.src && t.src.includes(".svg")) {
+                t.src = zoneImageFallback(zone.id);
+              }
+            }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#101213] via-transparent to-transparent" />
           <div className="absolute bottom-2 left-3 right-3">

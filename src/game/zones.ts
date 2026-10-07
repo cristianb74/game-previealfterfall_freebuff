@@ -4,7 +4,8 @@ import type { BuildingKey, ResourceKey } from "./types";
 // ============================================================
 // AFTERFALL — world zones. Exactly 20, unlocked progressively by EXP.
 // Names, images, descriptions and rewards are editable here.
-// Zone images: /assets/stages/stage-XX.png (rendered with object-fit: cover).
+// Zone images: /assets/stages/stage-XX.svg (rendered with object-fit: cover).
+// PNGs remain in public/assets/stages/ as a per-zone fallback only.
 //
 // REBALANCEO v3 — los umbrales de desbloqueo ya NO son números sueltos:
 // se derivan de la curva expZona(n) = round(B × r^(n−1)) definida en
@@ -164,6 +165,11 @@ export function getZone(id: number): ZoneDef {
 }
 
 export function zoneImage(id: number): string {
+  const n = String(getZone(id).id).padStart(2, "0");
+  return `/assets/stages/stage-${n}.svg`;
+}
+
+export function zoneImageFallback(id: number): string {
   const n = String(getZone(id).id).padStart(2, "0");
   return `/assets/stages/stage-${n}.png`;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useGame } from "@/game/GameProvider";
-import { ZONES, zoneImage } from "@/game/zones";
+import { ZONES, zoneImage, zoneImageFallback } from "@/game/zones";
 import { THEMATIC_BY_KEY } from "@/game/buildings";
 import { vnow } from "@/game/virtualClock";
 import { currentEnergy } from "@/game/energySystem";
@@ -323,13 +323,19 @@ export function ZonasTab() {
                       : "border-zinc-800/60 opacity-45",
                 )}
               >
-                <div className="relative h-20 w-full shrink-0 sm:h-24">
+                <div className="relative h-20 w-full shrink-0 sm:h-24 bg-[#0a0c0d]">
                   <img
                     src={zoneImage(z.id)}
                     alt={z.name}
                     className="absolute inset-0 size-full object-cover"
                     style={{ objectFit: "cover" }}
                     loading="lazy"
+                    onError={(e) => {
+                      const t = e.currentTarget as HTMLImageElement;
+                      if (t.src && t.src.includes(".svg")) {
+                        t.src = zoneImageFallback(z.id);
+                      }
+                    }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#0c0e0f] via-[#0c0e0f]/30 to-transparent" />
                   <span className="absolute left-1.5 top-1.5 rounded-sm bg-black/70 px-1 text-[9px] font-bold tabular-nums text-zinc-300">
