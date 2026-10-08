@@ -7,13 +7,7 @@ import {
 import { vnow } from "./virtualClock";
 import { SCAVENGE_PINS, SCAVENGE_LOCATIONS, scavengeLocationForZone } from "./scavengeLocations";
 import type { ScavengePointDef } from "./scavengeLocations";
-import type {
-  ActiveScavengeEvent,
-  GameState,
-  ResourceKey,
-  ScavengePointId,
-  ScavengePointResult,
-} from "./types";
+import type { GameState, ResourceKey, ScavengePointId, ScavengePointResult } from "./types";
 import { pushLog } from "./log";
 import type { LogFieldRecord } from "./log";
 
@@ -173,7 +167,6 @@ function rollPoint(
 
   const pick = <T,>(variants: string[], vars: Record<string, string | number>): string =>
     fillText(variants[Math.floor(Math.random() * variants.length)] ?? variants[0], vars);
-
   // Daño
   roll -= danoWeight;
   if (roll <= 0) {

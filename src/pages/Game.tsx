@@ -14,7 +14,7 @@ import { RegistroTab } from "@/components/game/RegistroTab";
 import { useGame, MERCHANT_OFFERS } from "@/game/GameProvider";
 import { buildingUpgradeCost, CORE_BUILDING_GATE_ZONE } from "@/game/buildings";
 import { BALANCE } from "@/game/balance";
-import { getZone, ZONES, isZoneUnlocked } from "@/game/zones";
+import { isZoneUnlocked } from "@/game/zones";
 import { cn } from "@/lib/utils";
 import { activityScreenFor } from "@/game/log";
 import type { BuildingKey, Screen } from "@/game/types";
@@ -47,7 +47,6 @@ export default function Game() {
     hasSaveFile,
     screen,
     setScreen,
-    maxUnlockedZoneId,
     savedZonasScrollRef,
   } = useGame();
   const navigate = useNavigate();
@@ -88,7 +87,6 @@ export default function Game() {
   let baseUpgradable = false;
   let merchantAffordable = false;
   if (state) {
-    const now = Date.now();
     zonesUnlockable =
       state.pendingZoneUnlock != null && state.pendingZoneUnlock > state.currentZoneId;
     const assignedIds = new Set(state.npcs.filter((n) => n.assignedZoneId).map((n) => n.id));
