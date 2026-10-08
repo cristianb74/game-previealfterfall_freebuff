@@ -1077,8 +1077,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const envelope = await loadGame();
     if (envelope?.state) {
       bootOnceRef.current = true;
-      resetVirtualClock(); // fresh session: real timeline
-      const now = Date.now();
+      resetVirtualClock(); // fresh session: real timeline        const now = Date.now();
+        const result = applyOfflineProgress(envelope.state, now);
+        pushLog(envelope.state, { zona: 'boot', origen: 'manual', category: 'RELOAD', subtype: 'trace',      const now = Date.now();
       const result = applyOfflineProgress(envelope.state, now);
       const s = result.state;
       s.lastTickAt = now;
@@ -1086,10 +1087,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
       // del boot corrió sobre OTRO state) — purgar aquí el estado que
       // realmente entra en juego.
       purgeExpiredCandidates(s, now);
-      setState(s);
-      stateRef.current = s;
-      setHasSaveFile(true);
-      setScreen("zonas");
+        setState(s);
+        stateRef.current = s;
+        setHasSaveFile(true);
+        setScreen("zonas");
       if (result.summary.minutesAway >= 1) {
         setOfflineSummary(result.summary);
       } else if (pendingOfflineSummaryRef.current) {
@@ -1111,19 +1112,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
     bootOnceRef.current = false;
     setRollOptions([rollSurvivor()]);
   }, []);
-  void eraseSave;
-
   /** Dev/QA: change session speed. Session-only — never saved or synced. */
   const setSpeed = useCallback((m: SpeedMultiplier) => {
     setSpeedMultiplier(m);
     setSpeedMultiplierState(m);
   }, []);
-
   const rerollSurvivors = useCallback(() => {
     setRollOptions((prev) => (prev.length < SURVIVOR_MAX_ROLLS ? [...prev, rollSurvivor()] : prev));
   }, []);
-
-  // ---- CRAFTING actions ----
+  void rerollSurvivors;
   /** FABRICAR: validate against the REAL resources, deduct atomically and
    *  enqueue. Returns false when unaffordable (UI keeps the button disabled;
    *  the guard also protects against races). */
@@ -1996,13 +1993,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
       craftRecipe,
       cancelCrafting,
       dismissOfflineSummary: () => setOfflineSummary(null),
-      speedMultiplier,
       setSpeed,
+      speedMultiplier,
+      eraseSave,
     }),
-    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, searchScavenge, finishScavengeEvent, ignoreScavengeEvent, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, ignoreNpc, markScreenSeen, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, useCraftedItemAction, assignCraftedItem, cancelCraftedAssignment, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, savedZonasScrollRef, speedMultiplier, setSpeed, eraseSave],
-  );
+    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, searchScavenge, finishScavengeEvent, ignoreScavengeEvent, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, ignoreNpc, markScreenSeen, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, useCraftedItemAction, assignCraftedItem, cancelCraftedAssignment, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, savedZonasScrollRef, setSpeed, speedMultiplier, eraseSave],    );
 
-  return (
+    return (
     <GameContext.Provider value={value}>
       {children}
       <OfflineSummaryModal />
