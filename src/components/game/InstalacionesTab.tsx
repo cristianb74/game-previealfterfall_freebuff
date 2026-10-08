@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { HUD } from "@/components/game/HUD";
 import { returnToZonasWithScroll } from "@/pages/Game";
 import { useGame } from "@/game/GameProvider";
 import {

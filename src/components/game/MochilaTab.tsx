@@ -3,8 +3,7 @@ import { useGame } from "@/game/GameProvider";
 import { RESOURCE_META } from "@/game/resources";
 import { BALANCE, teamFoodUpkeepPerHour, teamWaterUpkeepPerHour } from "@/game/balance";
 import { getZone, ZONES } from "@/game/zones";
-import { RECIPE_BY_ID } from "@/game/crafting/recipes";
-import {
+import { RECIPE_BY_ID } from "@/game/crafting/recipes";import {
   activeAssignments,
   buffRemainingMs,
   craftedItemKind,
@@ -72,7 +71,7 @@ export function MochilaTab() {
     food: BALANCE.FOOD_PER_HOUR_PLAYER + teamFoodUpkeepPerHour(state.npcs),
     water: BALANCE.WATER_PER_HOUR_PLAYER + teamWaterUpkeepPerHour(state.npcs),
   });
-  const now = Date.now();
+  const now = nowReal();
 
   const npcName = (id: string) => {
     const npc = state.npcs.find((n) => n.id === id);
@@ -145,11 +144,10 @@ export function MochilaTab() {
                 <span className="text-base">{meta.icon}</span>
                 <p className="text-2xl font-black tabular-nums text-zinc-100">{value.toLocaleString("es")}</p>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">{meta.label}</p>
-                {isMedicine ? (
-                  <div className="mt-0.5 flex flex-col gap-1">
+                {isMedicine ? (                  <div className="mt-0.5 flex flex-col gap-1">
                     <button
                       type="button"
-                      onClick={() => useMedicine()}
+                      onClick={useMedicine}
                       disabled={!canHeal}
                       title={
                         canHeal
@@ -181,8 +179,7 @@ export function MochilaTab() {
                           </button>
                         ))}
                       </div>
-                    )}
-                  </div>
+                    )}</div>
                 ) : (
                   hint && <p className="text-[9px] text-subtle">{hint}</p>
                 )}
@@ -236,10 +233,10 @@ export function MochilaTab() {
                       )}
                     </div>
                     {kind === "consumable" ? (
-                      <button
-                        type="button"
-                        onClick={() => useCraftedItem(id)}
-                        title={
+                    <button
+                      type="button"
+                      onClick={() => useCraftedItem(id)}
+                      title={
                           id === "botiquin"
                             ? `Restaura hasta 20 Salud (salud ${Math.round(state.health)}/${BALANCE.maxHealth})`
                             : buffMs > 0

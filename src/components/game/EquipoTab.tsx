@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { HUD } from "@/components/game/HUD";
 import { StatsGrid } from "@/components/game/StatsGrid";
 import { useGame } from "@/game/GameProvider";
-import { NPC_TYPE_MODIFIERS, npcCycleChance } from "@/game/npcTypes";
+import { NPC_TYPE_MODIFIERS } from "@/game/npcTypes";
 import {
   BALANCE,
   npcFoodUpkeepPerHour,
