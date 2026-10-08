@@ -3,7 +3,7 @@ import { useGame } from "@/game/GameProvider";
 import { formatLogLine } from "@/game/log";
 import { getZone } from "@/game/zones";
 import { NPC_TYPE_MODIFIERS } from "@/game/npcTypes";
-import { vnow } from "@/game/virtualClock";
+import { vnow, nowReal } from "@/game/virtualClock";
 import { GAME_INFO } from "@/game/gameConfig";
 import { BALANCE } from "@/game/balance";
 import { BUILDING_BY_KEY, buildingBonus, THEMATIC_BY_KEY, thematicBonus } from "@/game/buildings";
@@ -59,7 +59,7 @@ export function RegistroTab() {
     const lines: string[] = [];
     lines.push("=== AFTERFALL — REPORTE DE PRUEBA ===");
     lines.push(`Versión: ${GAME_INFO.version}`);
-    lines.push(`Fecha: ${fmtDate(Date.now())}`);
+    lines.push(`Fecha: ${fmtDate(nowReal())}`);
     lines.push(`Zona actual: ${String(state.currentZoneId).padStart(2, "0")} · ${getZone(state.currentZoneId).name}`);
     lines.push(`EXP total: ${Math.round(state.expTotal)}`);
     lines.push(`Dinero: $${Math.floor(state.resources.dinero)}`);

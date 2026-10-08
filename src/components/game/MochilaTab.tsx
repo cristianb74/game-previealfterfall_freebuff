@@ -171,11 +171,14 @@ export function MochilaTab() {
                           <button
                             key={q}
                             type="button"
-                            onClick={() => useMedicine(q)}
-                            title={`Usa ${q} medicamentos · +${q * BALANCE.medicineHealthPerUnit} salud (se ajusta a lo que falte)`}
-                            className="flex h-5 flex-1 cursor-pointer items-center justify-center rounded-sm border border-zinc-800 bg-black/30 font-mono text-[9px] font-bold tabular-nums text-zinc-400 transition-colors hover:border-red-500/50 hover:text-red-300 active:bg-red-950/40"
                           >
-                            ×{q}
+                              <button
+                              type="button"
+                              onClick={() => useMedicine(q)}
+                              title={`Usa ${q} medicamentos · +${q * BALANCE.medicineHealthPerUnit} salud (se ajusta a lo que falte)`}
+                            >
+                              ×{q}
+                            </button>
                           </button>
                         ))}
                       </div>
@@ -233,10 +236,10 @@ export function MochilaTab() {
                       )}
                     </div>
                     {kind === "consumable" ? (
-                    <button
-                      type="button"
-                      onClick={() => useCraftedItem(id)}
-                      title={
+                      <button
+                        type="button"
+                        onClick={() => useCraftedItem(id)}
+                        title={
                           id === "botiquin"
                             ? `Restaura hasta 20 Salud (salud ${Math.round(state.health)}/${BALANCE.maxHealth})`
                             : buffMs > 0
