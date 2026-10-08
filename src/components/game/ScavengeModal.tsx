@@ -153,11 +153,14 @@ export function ScavengeModal() {
                   className="aspect-[1253/847] w-full select-none object-cover opacity-90"
                   draggable={false}
                   onError={(e) => {
-                    // JPG not present yet → vector fallback scene.
+                    // JPG not present → WEBP primary fallback, then SVG/BASE64 as last resort.
                     const img = e.currentTarget;
-                    if (!img.dataset.fallback) {
+                    if (!img.dataset.fallback && img.src !== loc.fallbackImage && img.src !== loc.alternateImage) {
                       img.dataset.fallback = "1";
                       img.src = loc.fallbackImage;
+                    } else if (img.src === loc.fallbackImage && !img.dataset.altFallback) {
+                      img.dataset.altFallback = "1";
+                      img.src = loc.alternateImage;
                     }
                   }}
                 />

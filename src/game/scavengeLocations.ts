@@ -10,8 +10,8 @@ export type { ScavengePointId };
 // of every background (same base composition: central crack,
 // left junk pile, ⊗ "zona de peligro" bottom-right). Only the
 // background image, point labels and flavor texts change.
-// Images: /assets/scavenge/<focus>.jpg (real art) with an
-// /assets/scavenge/<focus>.svg vector fallback rendered by the
+// Images: /assets/scavenge/<focus>.jpg (real art) with a
+// /assets/scavenge/<focus>.webp primary fallback rendered by the
 // modal when the JPG is not present.
 // ============================================================
 
@@ -46,9 +46,10 @@ export interface ScavengeLocationDef {
   focus: ScavengeFocus;
   name: string;
   subtitle: string;
-  /** Real art (JPG). The modal falls back to `fallbackImage` on error. */
+  /** Real art (JPG). The modal falls back to `fallbackImage` and then to `alternateImage` when needed. */
   image: string;
   fallbackImage: string;
+  alternateImage: string;
   points: Record<ScavengePointId, ScavengePointDef>;
 }
 
@@ -80,7 +81,8 @@ export const SCAVENGE_LOCATIONS: Record<ScavengeFocus, ScavengeLocationDef> = {
     name: "Desguace Municipal",
     subtitle: "Estacionamiento · autos oxidados",
     image: "/assets/scavenge/materiales.jpg",
-    fallbackImage: "/assets/scavenge/materiales.svg",
+    fallbackImage: "/assets/scavenge/materiales.webp",
+    alternateImage: "/assets/scavenge/materiales.svg",
     points: {
       p1: {
         label: "Auto entre la maleza",
@@ -173,7 +175,8 @@ export const SCAVENGE_LOCATIONS: Record<ScavengeFocus, ScavengeLocationDef> = {
     name: "Supermercado Saqueado",
     subtitle: "Góndolas · pasillos colapsados",
     image: "/assets/scavenge/comida.jpg",
-    fallbackImage: "/assets/scavenge/comida.svg",
+    fallbackImage: "/assets/scavenge/comida.webp",
+    alternateImage: "/assets/scavenge/comida.svg",
     points: {
       p1: {
         label: "Derrumbe del techo",
@@ -266,7 +269,8 @@ export const SCAVENGE_LOCATIONS: Record<ScavengeFocus, ScavengeLocationDef> = {
     name: "Sala de Máquinas",
     subtitle: "Reactor · cañerías · electrónica",
     image: "/assets/scavenge/componentes.jpg",
-    fallbackImage: "/assets/scavenge/componentes.svg",
+    fallbackImage: "/assets/scavenge/componentes.webp",
+    alternateImage: "/assets/scavenge/componentes.svg",
     points: {
       p1: {
         label: "Panel de control",
@@ -359,7 +363,8 @@ export const SCAVENGE_LOCATIONS: Record<ScavengeFocus, ScavengeLocationDef> = {
     name: "Enfermería Abandonada",
     subtitle: "Camas · instrumental · botiquines",
     image: "/assets/scavenge/medicamentos.jpg",
-    fallbackImage: "/assets/scavenge/medicamentos.svg",
+    fallbackImage: "/assets/scavenge/medicamentos.webp",
+    alternateImage: "/assets/scavenge/medicamentos.svg",
     points: {
       p1: {
         label: "Cama superior",
@@ -452,7 +457,8 @@ export const SCAVENGE_LOCATIONS: Record<ScavengeFocus, ScavengeLocationDef> = {
     name: "Planta Potabilizadora",
     subtitle: "Tanques · cañerías · registros",
     image: "/assets/scavenge/agua.jpg",
-    fallbackImage: "/assets/scavenge/agua.svg",
+    fallbackImage: "/assets/scavenge/agua.webp",
+    alternateImage: "/assets/scavenge/agua.svg",
     points: {
       p1: {
         label: "Vigas caídas del techo",
