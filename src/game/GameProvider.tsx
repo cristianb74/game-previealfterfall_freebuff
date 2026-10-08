@@ -6,7 +6,7 @@ import { BALANCE, autoFarmConcurrentFactorFor, farmExpForZone, STAT_RESOURCE, ME
 import { getZone, frontierZoneId, ZONES } from "@/game/zones";
 import { NPC_BY_ID, npcDisplayName } from "@/game/npcData";
 import { NPC_TYPE_MODIFIERS, npcProductionMultiplier, npcZoneSpeedFactor } from "@/game/npcTypes";
-import { createInitialState, loadGame, saveGame, deleteSave, migrateStateToCurrent } from "@/game/saveSystem";
+import { createInitialState, loadGame, saveGame, migrateStateToCurrent } from "@/game/saveSystem";
 import { legacyUnlockFloorV2 } from "@/game/zones";
 import {
   setConvexClient,
@@ -72,12 +72,11 @@ import {
   BUILDING_BY_KEY,
   THEMATIC_BY_KEY,
 } from "@/game/buildings";
-import { SURVIVOR_MAX_ROLLS, generateSurvivorOptions, rollSurvivor } from "@/game/survivorGenerator";
+import { SURVIVOR_MAX_ROLLS, rollSurvivor } from "@/game/survivorGenerator";
 import { RESOURCE_META } from "@/game/resources";
 import type {
   BuildingKey,
   ExplorationOutcome,
-  ExplorationRun,
   GameState,
   NpcSurvivor,
   ResourceKey,
@@ -1112,6 +1111,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     bootOnceRef.current = false;
     setRollOptions([rollSurvivor()]);
   }, []);
+  void eraseSave;
 
   /** Dev/QA: change session speed. Session-only — never saved or synced. */
   const setSpeed = useCallback((m: SpeedMultiplier) => {
@@ -1999,7 +1999,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       speedMultiplier,
       setSpeed,
     }),
-    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, searchScavenge, finishScavengeEvent, ignoreScavengeEvent, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, ignoreNpc, markScreenSeen, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, useCraftedItemAction, assignCraftedItem, cancelCraftedAssignment, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, savedZonasScrollRef, speedMultiplier, setSpeed],
+    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, searchScavenge, finishScavengeEvent, ignoreScavengeEvent, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, ignoreNpc, markScreenSeen, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, useCraftedItemAction, assignCraftedItem, cancelCraftedAssignment, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, savedZonasScrollRef, speedMultiplier, setSpeed, eraseSave],
   );
 
   return (

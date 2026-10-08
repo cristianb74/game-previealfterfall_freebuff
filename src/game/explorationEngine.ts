@@ -14,11 +14,8 @@ import { biomeOf } from "./narrativeLog";
 import {
   agilityFactor,
   damageTakenFactor,
-  findAmountFactor,
   injuryRiskFactor,
   perceptionFactor,
-  resourceFindFactor,
-  specialFindFactor,
   zoneAssignmentFactors,
 } from "./crafting/craftedEffects";
 import type {
@@ -187,7 +184,7 @@ export function rollExploration(
 ): ExplorationOutcome {
   const zone = getZone(zoneId);
   const findings: ExplorationFinding[] = [];
-  let exp = zone.playerExpReward;
+  const exp = zone.playerExpReward;
   const now = Date.now();
   // Zone specialization: the focus resource is amplified in this zone.
   const focusBonus = zone.focus ? 1 + zoneFocusBonus(zoneId) : 1;

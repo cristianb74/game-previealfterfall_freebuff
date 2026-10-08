@@ -1,5 +1,5 @@
 import { gainEnergy, spendEnergy } from "../energySystem";
-import type { CraftingQueueItem, GameState, Recipe, ResourceKey } from "../types";
+import type { GameState, Recipe, ResourceKey } from "../types";
 
 // ============================================================
 // AFTERFALL — CRAFTING logic (pure state functions).

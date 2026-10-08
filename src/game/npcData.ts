@@ -1,6 +1,6 @@
 import { NPC_SEED, type NpcSeed } from "./npcSeed";
 import { BALANCE } from "./balance";
-import type { BuildingKey, NpcSurvivor, NpcTypeCode, ResourceKey, Stats } from "./types";
+import type { BuildingKey, NpcSurvivor, NpcTypeCode, Stats } from "./types";
 
 // ============================================================
 // AFTERFALL — the 104 NPC survivors.

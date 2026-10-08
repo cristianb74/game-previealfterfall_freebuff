@@ -10,7 +10,7 @@ import {
   floorThematicMap,
   type ThematicDef,
 } from "./buildings";
-import { getZone, isZoneUnlocked, legacyUnlockFloorV2 } from "./zones";
+import { isZoneUnlocked, legacyUnlockFloorV2 } from "./zones";
 import { ensureStandby } from "./npcStandby";
 import { RECIPE_BY_ID } from "./crafting/recipes";
 import type {

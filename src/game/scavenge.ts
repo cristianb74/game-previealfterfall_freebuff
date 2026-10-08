@@ -165,7 +165,7 @@ function rollPoint(
   const total = loot + nada + danoWeight;
   let roll = Math.random() * total;
 
-  const pick = <T,>(variants: string[], vars: Record<string, string | number>): string =>
+  const pick = (variants: string[], vars: Record<string, string | number>): string =>
     fillText(variants[Math.floor(Math.random() * variants.length)] ?? variants[0], vars);
   // Daño
   roll -= danoWeight;

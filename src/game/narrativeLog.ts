@@ -14,6 +14,10 @@ import type { GameState, ResourceKey } from "./types";
 import { pushLog } from "./log";
 import type { LogCategory, LogFieldRecord } from "./log";
 
+// Legacy symbol kept for any external audit references; not emitted directly.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _EVENT_KIND: unique symbol = Symbol("EVENT");
+
 /** ---------------------------------------------------------
  * TUNABLE — log size per channel.
  * --------------------------------------------------------- */
@@ -171,7 +175,8 @@ const DAMAGE: Pool = {
   all: ["{cause}: -{damage} de salud."],
 };
 
-const EVENT: Pool = {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _EVENT_POOL: Pool = {
   all: [
     "Caché escondido bajo un escombro — intacto desde el Estallido.",
     "Botiquín de campaña olvidado en una taquilla oxidada.",

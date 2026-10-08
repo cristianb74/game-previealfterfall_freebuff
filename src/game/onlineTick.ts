@@ -97,7 +97,7 @@ export function tickNpcs(state: GameState, now: number): TickChanges {
 
     const cycleSec = BALANCE.npcCycleSeconds[npc.type];
     const lastAt = state.npcCycles[npc.id] ?? state.lastTickAt;
-    let elapsedSec = (now - lastAt) / 1000;
+    const elapsedSec = (now - lastAt) / 1000;
     let cycles = Math.floor(elapsedSec / cycleSec);
     if (cycles <= 0) continue;
     cycles = Math.min(cycles, 120); // safety cap per tick

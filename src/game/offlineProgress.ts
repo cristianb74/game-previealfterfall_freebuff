@@ -116,7 +116,8 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
   const npcFinds: NpcFind[] = [];
   const buildingsCompleted: string[] = [];
   let explorationsCompleted = 0;
-  let healthLost = 0;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const healthLost = 0;
 
   const summary: OfflineSummary = {
     minutesAway,
@@ -287,7 +288,7 @@ export function applyOfflineProgress(state: GameState, now = Date.now()): Offlin
       ledgerTo: now,
     });
     // Progressive hunger/thirst health drain while away (tier-based).
-    healthLost += applySurvivalDrain(state, hours);
+    applySurvivalDrain(state, hours);
   }
 
   // ---- Player survival consumption while away (at settle time) ----
