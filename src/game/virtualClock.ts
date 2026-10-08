@@ -152,3 +152,7 @@ export function rebaseToRealTime(state?: GameState): boolean {
   lastReal = Date.now();
   return true;
 }
+
+export function nowReal(): number {
+  return Date.now();
+}

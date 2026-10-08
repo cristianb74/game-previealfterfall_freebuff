@@ -6,7 +6,7 @@ import { RECIPES, RECIPE_CATEGORIES, RECIPE_BY_ID } from "@/game/crafting/recipe
 import { missingCosts, getCraftedCount } from "@/game/crafting/crafting";
 import { RESOURCE_META } from "@/game/resources";
 import { currentEnergy } from "@/game/energySystem";
-import { vnow } from "@/game/virtualClock";
+import { vnow, nowReal } from "@/game/virtualClock";
 import type { Recipe, ResourceKey } from "@/game/types";
 import { cn } from "@/lib/utils";
 
@@ -94,8 +94,8 @@ export function CraftingTab() {
   const inventory = state.craftedInventory;
   void craftingVersion; // subscribe: deferred updates (catch-up) re-render us
 
-  const now = Date.now();
   const active = queue[0] ?? null;
+  const now = nowReal();
   const activePct =
     active && active.startedAt > 0
       ? Math.max(
