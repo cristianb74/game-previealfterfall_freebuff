@@ -3,7 +3,8 @@ import { useGame } from "@/game/GameProvider";
 import { RESOURCE_META } from "@/game/resources";
 import { BALANCE, teamFoodUpkeepPerHour, teamWaterUpkeepPerHour } from "@/game/balance";
 import { getZone, ZONES } from "@/game/zones";
-import { RECIPE_BY_ID } from "@/game/crafting/recipes";import {
+import { RECIPE_BY_ID } from "@/game/crafting/recipes";
+import {
   activeAssignments,
   buffRemainingMs,
   craftedItemKind,
@@ -71,7 +72,7 @@ export function MochilaTab() {
     food: BALANCE.FOOD_PER_HOUR_PLAYER + teamFoodUpkeepPerHour(state.npcs),
     water: BALANCE.WATER_PER_HOUR_PLAYER + teamWaterUpkeepPerHour(state.npcs),
   });
-  const now = nowReal();
+  const now = Date.now();
 
   const npcName = (id: string) => {
     const npc = state.npcs.find((n) => n.id === id);
@@ -147,7 +148,7 @@ export function MochilaTab() {
                 {isMedicine ? (                  <div className="mt-0.5 flex flex-col gap-1">
                     <button
                       type="button"
-                      onClick={useMedicine}
+                      onClick={() => useMedicine()}
                       disabled={!canHeal}
                       title={
                         canHeal
@@ -171,14 +172,10 @@ export function MochilaTab() {
                           <button
                             key={q}
                             type="button"
+                            onClick={() => useMedicine(q)}
+                            title={`Usa ${q} medicamentos · +${q * BALANCE.medicineHealthPerUnit} salud (se ajusta a lo que falte)`}
                           >
-                              <button
-                              type="button"
-                              onClick={() => useMedicine(q)}
-                              title={`Usa ${q} medicamentos · +${q * BALANCE.medicineHealthPerUnit} salud (se ajusta a lo que falte)`}
-                            >
-                              ×{q}
-                            </button>
+                            ×{q}
                           </button>
                         ))}
                       </div>

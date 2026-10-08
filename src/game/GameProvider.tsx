@@ -440,6 +440,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           setBooted(true);
           return;
         }
+        const oldFirstCompactBuild = envelope.state.base?.almacen;
         const result = applyOfflineProgress(envelope.state, Date.now());
         const s = result.state;
         s.lastTickAt = Date.now();
@@ -470,6 +471,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (result.summary.minutesAway >= 1) {
           pendingOfflineSummaryRef.current = result.summary;
         }
+        console.log("BOOT note:", { oldFirstCompactBuild: oldFirstCompactBuild?.level ?? null });
       } else {
         setHasSaveFile(false);
       }
@@ -1997,7 +1999,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       speedMultiplier,
       setSpeed,
     }),
-    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave,      cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud,      startExploration, searchScavenge, finishScavengeEvent, ignoreScavengeEvent, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, ignoreNpc, markScreenSeen, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, useCraftedItemAction, assignCraftedItem, cancelCraftedAssignment, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, savedZonasScrollRef, speedMultiplier, setSpeed],
+    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, eraseSave, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, searchScavenge, finishScavengeEvent, ignoreScavengeEvent, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, ignoreNpc, markScreenSeen, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, useCraftedItemAction, assignCraftedItem, cancelCraftedAssignment, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, savedZonasScrollRef, speedMultiplier, setSpeed],
   );
 
   return (
