@@ -1077,10 +1077,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const envelope = await loadGame();
     if (envelope?.state) {
       bootOnceRef.current = true;
-      resetVirtualClock(); // fresh session: real timeline        const now = Date.now();
-        const result = applyOfflineProgress(envelope.state, now);
-        pushLog(envelope.state, { zona: 'boot', origen: 'manual', category: 'RELOAD', subtype: 'trace',      const now = Date.now();
+      resetVirtualClock(); // fresh session: real timeline
+      const now = Date.now();
       const result = applyOfflineProgress(envelope.state, now);
+      pushLog(envelope.state, { zona: 'boot', origen: 'manual', category: 'RELOAD', subtype: 'trace', fields: { trace: 'continueGame reload' } });
       const s = result.state;
       s.lastTickAt = now;
       // STAND-BY: continueGame vuelve a leer el save del disco (el purge
