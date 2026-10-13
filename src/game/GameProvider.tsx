@@ -814,7 +814,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         // (narrEvent se eliminó: repetía exactamente este mismo texto como
         // SEGUNDA línea [EXP]/evento para un único evento real.)
       }
-    }    if (outcome.findings.length === 0) {
+    }
+    if (outcome.findings.length === 0) {
       pushLog(s, { zona: `Z${String(outcome.zoneId).padStart(2, "0")}`, origen: opts.auto ? "auto" : "manual", category: "EXP", subtype: "sin_hallazgos", fields: {}, mensaje: `${expTag}Sin hallazgos` });
     }
     pushLog(s, { zona: `Z${String(outcome.zoneId).padStart(2, "0")}`, origen: opts.auto ? "auto" : "manual", category: "EXP", subtype: opts.auto ? "auto_fin" : "fin", fields: { exp: outcome.exp }, mensaje: `${expTag}${opts.auto ? "Auto" : "FIN"} | Z${String(outcome.zoneId).padStart(2, "0")} · ${zone.name} completada · +${outcome.exp} EXP` });
@@ -1080,14 +1081,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
       resetVirtualClock(); // fresh session: real timeline
       const now = Date.now();
       const result = applyOfflineProgress(envelope.state, now);
-      pushLog(envelope.state, { zona: 'boot', origen: 'manual', category: 'RELOAD', subtype: 'trace', fields: { trace: 'continueGame reload' } });
+      pushLog(envelope.state, { zona: 'boot', origen: 'manual', category: 'INICIO', subtype: 'reload', fields: { trace: 'continueGame reload' } });
       const s = result.state;
       s.lastTickAt = now;
       // STAND-BY: continueGame vuelve a leer el save del disco (el purge
       // del boot corrió sobre OTRO state) — purgar aquí el estado que
       // realmente entra en juego.
       purgeExpiredCandidates(s, now);
-        setState(s);
+      setState(s);
         stateRef.current = s;
         setHasSaveFile(true);
         setScreen("zonas");
@@ -1996,8 +1997,91 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setSpeed,
       speedMultiplier,
       eraseSave,
-    }),
-    [state, booted, hasSaveFile, screen, setNavigator, startNewGame, continueGame, cloudConnected, cloudSyncing, lastSyncAt, syncNow, restoreFromCloud, startExploration, searchScavenge, finishScavengeEvent, ignoreScavengeEvent, toggleAutoExplore, setCurrentZone, assignNpc, recruitNpc, ignoreNpc, markScreenSeen, upgradeBaseBuilding, upgradeThematicBuilding, useMedicine, useCraftedItemAction, assignCraftedItem, cancelCraftedAssignment, buyResource, buyBattery, sellResource, expelNpc, rollOptions, rerollSurvivors, offlineSummary, savedZonasScrollRef, setSpeed, speedMultiplier, eraseSave],    );
+    });
+  const value = {
+    state,
+    booted,
+    hasSaveFile,
+    screen,
+    setScreen,
+    setNavigator,
+    startNewGame,
+    continueGame,
+    eraseSave,
+    cloud: { connected: cloudConnected, syncing: cloudSyncing, lastSyncAt },
+    syncNow,
+    restoreFromCloud,
+    startExploration,
+    searchScavenge,
+    finishScavengeEvent,
+    ignoreScavengeEvent,
+    toggleAutoExplore,
+    maxUnlockedZoneId: state ? computeZoneUnlocks(state) : 1,
+    setCurrentZone,
+    assignNpc,
+    recruitNpc,
+    ignoreNpc,
+    markScreenSeen,
+    upgradeBaseBuilding,
+    upgradeThematicBuilding,
+    useMedicine,
+    useCraftedItem: useCraftedItemAction,
+    assignCraftedItem,
+    cancelCraftedAssignment,
+    buyResource,
+    buyBattery,
+    sellResource,
+    expelNpc,
+    rollOptions,
+    rerollSurvivors,
+    offlineSummary,
+    savedZonasScrollRef,
+    craftingVersion: craftingUiTick,
+    craftRecipe,
+    cancelCrafting,
+    dismissOfflineSummary: () => setOfflineSummary(null),
+    setSpeed,
+  };
+    [
+      state,
+      booted,
+      hasSaveFile,
+      screen,
+      setNavigator,
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
 
     return (
     <GameContext.Provider value={value}>
