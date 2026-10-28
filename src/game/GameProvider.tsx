@@ -1089,9 +1089,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
       // realmente entra en juego.
       purgeExpiredCandidates(s, now);
       setState(s);
-        stateRef.current = s;
-        setHasSaveFile(true);
-        setScreen("zonas");
+      stateRef.current = s;
+      setHasSaveFile(true);
+      setScreen("zonas");
       if (result.summary.minutesAway >= 1) {
         setOfflineSummary(result.summary);
       } else if (pendingOfflineSummaryRef.current) {
@@ -2038,59 +2038,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setSpeed,
     ],
   );
-  const value = {
-    state,
-    booted,
-    hasSaveFile,
-    screen,
-    setScreen,
-    setNavigator,
-    startNewGame,
-    continueGame,
-    eraseSave,
-    cloud: { connected: cloudConnected, syncing: cloudSyncing, lastSyncAt },
-    syncNow,
-    restoreFromCloud,
-    startExploration,
-    searchScavenge,
-    finishScavengeEvent,
-    ignoreScavengeEvent,
-    toggleAutoExplore,
-    maxUnlockedZoneId: state ? computeZoneUnlocks(state) : 1,
-    setCurrentZone,
-    assignNpc,
-    recruitNpc,
-    ignoreNpc,
-    markScreenSeen,
-    upgradeBaseBuilding,
-    upgradeThematicBuilding,
-    useMedicine,
-    useCraftedItem: useCraftedItemAction,
-    assignCraftedItem,
-    cancelCraftedAssignment,
-    buyResource,
-    buyBattery,
-    sellResource,
-    expelNpc,
-    rollOptions,
-    rerollSurvivors,
-    offlineSummary,
-    savedZonasScrollRef,
-    craftingVersion: craftingUiTick,
-    craftRecipe,
-    cancelCrafting,
-    dismissOfflineSummary: () => setOfflineSummary(null),
-    setSpeed,
-    speedMultiplier,
-  };
+  // END NOTE line                                            
   return (
-    <GameContext.Provider value={value}>
-      {children}
-    </GameContext.Provider>
-  );
-}
-
-    return (
     <GameContext.Provider value={value}>
       {children}
       <OfflineSummaryModal />
@@ -2099,5 +2048,5 @@ export function GameProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// Re-export helpers used by UI
 export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+
