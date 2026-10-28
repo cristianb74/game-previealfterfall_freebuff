@@ -15,7 +15,8 @@ import {
   wipeAllSaves,
 } from "@/game/cloudSave";
 import { applyOfflineProgress } from "@/game/offlineProgress";
-import type { OfflineSummary } from "@/game/offlineProgress";import { vnow,
+import type { OfflineSummary } from "@/game/offlineProgress";
+import { vnow,
   setSpeedMultiplier,
   getSpeedMultiplier,
   tickVirtualClock,
@@ -1996,6 +1997,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       dismissOfflineSummary: () => setOfflineSummary(null),
       setSpeed,
       speedMultiplier,
+      setSpeedMultiplier: setSpeedMultiplierState,
       eraseSave,
     }),
     [
@@ -2038,7 +2040,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setSpeed,
     ],
   );
-  // END NOTE line                                            
+  // END NOTE line
   return (
     <GameContext.Provider value={value}>
       {children}
@@ -2049,4 +2051,1222 @@ export function GameProvider({ children }: { children: ReactNode }) {
 }
 
 export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );
+  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+      startNewGame,
+      continueGame,
+      cloudConnected,
+      cloudSyncing,
+      lastSyncAt,
+      syncNow,
+      restoreFromCloud,
+      startExploration,
+      searchScavenge,
+      finishScavengeEvent,
+      ignoreScavengeEvent,
+      toggleAutoExplore,
+      setCurrentZone,
+      assignNpc,
+      recruitNpc,
+      ignoreNpc,
+      markScreenSeen,
+      upgradeBaseBuilding,
+      upgradeThematicBuilding,
+      useMedicine,
+      useCraftedItemAction,
+      assignCraftedItem,
+      cancelCraftedAssignment,
+      buyResource,
+      buyBattery,
+      sellResource,
+      expelNpc,
+      rollOptions,
+      rerollSurvivors,
+      offlineSummary,
+      savedZonasScrollRef,
+      setSpeed,
+    ],
+  );  // END NOTE line
+  return (
+    <GameContext.Provider value={value}>
+      {children}
+      <OfflineSummaryModal />
+      <ScavengeModal />
+    </GameContext.Provider>
+  );
+}
+
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+
+
+
+
 
