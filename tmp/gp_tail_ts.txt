@@ -1,0 +1,3 @@
+export { STAT_RESOURCE, npcProductionMultiplier, SURVIVOR_MAX_ROLLS, rollSurvivor };
+
+import { setSpeedMultiplierState } from "@/game/virtualClock";
